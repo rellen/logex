@@ -629,6 +629,14 @@ choice, not an oversight to fix.
   `Runtime.instance(:motor)` and warns on every run. Pass the bad value through a helper it
   cannot see through, as `runtime_test.exs`'s `opaque/1` does (copy it into another file
   that needs it), rather than living with the warning.
+- **A scratch directory in the machine's temporary directory is named by the VM's OS
+  pid.** Fourteen directories in nine test files were named by the VM's own count alone,
+  `logex-rv2-<n>` from `System.unique_integer/1`, and every VM counts from 1: two suites
+  run at once on one machine, two clones gated side by side, gave their directories one
+  name, and each could write into, read and remove the other's (RV-30; `prose_test.exs`'s
+  file met it first, `563debe`). Name one by `System.pid()` beside the count, or use
+  ExUnit's `:tmp_dir`, which is under the checkout; `scratch_test.exs` reads every test
+  file's syntax tree for it.
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting fold along a rung
   (`series/3` in `Logex.Runtime`) and the sequential `env` threading through parallel

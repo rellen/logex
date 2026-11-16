@@ -14936,14 +14936,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `scripts_test.exs` holds the step and the script. The twelve warnings it gave at the
      base, none a defect, were cleared in the code, each recorded; a spec made false is red
      in CI, `backup/rv24-red`. The flags, when a contributor runs it, how a warning that is
-     no defect is cleared, the contract's reach and the opacity's reader are `PLAN.md`'s
-     RV-24, questions 1 to 5, provisional. Since RV-24's review, the same day: Dialyzer
+     no defect is cleared, the contract's reach and the opacity's reader were `PLAN.md`'s
+     RV-24, questions 1 to 5, answered by decisions 549 to 553, and its review's
+     questions 6 and 7 by decisions 554 and 555. Since RV-24's review, the same day: Dialyzer
      types nothing a call to a process gives back nor a struct's field, so a third of the
      specs it held to nothing; `test/logex/typespec_test.exs` reaches every spec of the
      contract and holds each value and argument to it, and made the types of a block's
      member and the maps a program and an instance hold true; `-Wmissing_return` and
      `-Wopaque_union` are on, their sites written to say what they do, and the PLT is named
-     and cached by the applications it holds too.)*
+     and cached by the applications it holds too. Since RV-30, 2026-11-15, decisions 549,
+     550 and 555: `scripts/gate.sh` runs the script as its fifth step, `-Wunmatched_returns`
+     is on, each call that drops an answer on purpose written `_ = ...`, and
+     `Logex.Configuration.Global.new!/3` gives no struct outside `Global.t()`.)*
 
 516. **A real adapter (the review after Milestone 6),** RV-8's question 3, its option (f)
      (b7-premortem-project-7): logex ships only `Logex.IO.Sim`, the simulated device the
@@ -15721,6 +15725,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      taken: by hand and in CI alone, as built; a test of the suite, every `mix test` that
      much longer. IEC 61131-3's tools check a typed interface at every compile, and
      Logix's Verify runs before every download. RV-30 builds it.
+     *(Landed with RV-30, 2026-11-15, `e3a8c2f`: `scripts/gate.sh` runs
+     `scripts/dialyzer.sh` once its four gates are green, `GATE-OK` with all five; a red
+     fifth step is `GATE-FAIL` with Dialyzer's code, 2 for a warning, then a line that
+     names the step and the log, which keeps every warning; a red earlier gate stops the
+     rest, as it did, so the fifth is not run after one. `scripts/release.sh`'s gate is
+     the same script. `scripts_test.exs` holds it over a stand-in `dialyzer`. Measured on
+     a quiet machine: the fifth step 10 s of a gate with the PLT kept and 51 s the first
+     time, a gate of 283 and 329 s where the four took 296 s, the suite's own time 248 to
+     272 s of each.)*
 
 550. **Which of Dialyzer's warnings are held (RV-24),** RV-24's question 2 as its review
      restated it: as built, Dialyzer's defaults and five more, `-Wextra_return`,
@@ -15736,6 +15749,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      the flags as built; both classes; the three flags the item first chose. IEC's tools
      refuse every interface mismatch; Logix's Verify blocks a download on an error and
      lists a warning. RV-30 builds it.
+     *(Landed with RV-30, 2026-11-15, `e3a8c2f`: the flag is in `scripts/dialyzer.sh`,
+     `scripts_test.exs`'s pinned flags with it. The 24 sites, each read again, each drop
+     an answer on purpose and none is a defect, each written `_ = ...`: five calls made
+     for their raise, a device's two that give back its own state, twelve calls of the
+     runner's `published/2`, whose answer is the messages it sent, three cancels of a
+     timer, and in `Logex.Retain`'s atomic write
+     the close after a write or a sync that failed and the delete of the `.tmp` after any
+     failure, each following the failure the write gives and the runner reports. No
+     behaviour changed. Each mark taken away is red by Dialyzer, and so is a good close's
+     answer thrown away; the red run in CI, `backup/rv30-red`, is in `PLAN.md`'s "RV-30
+     as built".)*
 
 551. **A Dialyzer warning that is no defect (RV-24),** RV-24's question 3: twelve of the
      first warnings were no defect, ten of them a refusal raised through a call that
@@ -15748,6 +15772,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      warning where it stands, and no class of warning is turned off without a reason that
      holds. IEC's and Logix's tools have no mark that hides one warning; the code is
      changed until the check is clean. RV-30 makes the marks this decision's number.
+     *(Marked with RV-30, 2026-11-15, `e3a8c2f`: `CONTRIBUTING.md`'s rule for a warning
+     that is no defect names this decision, and `scripts/dialyzer.sh`'s reason for
+     `-Werror_handling` left off.)*
 
 552. **How far the typespecs reach (RV-24),** RV-24's question 4.
 
@@ -15758,6 +15785,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      public function without one. Not taken: decision 514's modules alone; the documented
      functions alone. IEC types the interface of every program organisation unit. RV-30
      makes the marks this decision's number.
+     *(Marked with RV-30, 2026-11-15, `e3a8c2f`: `runtime_test.exs`'s test of a spec on
+     every public function names this decision.)*
 
 553. **How the resource stays opaque inside logex (RV-24),** RV-24's question 5: with
      `Logex.Runtime.t()` opaque, `Logex.Configuration.Edit`, which needs the resource's
@@ -15769,6 +15798,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `-Wno_opaque`, the rule left to the documents; a plain type. An IEC function block's
      internal variables are read from outside it through its outputs alone. RV-30 makes
      the marks this decision's number.
+     *(Marked with RV-30, 2026-11-15, `e3a8c2f`: `Logex.Runtime.fields/1`'s comment
+     names this decision.)*
 
 554. **How far a spec is held where Dialyzer cannot type the value (RV-24),** question 6,
      from RV-24's review: Dialyzer types nothing a call to a process gives back, so a
@@ -15782,6 +15813,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      (RV-24's mutant s7). Not taken: each alternative of a spec's return reached by a
      test; the test removed. Logix documents a fixed list of error codes an instruction
      gives, each of which can occur. RV-30 makes the marks this decision's number.
+     *(Marked with RV-30, 2026-11-15, `f4fa1af`: `typespec_test.exs`'s moduledoc names
+     this decision.)*
 
 555. **A global built from Elixir with a value of no global's type (RV-24),** question 7,
      from RV-24's review: `Logex.Configuration.Global.new!("fan_on", :bool, initial:
@@ -15795,6 +15828,20 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      refusal for a struct built by hand. IEC refuses an initial value of the wrong type
      at its declaration, and Logix's tag editor refuses it as it is typed. RV-30 builds
      it.
+     *(Landed with RV-30, 2026-11-15, `f4fa1af`: `new!/3` raises the lines `check/1`
+     gives of the same value in a struct built by hand, from the one judge both read,
+     `Logex.Configuration.Initial`, internal: a value that is no number, an array's that
+     is no list of numbers and -0.0 in a real, which `check/1` raises as the host's; and
+     a number outside the type, a float in a type that holds integers, a real's by the
+     literal rules and an array's list of another length or with an element its type
+     does not hold, which `check/1` gives as diagnostics. A wrong value is so told in
+     the same words wherever it is met, `` the initial value of global `fan_on` must be
+     an integer, found true ``, which are a tag's words where `check/1`'s were already,
+     and `check/1`'s own where they differ. The value is judged against the type alone:
+     a located global's initial value its type holds is kept and refused by `check/1`
+     for its location, as it was, and the type and the name stay `check/1`'s; the
+     options' mistakes come first; `new!/2` is as it was. Both readings are provisional,
+     `PLAN.md`'s "RV-30 as built", questions 1 and 2.)*
 
 ---
 

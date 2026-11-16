@@ -399,7 +399,7 @@ changelog naming every decision at every commit, and the refusal of a store that
 resource and no program told at its resource line. RV-24 has landed (decision 515 (c)):
 typespecs on the host contract, which OTP's own Dialyzer reads in CI after the four
 gates, red on any warning its flags give, and the suite holds to every value a function
-gives. The maintainer answered RV-24's questions the same day, decisions 549–555: waiting
+gives. The maintainer answered RV-24's questions the same day, decisions 549–555, and RV-30 has landed: built
 with RV-30 are Dialyzer as the gate's fifth step, a call whose answer is thrown away made
 red, and a global's wrong initial value refused where it is declared. Waiting: RV-29, a store with no resource line whose count does
 not read told its count first, and a renamed configuration's refusal ending with the full
