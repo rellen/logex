@@ -20,9 +20,12 @@ program.
 | `boxes.ld` | It counts the boxes on a conveyor. A lamp comes on at 3 boxes. | `boxes.exs` |
 
 This timing diagram shows what `delay.ld` does. Time goes from left to right, and each
-column is 1 scan of 500 ms. The row `t1.acc` is the time that the timer measures. The
-first time, `go` is on for 3 scans only, and the lamp stays off. The second time, `go`
-comes on in scan 6 and stays on. The lamp comes on in scan 12, which is 3 s later.
+column is 1 scan. The time from 1 scan to the next is 500 ms. The row `t1.acc` is the
+time that the timer measures.
+
+The first time, `go` is on for 3 scans only, and the lamp stays off. The second time,
+`go` comes on in scan 6 and stays on to scan 12. The lamp comes on in scan 12, which is
+3 s later, and goes off in scan 13 with `go`.
 
 <!-- timing: delay.timing.exs -->
 ![A timing diagram of delay.ld with 14 scans. The input go is on from scan 2 to scan 4, and from scan 6 to scan 12. The lamp is on in scan 12 only, when t1.acc is 3000. The output pulse is on in scans 2 and 6.](../assets/delay.svg)
@@ -69,7 +72,7 @@ parts:
 | `var t1 ton` | It declares the timer `t1`. The [type](../reference/glossary.md#type) `ton` is an on-delay timer. |
 | `ton t1 3000` | It gives the timer `t1` a [preset](../reference/glossary.md#preset) of 3000 ms. While rung 1 is [true](../reference/glossary.md#true-rung), the timer measures the time. If rung 1 is [false](../reference/glossary.md#false-rung), the timer goes back to 0. |
 | `t1.acc` and `t1.dn` | They are 2 [members](../reference/glossary.md#member) of the timer. `t1.acc` holds the time since the timer started, in ms, up to the preset. `t1.dn` is 1 when `t1.acc` is equal to the preset. |
-| `ons s1` | It is a [one-shot](../reference/glossary.md#one-shot). It passes power for 1 scan when `go` changes from 0 to 1. The bool [tag](../reference/glossary.md#tag) `s1` is its [storage bit](../reference/glossary.md#storage-bit). |
+| `ons s1` | It is a [one-shot](../reference/glossary.md#one-shot). It passes power for 1 scan when `go` changes from 0 to 1. It does not pass power on the [first scan](../reference/glossary.md#first-scan), even when `go` is already 1. The bool [tag](../reference/glossary.md#tag) `s1` is its [storage bit](../reference/glossary.md#storage-bit). |
 
 Rung 4 has no [contact](../reference/glossary.md#contact). Thus `move` gets power in
 each scan. It copies `t1.acc` to the [output](../reference/glossary.md#output) `waited`.
@@ -81,15 +84,16 @@ power from it.
 
 > #### The host gives the time {: .info}
 >
-> `Logex.Runtime` reads no clock. Your script tells each scan how much time it gets. Thus
-> the script does not wait for 3 s, and each run prints the same lines.
+> `Logex.Runtime` reads no clock. Your script tells each scan the time since the last
+> scan. Thus the script does not wait for 3 s, and each run prints the same lines.
 >
-> `Logex.Runtime.scan/2`, which the first tutorial uses, gives 0 ms to a scan. With that
-> call, a timer measures no time.
+> `Logex.Runtime.scan/2`, which the first tutorial uses, tells each scan that the time
+> since the last scan is 0 ms. With that call, a timer measures no time.
 
 Make the file `delay.exs` with this text. The first argument of each `scan.` call is the
-time for that scan, in ms. The script gives it to `Logex.Runtime.scan/3` as the third
-argument. Copy the spaces at the end of each string. They make the columns of the output.
+time since the last scan, in ms. The script gives it to `Logex.Runtime.scan/3` as the
+third argument. Copy the spaces at the end of each string. They make the columns of the
+output.
 
 ```elixir
 {:ok, delay} = Logex.compile_file("delay.ld")
@@ -135,23 +139,24 @@ If you see these 6 lines, the program and the script are correct.
 > If `line:` is `nil`, the script cannot read `delay.ld`. Make sure that the file is in
 > the directory `first`.
 
-Each scan adds its time to `state.now`, which is the time of the
+Each scan adds that time to `state.now`, which is the time of the
 [instance](../reference/glossary.md#instance) in ms. Each line starts with that value,
 after `t=`.
 
-| Line | Scan gets | What the scan does |
+| Line | Time since the last scan | What the scan does |
 |---|---|---|
 | `t=   0` | 0 ms | `go` is 0. Rung 1 is false, and the timer measures no time. |
-| `t= 100` | 100 ms | `go` is 1. The timer starts at this scan. Thus `waited` is 0. The one-shot passes power, and `pulse` is 1 for this scan only. |
+| `t= 100` | 100 ms | `go` is 1. The timer starts at this scan. The 100 ms before this scan do not count. Thus `waited` is 0. The one-shot passes power, and `pulse` is 1 for this scan only. |
 | `t=1100` | 1000 ms | `waited` is 1000. |
 | `t=3100` | 2000 ms | `waited` is 3000, which is the preset. `t1.dn` is 1, and the lamp comes on. |
 | `t=3600` | 500 ms | The timer stops at its preset. `waited` stays 3000. |
 | `t=3610` | 10 ms | `go` is 0. Rung 1 is false, the timer goes back to 0, and the lamp goes off. |
 
 The timer measures time. It does not count scans. In this run, the lamp comes on 2 scans
-after the timer starts, because those 2 scans get 1000 ms and 2000 ms. In the timing
-diagram of [What you make](#what-you-make), each scan gets 500 ms. There, the timer
-starts in scan 6 and the lamp comes on in scan 12, which is 6 scans later.
+after the timer starts. The time before the first of those scans is 1000 ms, and the
+time before the second is 2000 ms. In the timing diagram of
+[What you make](#what-you-make), the time from 1 scan to the next is 500 ms. There, the
+timer starts in scan 6 and the lamp comes on in scan 12, which is 6 scans later.
 
 ## Step 3: Write the counter program
 
@@ -248,8 +253,8 @@ box 1 of the next case   %{"count" => 1, "full_lamp" => 0}
 If you see these 12 lines, the program and the script are correct. If you see a
 `MatchError`, do what [Step 2](#step-2-run-the-timer-program) says, for `boxes.ld`.
 
-Each line is 1 scan. The script gives 10 ms to each scan, but a counter does not use the
-time. This timing diagram shows the same 12 scans.
+Each line is 1 scan. In this script, the time since the last scan is always 10 ms, but a
+counter does not use the time. This timing diagram shows the same 12 scans.
 
 <!-- timing: timers-and-counters-boxes.timing.exs -->
 ![A timing diagram of the 12 scans of boxes.exs. The output count goes up by 1 in scans 3, 6 and 8. The output full_lamp is on in scan 8 only. The input reset_pb is on in scan 9, and count is 0 from scan 9 to scan 11. In scan 12, count is 1.](../assets/timers-and-counters-boxes-run.svg)
