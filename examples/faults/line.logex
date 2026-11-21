@@ -1,0 +1,27 @@
+// The conveyor and its fan on 1 panel
+task belts interval 10 priority 1
+task fans  interval 10 priority 2
+
+var_global run     bool at panel.i.0
+var_global sel     int  at panel.i.1
+var_global set     bool at panel.i.2
+var_global boxes   dint at panel.i.3
+var_global minutes dint at panel.i.4
+var_global motor_k bool at panel.q.0
+var_global speed   int  at panel.q.1
+var_global rate    dint at panel.q.2
+var_global fan_k   bool at panel.q.3
+
+program c1 conveyor with belts
+  c1.run     run
+  c1.sel     sel
+  c1.set     set
+  c1.boxes   boxes
+  c1.minutes minutes
+  c1.motor   motor_k
+  c1.speed   speed
+  c1.rate    rate
+
+program f1 fan with fans
+  f1.belt motor_k
+  f1.fan  fan_k
