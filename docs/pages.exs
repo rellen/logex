@@ -118,6 +118,7 @@
   {"guides/explanation/tasks-and-scheduling.md", :explanation, "Explanation"},
   {"guides/explanation/event-tasks.md", :explanation, "Explanation"},
   {"guides/explanation/online-edit-model.md", :explanation, "Explanation"},
+  {"guides/explanation/online-edit-of-a-plant.md", :explanation, "Explanation"},
   {"guides/explanation/warm-and-cold-restarts.md", :explanation, "Explanation"},
   {"guides/explanation/trips-and-watchdogs.md", :explanation, "Explanation"},
   {"guides/explanation/timing-and-capacity.md", :explanation, "Explanation"},
