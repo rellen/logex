@@ -130,6 +130,7 @@
   {"docs/architecture/compile-pipeline.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/ir-and-program-type.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runtime-and-evaluator.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/resource-and-schedule.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runner.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/online-edit.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/store-and-files.md", :contributor, "Architecture and implementation"},
