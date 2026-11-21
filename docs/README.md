@@ -94,7 +94,8 @@ by its number.
 | Page | What it gives |
 |---|---|
 | [The parts of logex](architecture/overview.md) | The parts of logex and the data that moves between them |
-| [The compile pipeline](architecture/compile-pipeline.md) | The lexer, the parser, the stages of the compiler and the program that they make |
+| [The compile pipeline](architecture/compile-pipeline.md) | The loader, the lexer, the parser, the compiler and the printer, and where each error comes from |
+| [The IR and the program type](architecture/ir-and-program-type.md) | Each form of the IR, the fields of a program type and the walk of the IR |
 | [The runtime and the evaluator](architecture/runtime-and-evaluator.md) | [Instances](../guides/reference/glossary.md#instance), the evaluator, [scans](../guides/reference/glossary.md#scan), [resources](../guides/reference/glossary.md#resource) and the schedule of [tasks](../guides/reference/glossary.md#task) |
 | [The architecture of the runner](architecture/runner.md) | The processes of the [runner](../guides/reference/glossary.md#runner), a [round](../guides/reference/glossary.md#round), the [devices](../guides/reference/glossary.md#device), the writer and the paths |
 | [The architecture of an online edit](architecture/online-edit.md) | The plans, the [switch](../guides/reference/glossary.md#switch) and the [state](../guides/reference/glossary.md#state) of an [instance](../guides/reference/glossary.md#instance) across an [online edit](../guides/reference/glossary.md#online-edit) |

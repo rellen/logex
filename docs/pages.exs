@@ -128,6 +128,7 @@
   {"guides/explanation/short-pulses.md", :explanation, "Explanation"},
   {"docs/architecture/overview.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/compile-pipeline.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/ir-and-program-type.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runtime-and-evaluator.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runner.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/online-edit.md", :contributor, "Architecture and implementation"},
