@@ -392,7 +392,7 @@ under it.
 | Each block type in each holder, measured for decision 53 | 36,405 | 2,354,805 |
 | 1 table on the program, a run on 2026-11-21 | 4,642 | 9,082 |
 
-The unit is the machine word of a flat copy, as `:erts_debug.flat_size/1` counts it. The 2
+The unit is the machine word of a flat copy, as `:erts_debug.flat_size(term)` counts it. The 2
 rows come from 2 shapes of the same kind, so compare how each row grows.
 
 The costs:
