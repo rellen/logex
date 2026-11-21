@@ -80,7 +80,8 @@ a [counter](../../guides/reference/glossary.md#counter).
 
 Each function that takes a state checks all of the state. The check includes the tags that
 no rung writes. A guard checks each element of an integer, bit-string or bool array. A
-function, `Logex.Real.value?/2`, checks each element of a real array, and that costs more.
+function, `value?/2` of [`real.ex`](../../lib/logex/real.ex), checks each element of a real
+array, and that costs more.
 Thus the check costs time with a large array. These times are from 3 runs on 1 machine,
 with 200 scans of 1 rung in each run:
 

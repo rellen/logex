@@ -315,7 +315,8 @@ To add a check of the compiler:
    not raise: logex raises only for a wrong argument of the host. Run the file again. It
    passes.
 4. For a name that the compiler cannot find, make the message through
-   `Logex.Declarations.offer/5`. Then the suggestions stay inside their limit.
+   `offer/5`, an internal function of `Logex.Declarations`. Then the suggestions stay
+   inside their limit.
 5. Add the message to [Diagnostics](../../guides/reference/diagnostics.md).
 6. Run `scripts/gate.sh`. It prints `GATE-OK`.
 
