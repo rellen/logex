@@ -307,12 +307,13 @@ A new start of an instance or of a resource.
 
 ### cold restart
 
-A restart that sets each tag to its initial value.
+A restart that sets each tag to its initial value. Each input keeps the value that the
+host gives.
 
 ### warm restart
 
-A restart that keeps the value of each tag that has the qualifier `retain`. Each other
-tag starts at its initial value.
+A restart that keeps the value of each tag that has the qualifier `retain`, and of each
+input. Each other tag starts at its initial value.
 
 ### retain
 
