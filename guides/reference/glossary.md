@@ -456,6 +456,12 @@ The bool global that makes an event task due on its rising edge.
 
 The rank of a task. The priority 0 is the highest.
 
+### due
+
+A task is due when logex must run it in a cycle. A periodic task is due when the time
+of the resource reaches its due time. An event task is due when its trigger rises. An
+event task with an interval is also due at each interval while its trigger is 0.
+
 ### cycle
 
 One pass of a resource: it runs each task that is due at the time that the host gives.
@@ -481,6 +487,14 @@ One input or one output of a device, at an address. A located global is at a poi
 A global with the word `at` and the address of a point.
 
 IEC 61131-3: a located variable. Conventional set: an alias tag on an I/O member.
+
+### location
+
+The text that names a point in a configuration, for example `panel.i.0`. It has 3
+parts: the name of a device, the letter `i` or `q`, and an address. The letter `i` is
+for an input point, and the letter `q` is for an output point.
+
+IEC 61131-3: a direct representation, such as `%IX1.1`.
 
 ### device
 
@@ -585,6 +599,12 @@ this vocabulary, as [`docs/naming.md`](../../docs/naming.md) does not.
 
 A family of industrial controllers. A page can compare the behaviour of logex with the
 behaviour of a Logix controller.
+
+### safety function
+
+A function of a machine that protects persons, for example an emergency stop, a guard
+interlock or a light curtain. A failure of the function can cause an injury. logex must
+not do a safety function.
 
 ## Instruction mnemonics
 

@@ -94,6 +94,7 @@
   {"guides/reference/diagnostics.md", :reference, "Reference"},
   {"guides/reference/warnings.md", :reference, "Reference"},
   {"guides/reference/configuration-file.md", :reference, "Reference"},
+  {"guides/reference/configuration-file-messages.md", :reference, "Reference"},
   {"guides/reference/execution-model.md", :reference, "Reference"},
   {"guides/reference/faults.md", :reference, "Reference"},
   {"guides/reference/online-edit.md", :reference, "Reference"},
