@@ -157,6 +157,14 @@ The bool tag in which a one-shot keeps the power flow of its last run.
 
 The bool tag that an `osr` or an `osf` sets to 1 for 1 scan.
 
+### pulse coil
+
+A coil that is also a one-shot: `osr` and `osf`. It sets its pulse bit to 1 for 1 scan
+when the power flow to it rises (`osr`) or falls (`osf`).
+
+IEC 61131-3: a transition-sensing coil. Conventional set: OSR, One Shot Rising, and OSF,
+One Shot Falling.
+
 ## Tags and types
 
 ### tag
@@ -305,6 +313,11 @@ instruction on the rung gives it.
 ### rising edge
 
 A change of a bool from 0 to 1 between 2 runs of an instruction.
+
+### falling edge
+
+A change of the power flow to an instruction from true to false, between 2 runs of the
+instruction. For a bool: a change from 1 to 0.
 
 ## Runs
 
