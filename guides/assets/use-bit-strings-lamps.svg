@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="454" height="238" viewBox="0 0 454 238" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of lamps.ld</title>
+<desc id="description">2 rungs between two power rails. Rung 1: ge sel 0 lt sel 16 xic go otl lamps.[sel]. Rung 2: ge sel 0 lt sel 16 xio go otu lamps.[sel].</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="453" height="237" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="226"/>
+<line class="rail" x1="436" y1="14" x2="436" y2="226"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="266" y1="52" x2="322" y2="52"/>
+<line class="ink" x1="414" y1="52" x2="436" y2="52"/>
+<rect class="box" x="68" y="39" width="60" height="68" rx="3"/>
+<line class="ink" x1="68" y1="65" x2="128" y2="65"/>
+<text class="op" x="98" y="56" text-anchor="middle">ge</text>
+<text class="tag" x="118" y="79" text-anchor="end">sel</text>
+<text class="tag" x="118" y="97" text-anchor="end">0</text>
+<line class="ink" x1="128" y1="52" x2="144" y2="52"/>
+<rect class="box" x="144" y="39" width="60" height="68" rx="3"/>
+<line class="ink" x1="144" y1="65" x2="204" y2="65"/>
+<text class="op" x="174" y="56" text-anchor="middle">lt</text>
+<text class="tag" x="194" y="79" text-anchor="end">sel</text>
+<text class="tag" x="194" y="97" text-anchor="end">16</text>
+<line class="ink" x1="204" y1="52" x2="220" y2="52"/>
+<text class="tag" x="243" y="35" text-anchor="middle">go</text>
+<line class="ink" x1="220" y1="52" x2="236" y2="52"/>
+<line class="ink" x1="236" y1="41" x2="236" y2="63"/>
+<line class="ink" x1="250" y1="41" x2="250" y2="63"/>
+<line class="ink" x1="250" y1="52" x2="266" y2="52"/>
+<text class="tag" x="412" y="35" text-anchor="end">lamps.[sel]</text>
+<line class="ink" x1="322" y1="52" x2="380" y2="52"/>
+<path class="ink" d="M 385 41 Q 375 52 385 63"/>
+<path class="ink" d="M 397 41 Q 407 52 397 63"/>
+<line class="ink" x1="402" y1="52" x2="414" y2="52"/>
+<text class="op" x="391" y="56" text-anchor="middle">L</text>
+<text class="dim" x="36" y="161" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="157" x2="68" y2="157"/>
+<line class="ink" x1="266" y1="157" x2="322" y2="157"/>
+<line class="ink" x1="414" y1="157" x2="436" y2="157"/>
+<rect class="box" x="68" y="144" width="60" height="68" rx="3"/>
+<line class="ink" x1="68" y1="170" x2="128" y2="170"/>
+<text class="op" x="98" y="161" text-anchor="middle">ge</text>
+<text class="tag" x="118" y="184" text-anchor="end">sel</text>
+<text class="tag" x="118" y="202" text-anchor="end">0</text>
+<line class="ink" x1="128" y1="157" x2="144" y2="157"/>
+<rect class="box" x="144" y="144" width="60" height="68" rx="3"/>
+<line class="ink" x1="144" y1="170" x2="204" y2="170"/>
+<text class="op" x="174" y="161" text-anchor="middle">lt</text>
+<text class="tag" x="194" y="184" text-anchor="end">sel</text>
+<text class="tag" x="194" y="202" text-anchor="end">16</text>
+<line class="ink" x1="204" y1="157" x2="220" y2="157"/>
+<text class="tag" x="243" y="140" text-anchor="middle">go</text>
+<line class="ink" x1="220" y1="157" x2="236" y2="157"/>
+<line class="ink" x1="236" y1="146" x2="236" y2="168"/>
+<line class="ink" x1="250" y1="146" x2="250" y2="168"/>
+<line class="ink" x1="250" y1="157" x2="266" y2="157"/>
+<line class="ink" x1="238" y1="166" x2="248" y2="148"/>
+<text class="tag" x="412" y="140" text-anchor="end">lamps.[sel]</text>
+<line class="ink" x1="322" y1="157" x2="380" y2="157"/>
+<path class="ink" d="M 385 146 Q 375 157 385 168"/>
+<path class="ink" d="M 397 146 Q 407 157 397 168"/>
+<line class="ink" x1="402" y1="157" x2="414" y2="157"/>
+<text class="op" x="391" y="161" text-anchor="middle">U</text>
+</svg>

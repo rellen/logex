@@ -213,6 +213,11 @@ example `t1.dn`.
 One binary digit of an integer tag or of a bit string tag, read as a bool. You write its
 number after a dot, for example `status.3`.
 
+### mask
+
+A literal with a 1 for each bit that a bitwise instruction keeps, sets or changes, for
+example `16#00ff` in `and status 16#00ff d`.
+
 ### initial value
 
 The value that a tag has when its instance starts. It is 0 if the declaration gives no
