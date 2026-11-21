@@ -122,6 +122,7 @@
   {"guides/explanation/warm-and-cold-restarts.md", :explanation, "Explanation"},
   {"guides/explanation/trips-and-watchdogs.md", :explanation, "Explanation"},
   {"guides/explanation/timing-and-capacity.md", :explanation, "Explanation"},
+  {"guides/explanation/plant-size.md", :explanation, "Explanation"},
   {"guides/explanation/safety-and-limits.md", :explanation, "Explanation"},
   {"guides/explanation/limits-of-retained-values.md", :explanation, "Explanation"},
   {"guides/explanation/short-pulses.md", :explanation, "Explanation"},
