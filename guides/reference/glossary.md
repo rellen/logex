@@ -262,6 +262,13 @@ An instance of a built-in function block type that counts rising edges: `ctu`, `
 
 IEC 61131-3: a counter function block. Conventional set: a COUNTER tag.
 
+### typed counter
+
+A counter with a type word that names the integer type of its count, for example
+`ctu_int`. A counter with the type word `ctu`, `ctd` or `ctud` counts in a `dint`.
+
+IEC 61131-3: a counter with the type in its name, for example CTU_INT.
+
 ### preset
 
 The limit of a timer or of a counter: the time to measure or the number to count to. The
