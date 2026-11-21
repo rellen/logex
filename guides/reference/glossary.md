@@ -224,7 +224,9 @@ The word `retain` or `non_retain` after the section word of a declaration.
 
 ### reserved word
 
-A word that cannot be the name of a tag, for example a mnemonic or a type word.
+A word that a kind of file keeps for its own lines, so it cannot be a name in that kind
+of file. For example, a mnemonic or a type word cannot be the name of a tag. A message
+calls a reserved word a keyword.
 
 ## Function blocks
 
