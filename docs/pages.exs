@@ -62,6 +62,8 @@
   {"guides/howto/write-a-function-block.md", :howto, "How-to guides"},
   {"guides/howto/keep-values-across-a-restart.md", :howto, "How-to guides"},
   {"guides/howto/port-a-program.md", :howto, "How-to guides"},
+  {"guides/howto/correct-a-ported-program.md", :howto, "How-to guides"},
+  {"guides/howto/check-a-ported-program.md", :howto, "How-to guides"},
   {"guides/howto/write-a-configuration-file.md", :howto, "How-to guides"},
   {"guides/howto/build-a-configuration-from-elixir.md", :howto, "How-to guides"},
   {"guides/howto/share-a-global.md", :howto, "How-to guides"},
