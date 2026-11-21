@@ -243,9 +243,17 @@ and the counters.
 ### timer
 
 An instance of a built-in function block type that measures time: `ton`, `tof`, `tp` or
-`rto`.
+`rto`, or a long timer.
 
 IEC 61131-3: a timer function block. Conventional set: a TIMER tag.
+
+### long timer
+
+A timer that measures time in nanoseconds: an instance of `ton_ltime`, `tof_ltime`,
+`tp_ltime` or `rto_ltime`. The preset of a timer of a different type is a time in
+milliseconds.
+
+IEC 61131-3: a timer with the ending `_LTIME`, for example TON_LTIME.
 
 ### counter
 
