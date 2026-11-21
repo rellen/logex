@@ -404,6 +404,11 @@ The bool global that makes an event task due on its rising edge.
 
 The rank of a task. The priority 0 is the highest.
 
+### due
+
+A task is due when logex must run it in a cycle. A periodic task is due when the time
+of the resource reaches its due time. An event task is due when its trigger rises.
+
 ### cycle
 
 One pass of a resource: it runs each task that is due at the time that the host gives.

@@ -1,0 +1,12 @@
+// line.logex -- 4 instances of runs.ld, on 4 tasks
+task fast interval 10 priority 1
+task slow interval 50 priority 2
+task on_estop single estop priority 0
+task main continuous
+
+var_global estop bool at panel.i.7
+
+program conveyor runs with fast
+program fan      runs with slow
+program alarm    runs with on_estop
+program sorter   runs
