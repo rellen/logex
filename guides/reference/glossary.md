@@ -222,6 +222,21 @@ value.
 
 The word `retain` or `non_retain` after the section word of a declaration.
 
+### widen
+
+To put a value of 1 type into a tag of a wider type with no conversion. logex widens a
+type only into a type that holds each value of the first type.
+
+IEC 61131-3: an implicit type conversion.
+
+### wrap
+
+To keep the low bits of an integer result that its type cannot hold. The value then goes
+to the other end of the range of the type. Example: in an `sint`, 127 + 1 wraps to -128.
+An arithmetic instruction, or a conversion between 2 number types, that wraps a result
+passes no power. A conversion to or from a bit string keeps the low bits and passes
+power.
+
 ### reserved word
 
 A word that cannot be the name of a tag, for example a mnemonic or a type word.
