@@ -241,6 +241,14 @@ type only into a type that holds each value of the first type.
 
 IEC 61131-3: an implicit type conversion.
 
+### conversion
+
+An instruction that reads a value and writes it in the type that its mnemonic names last.
+The mnemonic names 2 types, for example `dint_to_sint` or `real_trunc_int`. logex has 182
+conversions. Use a conversion where the first type does not widen into the second.
+
+IEC 61131-3: a typed conversion function, for example DINT_TO_SINT.
+
 ### wrap
 
 To keep the low bits of an integer result that its type cannot hold. The value then goes
