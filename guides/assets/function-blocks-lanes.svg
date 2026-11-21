@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="496" viewBox="0 0 364 496" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of lanes.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: xic eye[0] ton lane_t[0] 30. Rung 5: xic lane_t[0].dn ctu lane_c[0] 3. Rung 9: cal gates[0] lane_c[0].q kick[0]. Rung 13: move lane_c[lane].cv count. Rung 14: xic lane_t[lane].dn ote held.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="495" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="484"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="484"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="124" y1="52" x2="236" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="96" y="35" text-anchor="middle">eye[0]</text>
+<line class="ink" x1="68" y1="52" x2="89" y2="52"/>
+<line class="ink" x1="89" y1="41" x2="89" y2="63"/>
+<line class="ink" x1="103" y1="41" x2="103" y2="63"/>
+<line class="ink" x1="103" y1="52" x2="124" y2="52"/>
+<rect class="box" x="236" y="39" width="88" height="68" rx="3"/>
+<line class="ink" x1="236" y1="65" x2="324" y2="65"/>
+<text class="op" x="280" y="56" text-anchor="middle">ton</text>
+<text class="tag" x="314" y="79" text-anchor="end">lane_t[0]</text>
+<text class="dim" x="246" y="97">preset</text>
+<text class="tag" x="314" y="97" text-anchor="end">30</text>
+<text class="dim" x="36" y="161" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="157" x2="68" y2="157"/>
+<line class="ink" x1="168" y1="157" x2="236" y2="157"/>
+<line class="ink" x1="324" y1="157" x2="346" y2="157"/>
+<text class="tag" x="118" y="140" text-anchor="middle">lane_t[0].dn</text>
+<line class="ink" x1="68" y1="157" x2="111" y2="157"/>
+<line class="ink" x1="111" y1="146" x2="111" y2="168"/>
+<line class="ink" x1="125" y1="146" x2="125" y2="168"/>
+<line class="ink" x1="125" y1="157" x2="168" y2="157"/>
+<rect class="box" x="236" y="144" width="88" height="68" rx="3"/>
+<line class="ink" x1="236" y1="170" x2="324" y2="170"/>
+<text class="op" x="280" y="161" text-anchor="middle">ctu</text>
+<text class="tag" x="314" y="184" text-anchor="end">lane_c[0]</text>
+<text class="dim" x="246" y="202">preset</text>
+<text class="tag" x="314" y="202" text-anchor="end">3</text>
+<text class="dim" x="36" y="249" text-anchor="end">9</text>
+<line class="ink" x1="46" y1="245" x2="68" y2="245"/>
+<line class="ink" x1="68" y1="245" x2="186" y2="245"/>
+<line class="ink" x1="324" y1="245" x2="346" y2="245"/>
+<rect class="box" x="186" y="232" width="138" height="86" rx="3"/>
+<line class="ink" x1="186" y1="258" x2="324" y2="258"/>
+<text class="op" x="255" y="249" text-anchor="middle">cal</text>
+<text class="tag" x="314" y="272" text-anchor="end">gates[0]</text>
+<text class="dim" x="196" y="290">open</text>
+<text class="tag" x="314" y="290" text-anchor="end">lane_c[0].q</text>
+<text class="dim" x="196" y="308">kick</text>
+<text class="tag" x="314" y="308" text-anchor="end">kick[0]</text>
+<text class="dim" x="36" y="355" text-anchor="end">13</text>
+<line class="ink" x1="46" y1="351" x2="68" y2="351"/>
+<line class="ink" x1="68" y1="351" x2="192" y2="351"/>
+<line class="ink" x1="324" y1="351" x2="346" y2="351"/>
+<rect class="box" x="192" y="338" width="132" height="68" rx="3"/>
+<line class="ink" x1="192" y1="364" x2="324" y2="364"/>
+<text class="op" x="258" y="355" text-anchor="middle">move</text>
+<text class="tag" x="314" y="378" text-anchor="end">lane_c[lane].cv</text>
+<text class="dim" x="202" y="396">to</text>
+<text class="tag" x="314" y="396" text-anchor="end">count</text>
+<text class="dim" x="36" y="460" text-anchor="end">14</text>
+<line class="ink" x1="46" y1="456" x2="68" y2="456"/>
+<line class="ink" x1="190" y1="456" x2="278" y2="456"/>
+<line class="ink" x1="324" y1="456" x2="346" y2="456"/>
+<text class="tag" x="129" y="439" text-anchor="middle">lane_t[lane].dn</text>
+<line class="ink" x1="68" y1="456" x2="122" y2="456"/>
+<line class="ink" x1="122" y1="445" x2="122" y2="467"/>
+<line class="ink" x1="136" y1="445" x2="136" y2="467"/>
+<line class="ink" x1="136" y1="456" x2="190" y2="456"/>
+<text class="tag" x="301" y="439" text-anchor="middle">held</text>
+<line class="ink" x1="278" y1="456" x2="290" y2="456"/>
+<path class="ink" d="M 295 445 Q 285 456 295 467"/>
+<path class="ink" d="M 307 445 Q 317 456 307 467"/>
+<line class="ink" x1="312" y1="456" x2="324" y2="456"/>
+</svg>
