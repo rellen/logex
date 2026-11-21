@@ -132,6 +132,8 @@
   {"docs/architecture/runtime-and-evaluator.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/resource-and-schedule.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runner.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/runner-devices.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/runner-files.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/online-edit.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/store-and-files.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/testing-strategy.md", :contributor, "Architecture and implementation"},
