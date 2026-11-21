@@ -1,0 +1,15 @@
+var_input  eye    bool
+var_input  skip   bool
+var_input  slot   dint
+var_input  speed  int
+var_input  rate   real
+var_input  big    lint
+var_output lamp   bool
+var_output belt   bool
+var_output small  sint
+var_output total  lreal
+var        delay  ton
+var        s1     seal
+var        s2     seal
+var        lanes  seal[3]
+var        g      gain
