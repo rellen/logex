@@ -490,7 +490,8 @@ The time between 2 reads of a device by the runner: the option `poll:` of
 
 ### clock
 
-The source of the time for the runner. The manual clock moves only when a test moves it.
+The source of the time for the runner. An ExUnit test moves the manual clock with
+`advance/2`. A slow simulated device moves it with `pass/2` during a round.
 
 ### watchdog
 
