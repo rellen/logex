@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="418" height="722" viewBox="0 0 418 722" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of weigh.ld</title>
+<desc id="description">7 rungs between two power rails. Rung 1: xic eye ons edge ote box. Rung 2: xic box move weights[2] weights[3]. Rung 3: xic box move weights[1] weights[2]. Rung 4: xic box move weights[0] weights[1]. Rung 5: xic box move weight weights[0]. Rung 6: ge weights[0] limits[0] le weights[0] limits[1] ote good. Rung 7: gt weights[0] limits[1] ote heavy.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="417" height="721" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="710"/>
+<line class="rail" x1="400" y1="14" x2="400" y2="710"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="182" y1="52" x2="332" y2="52"/>
+<line class="ink" x1="378" y1="52" x2="400" y2="52"/>
+<text class="tag" x="91" y="35" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="52" x2="84" y2="52"/>
+<line class="ink" x1="84" y1="41" x2="84" y2="63"/>
+<line class="ink" x1="98" y1="41" x2="98" y2="63"/>
+<line class="ink" x1="98" y1="52" x2="114" y2="52"/>
+<line class="ink" x1="114" y1="52" x2="130" y2="52"/>
+<text class="tag" x="156" y="35" text-anchor="middle">edge</text>
+<line class="ink" x1="130" y1="52" x2="137" y2="52"/>
+<rect class="box" x="137" y="42" width="38" height="20" rx="3"/>
+<text class="op" x="156" y="56" text-anchor="middle">ons</text>
+<line class="ink" x1="175" y1="52" x2="182" y2="52"/>
+<text class="tag" x="355" y="35" text-anchor="middle">box</text>
+<line class="ink" x1="332" y1="52" x2="344" y2="52"/>
+<path class="ink" d="M 349 41 Q 339 52 349 63"/>
+<path class="ink" d="M 361 41 Q 371 52 361 63"/>
+<line class="ink" x1="366" y1="52" x2="378" y2="52"/>
+<text class="dim" x="36" y="120" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="116" x2="68" y2="116"/>
+<line class="ink" x1="114" y1="116" x2="260" y2="116"/>
+<line class="ink" x1="378" y1="116" x2="400" y2="116"/>
+<text class="tag" x="91" y="99" text-anchor="middle">box</text>
+<line class="ink" x1="68" y1="116" x2="84" y2="116"/>
+<line class="ink" x1="84" y1="105" x2="84" y2="127"/>
+<line class="ink" x1="98" y1="105" x2="98" y2="127"/>
+<line class="ink" x1="98" y1="116" x2="114" y2="116"/>
+<rect class="box" x="260" y="103" width="118" height="68" rx="3"/>
+<line class="ink" x1="260" y1="129" x2="378" y2="129"/>
+<text class="op" x="319" y="120" text-anchor="middle">move</text>
+<text class="tag" x="368" y="143" text-anchor="end">weights[2]</text>
+<text class="dim" x="270" y="161">to</text>
+<text class="tag" x="368" y="161" text-anchor="end">weights[3]</text>
+<text class="dim" x="36" y="225" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="221" x2="68" y2="221"/>
+<line class="ink" x1="114" y1="221" x2="260" y2="221"/>
+<line class="ink" x1="378" y1="221" x2="400" y2="221"/>
+<text class="tag" x="91" y="204" text-anchor="middle">box</text>
+<line class="ink" x1="68" y1="221" x2="84" y2="221"/>
+<line class="ink" x1="84" y1="210" x2="84" y2="232"/>
+<line class="ink" x1="98" y1="210" x2="98" y2="232"/>
+<line class="ink" x1="98" y1="221" x2="114" y2="221"/>
+<rect class="box" x="260" y="208" width="118" height="68" rx="3"/>
+<line class="ink" x1="260" y1="234" x2="378" y2="234"/>
+<text class="op" x="319" y="225" text-anchor="middle">move</text>
+<text class="tag" x="368" y="248" text-anchor="end">weights[1]</text>
+<text class="dim" x="270" y="266">to</text>
+<text class="tag" x="368" y="266" text-anchor="end">weights[2]</text>
+<text class="dim" x="36" y="330" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="326" x2="68" y2="326"/>
+<line class="ink" x1="114" y1="326" x2="260" y2="326"/>
+<line class="ink" x1="378" y1="326" x2="400" y2="326"/>
+<text class="tag" x="91" y="309" text-anchor="middle">box</text>
+<line class="ink" x1="68" y1="326" x2="84" y2="326"/>
+<line class="ink" x1="84" y1="315" x2="84" y2="337"/>
+<line class="ink" x1="98" y1="315" x2="98" y2="337"/>
+<line class="ink" x1="98" y1="326" x2="114" y2="326"/>
+<rect class="box" x="260" y="313" width="118" height="68" rx="3"/>
+<line class="ink" x1="260" y1="339" x2="378" y2="339"/>
+<text class="op" x="319" y="330" text-anchor="middle">move</text>
+<text class="tag" x="368" y="353" text-anchor="end">weights[0]</text>
+<text class="dim" x="270" y="371">to</text>
+<text class="tag" x="368" y="371" text-anchor="end">weights[1]</text>
+<text class="dim" x="36" y="435" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="431" x2="68" y2="431"/>
+<line class="ink" x1="114" y1="431" x2="260" y2="431"/>
+<line class="ink" x1="378" y1="431" x2="400" y2="431"/>
+<text class="tag" x="91" y="414" text-anchor="middle">box</text>
+<line class="ink" x1="68" y1="431" x2="84" y2="431"/>
+<line class="ink" x1="84" y1="420" x2="84" y2="442"/>
+<line class="ink" x1="98" y1="420" x2="98" y2="442"/>
+<line class="ink" x1="98" y1="431" x2="114" y2="431"/>
+<rect class="box" x="260" y="418" width="118" height="68" rx="3"/>
+<line class="ink" x1="260" y1="444" x2="378" y2="444"/>
+<text class="op" x="319" y="435" text-anchor="middle">move</text>
+<text class="tag" x="368" y="458" text-anchor="end">weight</text>
+<text class="dim" x="270" y="476">to</text>
+<text class="tag" x="368" y="476" text-anchor="end">weights[0]</text>
+<text class="dim" x="36" y="540" text-anchor="end">6</text>
+<line class="ink" x1="46" y1="536" x2="68" y2="536"/>
+<line class="ink" x1="276" y1="536" x2="332" y2="536"/>
+<line class="ink" x1="378" y1="536" x2="400" y2="536"/>
+<rect class="box" x="68" y="523" width="96" height="68" rx="3"/>
+<line class="ink" x1="68" y1="549" x2="164" y2="549"/>
+<text class="op" x="116" y="540" text-anchor="middle">ge</text>
+<text class="tag" x="154" y="563" text-anchor="end">weights[0]</text>
+<text class="tag" x="154" y="581" text-anchor="end">limits[0]</text>
+<line class="ink" x1="164" y1="536" x2="180" y2="536"/>
+<rect class="box" x="180" y="523" width="96" height="68" rx="3"/>
+<line class="ink" x1="180" y1="549" x2="276" y2="549"/>
+<text class="op" x="228" y="540" text-anchor="middle">le</text>
+<text class="tag" x="266" y="563" text-anchor="end">weights[0]</text>
+<text class="tag" x="266" y="581" text-anchor="end">limits[1]</text>
+<text class="tag" x="355" y="519" text-anchor="middle">good</text>
+<line class="ink" x1="332" y1="536" x2="344" y2="536"/>
+<path class="ink" d="M 349 525 Q 339 536 349 547"/>
+<path class="ink" d="M 361 525 Q 371 536 361 547"/>
+<line class="ink" x1="366" y1="536" x2="378" y2="536"/>
+<text class="dim" x="36" y="645" text-anchor="end">7</text>
+<line class="ink" x1="46" y1="641" x2="68" y2="641"/>
+<line class="ink" x1="164" y1="641" x2="330" y2="641"/>
+<line class="ink" x1="378" y1="641" x2="400" y2="641"/>
+<rect class="box" x="68" y="628" width="96" height="68" rx="3"/>
+<line class="ink" x1="68" y1="654" x2="164" y2="654"/>
+<text class="op" x="116" y="645" text-anchor="middle">gt</text>
+<text class="tag" x="154" y="668" text-anchor="end">weights[0]</text>
+<text class="tag" x="154" y="686" text-anchor="end">limits[1]</text>
+<text class="tag" x="376" y="624" text-anchor="end">heavy</text>
+<line class="ink" x1="330" y1="641" x2="344" y2="641"/>
+<path class="ink" d="M 349 630 Q 339 641 349 652"/>
+<path class="ink" d="M 361 630 Q 371 641 361 652"/>
+<line class="ink" x1="366" y1="641" x2="378" y2="641"/>
+</svg>
