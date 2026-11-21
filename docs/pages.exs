@@ -71,6 +71,7 @@
   {"guides/howto/test-on-the-manual-clock.md", :howto, "How-to guides"},
   {"guides/howto/watch-a-runner.md", :howto, "How-to guides"},
   {"guides/howto/force-inputs.md", :howto, "How-to guides"},
+  {"guides/howto/find-why-a-plant-tripped.md", :howto, "How-to guides"},
   {"guides/howto/restart-after-a-trip.md", :howto, "How-to guides"},
   {"guides/howto/keep-values-on-disk.md", :howto, "How-to guides"},
   {"guides/howto/recover-a-refused-store.md", :howto, "How-to guides"},
