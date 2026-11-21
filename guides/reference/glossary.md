@@ -458,6 +458,11 @@ The process that runs a resource on a clock and through devices: `Logex.Runner`.
 One step of the runner: it takes the inputs from the devices, runs a cycle and writes
 the outputs to the devices.
 
+### poll period
+
+The time between 2 reads of the adapter by the process of a device, on the clock of the
+runner. The option `poll:` of `Logex.Runner` sets it, 10 ms by default.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
