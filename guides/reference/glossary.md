@@ -448,9 +448,18 @@ The task that runs each program instance that has no timed task.
 
 IEC 61131-3: a program with no task. Conventional set: the continuous task.
 
+### timed task
+
+A periodic task or an event task: each task that is not the continuous task.
+
 ### trigger
 
 The bool global that makes an event task due on its rising edge.
+
+### sample
+
+The value of the trigger of an event task that a cycle reads, 1 time in each cycle. The
+task is due when the sample is 1 and the sample of the last cycle is 0.
 
 ### priority
 
@@ -465,6 +474,11 @@ event task with an interval is also due at each interval while its trigger is 0.
 ### cycle
 
 One pass of a resource: it runs each task that is due at the time that the host gives.
+
+### overlap
+
+A due time of a task with an interval that passes with no run of the task, because a
+cycle came late. logex counts each overlap. `Logex.Runtime.overlaps/1` gives the count of each task.
 
 ### global
 
