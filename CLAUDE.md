@@ -16,8 +16,18 @@ own documentation holds:
   designing anything that adds a data type (§4.12), retains a value (§4.13), names a
   program, schedules one, binds I/O, changes a running controller (§4.9) or runs one on
   the clock (§4.11).
+- **The decision records** under `docs/adr/` each sum up the decisions of one large
+  choice, curated beside §7, which stays the full log (decision 547); `docs/adr/README.md`
+  lists them and the record to read before a change to each part.
 - **The plan and the history** are `PLAN.md`; the review of the whole codebase, every
   finding with its repro, is `docs/review-2026-11-01.md`.
+- **Where the pages are.** The user's, the site's, under `guides/` by kind:
+  `guides/tutorials/`, `guides/howto/`, `guides/reference/` (the host contract, the
+  cheatsheet, the glossary) and `guides/explanation/`, their pictures in `guides/assets/`.
+  The contributor's under `docs/`: `docs/architecture/` how each part works,
+  `docs/implementation/` how it is tested and how an instruction is named and added,
+  `docs/contributing/` the toolchain, the release and the project's history, and
+  `docs/adr/`; `docs/README.md` maps every document.
 - **The names** are `docs/naming.md`, one stanza a word. Read `docs/instruction-sets.md`,
   the reference it cites, before writing a stanza: it carries the IEC feature numbers a
   stanza should cite.
@@ -29,9 +39,11 @@ own documentation holds:
   `docs/check-a-page.md`, the kinds and how to add and check a page; its technical words
   are the headings of `guides/reference/glossary.md`, and each kind starts from its
   template under `docs/templates/`.
-- **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
-  is and how to use it is `README.md`, whose examples the suite runs from their files
-  under `examples/`, a project of their own (`examples/mix.exs`, logex its dependency).
+- **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`. `README.md`
+  is the short first page, what logex is, a small program, how to run it and what logex
+  is not, linking the site; how to use logex is the user's pages. The suite runs every
+  page's examples, README's among them, from their files under `examples/`, a project of
+  their own (`examples/mix.exs`, logex its dependency).
 
 ## Commands
 
@@ -325,7 +337,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/docs_test.exs` — the documentation's build: `mix.exs` giving no dependency
   outside the `docs` environment, read by a `mix` with no Hex, and `mix.lock` ExDoc's alone;
   `docs/pages.exs`, the one list of pages, a line a page, held to every Markdown file,
-  each page's kind to its directory and group, the legacy documents to the ten it names; `mix.exs`'s site read from it, the host contract's modules first; each
+  each page's kind to its directory and group, the legacy documents to the ten it names,
+  no page a stub; `mix.exs`'s site read from it, the host contract's modules first; each
   refusal of `scripts/site.exs`, a page's name in the site and each link's anchor made
   ExDoc's; `scripts/docs.sh` over a stand-in `mix`; and `.github/workflows/docs.yml`, its
   keys, toolchain and permissions, its question to GitHub run as written.
