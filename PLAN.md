@@ -23855,9 +23855,16 @@ is unchanged: DOC-1's close and its third step, RV-23, RV-25 alone, and DOC-2 la
     | `b09_check_shown_whole` | `check/1`'s values shown whole | red: `configuration_test.exs` 2 |
     | `b10_start_longer` | 25 characters kept, the compile's too | red: `compile_total_test.exs` 2, `configuration_test.exs` 2 |
     | `b11_sizes_whole` | an array's sizes quoted whole | red: `configuration_test.exs` 1 |
+    | `c01_respell_no_point` | a misspelled location names no point for the value | red: `configuration_test.exs` 2 |
+    | `c02_retain_reads_location` | `retain` judged against the location's spelling, not its point | red: `configuration_test.exs` 2 |
+    | `c03_array_reads_location` | a located array judged against the spelling, not its point | red: `configuration_test.exs` 1 |
+    | `c04_value_reads_location` | the value judged against the spelling, not its point | red: `configuration_test.exs` 1 |
+    | `c05_long_example_whole` | a long constant's example quoted with its number whole | red: `array_configuration_test.exs` 1 |
+    | `c06_long_never` | no number taken as long | red: `array_configuration_test.exs` 1 (and `readme_test.exs` 1, as `a05`) |
 
     None survives. Each changes `lib/` and each is red by the suite, so Dialyzer was
-    not run on them; it is green at each commit, in its gate. The table was run at
+    not run on them; it is green at each commit, in its gate. The `c` rows, the review's
+    mendings, were run at `d3d9ac2`. The `a` and `b` rows were run at
     `0652ccb` and `201fd25`, before the walk was made lighter (the gate, below); the
     lighter walk, run with `configuration_test.exs` against `a03` to `a06`, the mutants
     it caught, is red on each as it was.
