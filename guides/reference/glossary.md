@@ -520,6 +520,21 @@ default.
 A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
 a number of milliseconds of rounds that the share sets.
 
+### event
+
+A record of a thing that occurred while a resource ran, for example a run of an instance,
+a fault or a trip. An event is a tuple, and its first atom is its kind, for example
+`{:trip, reason}`. `Logex.Runtime.cycle/3` gives the events of a cycle in a list. The
+runner sends each event to each subscriber in the message
+`{Logex.Runner, runner, event}`. `runner` is the pid of the runner, and `event` is the
+tuple.
+
+### subscriber
+
+A process that called `Logex.Runner.subscribe/1` or `Logex.Runner.subscribe/2`. The
+runner sends it the events of the kinds that it gave, or of the default kinds of
+`subscribe/1`.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
