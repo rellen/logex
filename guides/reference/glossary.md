@@ -426,9 +426,20 @@ The bool global that makes an event task due on its rising edge.
 
 The rank of a task. The priority 0 is the highest.
 
+### due
+
+A task is due when logex must run it in a cycle. A periodic task is due when the time
+of the resource reaches its due time. An event task is due when its trigger rises. An
+event task with an interval is also due at each interval while its trigger is 0.
+
 ### cycle
 
 One pass of a resource: it runs each task that is due at the time that the host gives.
+
+### overlap
+
+A due time of a task with an interval that passes with no run of the task, because a
+cycle came late. logex counts each overlap. `Logex.Runtime.overlaps/1` gives the count of each task.
 
 ### global
 
@@ -487,6 +498,17 @@ the outputs to the devices.
 
 The time between 2 reads of a device by the runner: the option `poll:` of
 `Logex.Runner`, 10 ms by default.
+
+### share
+
+The part of the time that the runner keeps for its own work, such as the calls of the
+host. The option `overhead:` of `Logex.Runner` sets it, from 10 % to 90 %, and 20 % by
+default.
+
+### slot
+
+A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
+a number of milliseconds of rounds that the share sets.
 
 ### clock
 
