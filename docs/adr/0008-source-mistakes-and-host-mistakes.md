@@ -163,10 +163,14 @@ A check runs at the call where a value comes in from the host. A program gets it
 | A type in `types:` | Compiled again from its text, 1 time for each compile | 54 |
 | A global from `Global.new!/3` | Its initial value at the call, in the words of `check/1`. Its name, its type and its location at `new!/1` and `check/1` | 555, 575 |
 
-The check of a program finds only 2 kinds of hand edit. One is an arithmetic
-[instruction](../../guides/reference/glossary.md#instruction) whose destination has no
-integer type. The other is timer units that do not agree with the tags (decisions 182
-and 197). A configuration also refuses an instance in a `var_input` or a `var_output`
+The check of a program finds only these hand edits:
+
+- An arithmetic [instruction](../../guides/reference/glossary.md#instruction) whose
+  destination has no integer type, or a bitwise instruction whose destination has no
+  type that it can calculate in (decision 182).
+- Timer units, reals, arrays or retained tags of a routine that do not agree with its
+  tags (decision 197, and Milestones 5 and 6).
+ A configuration also refuses an instance in a `var_input` or a `var_output`
 (decision 169). logex trusts each other hand edit of a program. For example, a contact on
 a bool tag that the host retypes to a dint reads 5 as closed.
 

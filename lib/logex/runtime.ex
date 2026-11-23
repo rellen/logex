@@ -349,7 +349,9 @@ defmodule Logex.Runtime do
   decision 190 once: `instance/1`, `start/1` through `Logex.Configuration.check/1`, and
   an edit's accept, since decision 200 for the program running as well as its candidate;
   and since decision 197 so is one whose `units`, each timer's unit, are not the ones its
-  tags give (`Logex.Program.units/1`). Every other entry point checks only a program's
+  tags give (`Logex.Program.units/1`), and since M5-10, M5-11 and M6-1 one whose `reals`,
+  `arrays` or `retained` are not, or whose bitwise instruction's destination has no type
+  it can compute in. Every other entry point checks only a program's
   shape, so a program swapped in by hand after that check is trusted, and a scan that
   reaches such a destination raises there. Otherwise a `%Logex.Program{}`,
   `%Logex.Instance{}` or `%Logex.Edit{}` built or edited by hand is outside this contract, and so is one that holds a block type whose body
