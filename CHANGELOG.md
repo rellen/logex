@@ -127,16 +127,54 @@ changed after its last item was written, under "The host's API".
   is outside -128 to 127 ``: each the line `check/1` gives of the same value in a global
   with no location, a value that is no number, a number outside the type, -0.0 in a
   real, and an array's list of another length or with an element its type does not hold
-  among them. `new!/2`, and a value the type holds, are as they were; a struct built by
-  hand, or changed after, is refused where it was, by `check/1` and `new!/1`; a located
-  global's initial value is still refused there too, for its location, whatever the
-  value, so one refused by `new!/3` for its type is refused again there once the number
-  is mended. The name, the type and the location are kept as given, for `check/1`: with
-  a name that is no text, `{1, 2}`, a wrong value is refused all the same, the name
-  shown as Elixir shows it, and nothing but an `ArgumentError` comes out of `new!/3`
-  whatever it is given. Look for: a `rescue` around
-  `Logex.Configuration.new!/1` or a read of `check/1`'s diagnostics that expected a
-  global's wrong initial value there, where the global came from `Global.new!/3`.
+  among them. A value the type holds is as it was; a struct built by hand, or changed
+  after, is refused where it was, by `check/1` and `new!/1`. The name, the type and the
+  location are judged there too since decisions 576 and 577, below, and nothing but an
+  `ArgumentError` comes out of `new!/3` whatever it is given. Look for: a `rescue`
+  around `Logex.Configuration.new!/1` or a read of `check/1`'s diagnostics that expected
+  a global's wrong initial value there, where the global came from `Global.new!/3`.
+- **`Logex.Configuration.Global.new!/2,3` refuses every mistake of the one global at
+  once** (decisions 576 and 577), each in the lines `check/1` gives of the same struct
+  built by hand, where it judged the value alone and kept the rest for `check/1` and
+  `new!/1` to refuse, a line of the configuration's refusal: a name that is not one name
+  token, `new!("conveyor speed", :dint)`, ``"conveyor speed" cannot name a global: a
+  name is a letter or `_`, then letters, digits or `_` ``, or a configuration file's
+  keyword, `` `task` is a keyword and cannot name a global ``; a type that is none,
+  `new!("speed", :float, initial: 5)`, ``global `speed` has type :float: a global is
+  :bool, …``, or an array of a bad size; a location that is none, `new!("speed", :dint,
+  at: 5)`, or not in its one spelling; `retain: true` on a located global; and any
+  initial value on a located global, a box counter's photo-eye `new!("eye_1", :bool,
+  initial: 1, at: "panel.i.0")` told `` `eye_1` is an input point: its value comes from
+  the input image, so it takes no initial value `` where it was kept, and with
+  `initial: 2` told that line where it was told the type's, a bool holding 0 or 1, and
+  then refused again by `check/1` once the number was mended. A location not in its one
+  spelling, `at: "panel.I.0"` or `"panel.i.00"`, is the point it names for these lines,
+  so the photo-eye's call is told the point's line beside the spelling's, by `new!/3`
+  and `check/1` alike, a configuration file's line among them, where it was told the
+  spelling's alone, or the type's beside it, and the point's once the spelling was
+  mended; a location that is none, `panel.x.0`, names no point, its value judged against
+  the type as before. Several mistakes are one
+  `ArgumentError`, a line each, in `check/1`'s order; every struct `new!/2,3` gives is
+  a `Logex.Configuration.Global.t()`. Two globals of one name, or two on one point,
+  stay `check/1`'s. Look for: a `Global.new!/2,3` call whose name, type or location a
+  later step corrects, or that sets an initial value or `retain: true` on a located
+  global, which now raises where the global is built.
+- **A long number is quoted cut in a host's refusal** (decision 583): `Logex.Tag.new!/5`,
+  `Logex.Configuration.Global.new!/3` and `Logex.Configuration.check/1`, and so the
+  lines `Logex.Configuration.new!/1` raises from `check/1`, quote a number past 10,000
+  characters by its first 24 and how many it has, as a compile quotes a long literal,
+  where they quoted it whole: a
+  totaliser's `Global.new!("total_boxes", :dint, initial: 10 ** 100_000)` raises
+  `` `total_boxes` is a dint: `100000000000000000000000…` (100001 characters) is outside
+  -2147483648 to 2147483647 ``, some 100 bytes where it was a hundred thousand digits,
+  and in milliseconds where the whole text took time growing with the square of its
+  digits, a second for 320,000. A number of 10,000 characters or fewer is quoted whole,
+  as before; one inside a value that is no number, a list's, is cut the same way. A
+  connection of an array var_input to a long constant is told the element to connect,
+  `` the first `m.limits[0]` ``, where its example line held the constant. `new!/1`'s own
+  lines, of a field list that is no keyword list and of an element brought with a line,
+  quote a number whole, as the host contract's other refusals do. Look for: code that
+  reads a number back out of such a message.
 
 ### What it carries, by the work that built it
 

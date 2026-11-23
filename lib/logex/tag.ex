@@ -103,6 +103,12 @@ defmodule Logex.Tag do
     gives, a line's `-0.0` being read as 0.0 (since the review after Milestone 6), as a
     configuration's global's is (`Logex.Configuration.check/1`).
 
+  A number the message quotes is quoted whole up to 10,000 characters, and past that by
+  its first 24 and how many it has, `` `x` is a dint: `100000000000000000000000…` (100001
+  characters) is outside -2147483648 to 2147483647 ``, as a compile quotes a long literal
+  (decision 583), where until then the whole number was, a hundred thousand digits for
+  `10 ** 100_000`, made in time that grows with the square of its digits.
+
   Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
   key: `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and
   `non_retain: true` for `var non_retain c dint`, `false` or no option for a line with
@@ -148,13 +154,13 @@ defmodule Logex.Tag do
   defp options([{key, value} | rest], all, name, seen, problems) when key in @options,
     do:
       options(rest, all, name, Map.put(seen, key, value), [
-        "`#{key}:` for #{label(name)} takes true or false, found #{inspect(value)}" | problems
+        "`#{key}:` for #{label(name)} takes true or false, found #{shown(value)}" | problems
       ])
 
   defp options([{key, value} | rest], all, name, seen, problems) when is_atom(key),
     do:
       options(rest, all, name, Map.put(seen, key, value), [
-        "unknown option #{inspect(key)} for #{label(name)}: Logex.Tag.new!/5 takes " <>
+        "unknown option #{shown(key)} for #{label(name)}: Logex.Tag.new!/5 takes " <>
           "`retain:` and `non_retain:`"
         | problems
       ])
@@ -186,8 +192,12 @@ defmodule Logex.Tag do
   defp shape(options, name),
     do:
       "the options of #{label(name)} are a keyword list, `retain: true` or " <>
-        "`non_retain: true`, found #{inspect(options)}"
+        "`non_retain: true`, found #{shown(options)}"
 
   defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: inspect(name)
+  defp label(name), do: shown(name)
+
+  # A value a refusal shows, as `inspect/1` does, each long number in it cut (decision
+  # 583, `Logex.Lexer.inspected/2`).
+  defp shown(value), do: Logex.Lexer.inspected(value)
 end

@@ -86,7 +86,7 @@ defmodule Logex.Declarations do
   `Logex.Tag.new!/5` (decision 514).
   """
 
-  alias Logex.{Diagnostic, FbType, Parser, Tag}
+  alias Logex.{Diagnostic, FbType, Lexer, Parser, Tag}
   import Logex.Parser, only: [is_literal: 1]
   import Logex.Array, only: [is_array: 1]
   alias Logex.Configuration.Text
@@ -1588,7 +1588,7 @@ defmodule Logex.Declarations do
          section(tag.section, tag) ++ initial(tag, shown) ++ external(tag), checked}
 
   defp name(name) when is_binary(name), do: name(reserved(name), name, Logex.Lexer.tokenize(name))
-  defp name(name), do: ["#{inspect(name)} is not a tag name"]
+  defp name(name), do: ["#{shown(name)} is not a tag name"]
 
   defp name(:mnemonic, name, _), do: ["`#{name}` is an instruction and cannot name a tag"]
   defp name(:type, name, _), do: ["`#{name}` is a type and cannot name a tag"]
@@ -1607,7 +1607,7 @@ defmodule Logex.Declarations do
   defp name(nil, name, {:ok, [{:name, _, name}], _}),
     do: dotted(String.contains?(name, "."), name)
 
-  defp name(nil, name, _), do: ["#{inspect(name)} is not a tag name"]
+  defp name(nil, name, _), do: ["#{shown(name)} is not a tag name"]
 
   # A name with `.` parts lexes as one token (PLAN.md §5), but the `.` reaches into an
   # instance, so it never names a tag of its own.
@@ -1623,7 +1623,7 @@ defmodule Logex.Declarations do
   # `:tof` or `:Dint`, is told of it.
   defp type(type),
     do: [
-      "unknown type #{inspect(type)}: logex has " <>
+      "unknown type #{shown(type)}: logex has " <>
         listed(own_type_values()) <> spelled_as(type)
     ]
 
@@ -1637,7 +1637,7 @@ defmodule Logex.Declarations do
     do: [
       "#{label(name)} is an array whose elements are of an elementary type, as in " <>
         "{:array, :int, [8]}: logex has " <>
-        listed(Enum.map(@type_atoms, &inspect/1)) <> ", found #{inspect(type)}"
+        listed(Enum.map(@type_atoms, &inspect/1)) <> ", found #{shown(type)}"
     ]
 
   # A proper list of integers, one or more: Enum.all?/2 raises on an improper one.
@@ -1651,12 +1651,12 @@ defmodule Logex.Declarations do
   defp dimensions(false, name, dims),
     do: [
       "#{label(name)} is an array whose sizes are a list of one to three counts, as in " <>
-        "{:array, :int, [4, 8]}, found #{inspect(dims)}"
+        "{:array, :int, [4, 8]}, found #{shown(dims)}"
     ]
 
   defp dimensions(true, name, dims) when length(dims) > 3,
     do: [
-      "#{label(name)} is declared with #{length(dims)} dimensions, `[#{Enum.join(dims, ",")}]`: " <>
+      "#{label(name)} is declared with #{length(dims)} dimensions, `[#{joined(dims)}]`: " <>
         "an array has one to three, as in `int[8]`, `int[4,8]` or `int[2,3,4]`"
     ]
 
@@ -1666,17 +1666,23 @@ defmodule Logex.Declarations do
 
   defp sizes(size, name, dims),
     do: [
-      "#{label(name)} is declared with a dimension of #{size}, `[#{Enum.join(dims, ",")}]`: " <>
+      "#{label(name)} is declared with a dimension of #{Lexer.shown_number(size)}, " <>
+        "`[#{joined(dims)}]`: " <>
         "each dimension of an array holds 1 element or more"
     ]
 
   defp within_limit(size, name, dims) when size > 65_536,
     do: [
-      "#{label(name)} would hold #{size} elements, `[#{Enum.join(dims, ",")}]`: an array " <>
+      "#{label(name)} would hold #{Lexer.shown_number(size)} elements, `[#{joined(dims)}]`: " <>
+        "an array " <>
         "holds 65536 at most"
     ]
 
   defp within_limit(_size, _name, _dims), do: []
+
+  # Decision 583 (RV-31): an array's sizes as a refusal quotes them, each through the one
+  # cut a compile makes, a long size's first characters and how many it has.
+  defp joined(dims), do: Enum.map_join(dims, ",", &Lexer.shown_number/1)
 
   # Decisions 370 and 403 (RV-9, RV-12): a declaration of instances holds 65,536 elements
   # at most, counting every tag, element and instance it holds at every depth
@@ -1698,20 +1704,21 @@ defmodule Logex.Declarations do
 
   defp held_message(count, name, type),
     do:
-      "#{label(name)} would hold #{count} elements at every depth, #{holding(type)}: a " <>
+      "#{label(name)} would hold #{Lexer.shown_number(count)} elements at every depth, " <>
+        "#{holding(type)}: a " <>
         "declaration holds 65536 at most, counting every tag, element and instance it holds " <>
         "at every depth"
 
   defp holding({:array, %FbType{name: name, elements: elements}, dims}),
     do:
-      "#{instances_of(Logex.Array.size(dims))} of `#{name}`, `[#{Enum.join(dims, ",")}]`, " <>
+      "#{instances_of(Logex.Array.size(dims))} of `#{name}`, `[#{joined(dims)}]`, " <>
         "each counting itself and the #{elements} its type holds"
 
   defp holding(%FbType{name: name, elements: elements}),
     do: "the instance itself and the #{elements} its type `#{name}` holds"
 
   defp instances_of(1), do: "1 instance"
-  defp instances_of(count), do: "#{count} instances"
+  defp instances_of(count), do: "#{Lexer.shown_number(count)} instances"
 
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
   defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"
@@ -1761,7 +1768,7 @@ defmodule Logex.Declarations do
 
   defp known(false, type),
     do: [
-      "unknown function block type #{inspect(type.name)}: logex has the built-in types of " <>
+      "unknown function block type #{shown(type.name)}: logex has the built-in types of " <>
         "Logex.FbType.builtins/0 and the types Logex.compile/2 gives for a function block's file"
     ]
 
@@ -1857,7 +1864,7 @@ defmodule Logex.Declarations do
 
   defp retain_of(%Tag{retain: retain, name: name}),
     do: [
-      "unknown qualifier #{inspect(retain)} on #{label(name)}: logex has :retain and " <>
+      "unknown qualifier #{shown(retain)} on #{label(name)}: logex has :retain and " <>
         ":non_retain, or nil for none"
     ]
 
@@ -1867,7 +1874,7 @@ defmodule Logex.Declarations do
         "it, as the configuration declares it"
 
   defp section(section) when section in @section_atoms, do: []
-  defp section(section), do: ["unknown section #{inspect(section)}"]
+  defp section(section), do: ["unknown section #{shown(section)}"]
 
   # The section and, since M6-1, the qualifier, read in one call where the line has none,
   # so a tag of no qualifier is checked in what it was before M6-1.
@@ -1905,14 +1912,14 @@ defmodule Logex.Declarations do
   defp initial(%Tag{type: {:array, _, _} = type, name: name, initial: v}, _shown),
     do: [
       "#{label(name)} is #{a_type(type)}: its initial value is a list of its elements' " <>
-        "values, found #{inspect(v, charlists: :as_lists)}"
+        "values, found #{shown(v, charlists: :as_lists)}"
     ]
 
   # M5-10: a real's initial value is a number, an integer or a float; any other type's an
   # integer, a real one refused as a real literal in its slot is (decision 147).
   defp initial(%Tag{type: type, name: name, initial: v}, _shown)
        when type in @reals and not is_number(v),
-       do: ["the initial value of #{label(name)} must be a number, found #{inspect(v)}"]
+       do: ["the initial value of #{label(name)} must be a number, found #{shown(v)}"]
 
   # RV-2 (the review after Milestone 6, a3-compiler2-9): a real literal is quoted as written,
   # `1.5e1`, as every message quotes a literal (decision 202), where it was its value,
@@ -1952,7 +1959,7 @@ defmodule Logex.Declarations do
   defp initial_list(-1, array, name, {values, _shown}),
     do: [
       "#{label(name)} is #{a_type(array)}: its initial value is a list of its elements' " <>
-        "values, found #{inspect(values, charlists: :as_lists)}"
+        "values, found #{shown(values, charlists: :as_lists)}"
     ]
 
   defp initial_list(length, {:array, type, dims} = array, name, {values, shown}) do
@@ -1988,7 +1995,7 @@ defmodule Logex.Declarations do
         "#{plural(count, "value")} outside its type, not listed"
 
   defp element_name(name, index) when is_binary(name), do: Logex.Array.name(name, index)
-  defp element_name(name, index), do: Logex.Array.name(inspect(name), index)
+  defp element_name(name, index), do: Logex.Array.name(shown(name), index)
 
   defp shown_list(shown, _length) when is_list(shown), do: shown
   defp shown_list(_none, length), do: List.duplicate(nil, length)
@@ -2004,10 +2011,11 @@ defmodule Logex.Declarations do
   defp plus_one(n), do: n + 1
 
   defp found(spelling, _v) when is_binary(spelling), do: spelling
-  defp found(_none, v), do: inspect(v)
+  defp found(_none, v), do: shown(v)
 
-  defp quoted(nil, v) when is_float(v), do: "`#{Float.to_string(v)}`"
-  defp quoted(nil, v), do: "`#{v}`"
+  # Decision 583 (RV-31): a value from Elixir, which has no spelling, through the one cut
+  # a compile makes: a long number's first characters and how many it has.
+  defp quoted(nil, v), do: Lexer.quoted_number(v)
   defp quoted(spelling, _v), do: "`#{spelling}`"
 
   # M2-4: a var_external's name is a global's too, declared with `var_global` in a
@@ -2037,7 +2045,11 @@ defmodule Logex.Declarations do
   defp initial_of_literal(type, _v, shown), do: initial_misfit(type, shown)
 
   defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: inspect(name)
+  defp label(name), do: shown(name)
+
+  # A value a refusal shows, as `inspect/2` does, each long number in it cut (decision
+  # 583, `Logex.Lexer.inspected/2`).
+  defp shown(value, options \\ []), do: Lexer.inspected(value, options)
 
   # Tags from Elixir first, then the source's own, each checked against those before it.
   # `folded` indexes the table by lowercased name, so a case-only twin is one lookup.

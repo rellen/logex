@@ -51,7 +51,8 @@ second and third steps and DOC-2.)*
 
 *(Since RV-30, 2026-11-16: README's paragraph says RV-30 has landed, what it built named
 as it was while it waited.)* *(Since the answers to RV-30's questions, 2026-11-16: it names
-decisions 575–583 and what waits with RV-31.)*
+decisions 575–583 and what waits with RV-31.)* *(Since RV-31, 2026-11-23: it says RV-31
+has landed, what it built named as it was while it waited.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -23707,6 +23708,249 @@ is unchanged: DOC-1's close and its third step, RV-23, RV-25 alone, and DOC-2 la
   a number quoted whole changed so and only so (583). CI's comment on the `_build` cache
   and the PLT's made true, `scripts_test.exs`'s pin of the workflow changed by the
   comment alone (580). The marks decisions 575–583 settle made their numbers.
+
+  **RV-31 as built** (2026-11-23, branch `rv31` over `263fc95`). Decisions 576, 577, 580
+  and 583 built, each change with a test that fails when it is reverted, judged by the
+  full suite (the mutation table below); the marks decisions 575–583 settle made their
+  numbers. No test, walk or oracle was deleted or weakened; the test lines taken out are
+  listed below, each with the decision that changed what it pinned. `mix.exs` is
+  untouched, no version is set and no tag made. The working files are under
+  `scratchpad/rv/w31/`.
+
+  - *The one global judged at its line* (decisions 576 and 577, `0652ccb`). Decision 555's
+    judge, `Logex.Configuration.Initial`, grown into `Logex.Configuration.Judge`,
+    internal, every rule of the one global: `said/1`, what no `var_global` line can say,
+    the host's lines in `check/1`'s order, name, type, value, location and qualifier;
+    `lines/1`, the global's own diagnostics, `retain` on a point, an initial value on a
+    point or one its type does not hold, and an array's sizes and list; `unnamed/2`, a
+    name with `.` parts or brackets or a configuration file's keyword, which names a
+    task's and an instance's too; and `placed/1`, a location not in its one spelling or
+    on a device a keyword names. `check/1` reads each where it read its own copy, its
+    lines unchanged; `Global.new!/2,3` reads `refused/1`: the host's lines where there
+    are any, as `check/1` raises them alone, and otherwise the diagnostics' messages in
+    `check/1`'s order for a global alone, the name's, the global's own, the location's,
+    each line of one `ArgumentError`, after the options' own mistakes, which come first
+    as before. The judge sits after the nested structs: its compile-time read of the
+    configuration file's keywords waits on `Logex.Configuration.Text`, which waits on
+    `Instance`, and placed where `Initial` was it held the compile. What takes the other
+    globals, a program or a device to judge stays `check/1`'s: two globals of one name or
+    of a case twin, a point two globals take, two devices whose names differ only in
+    case, each kept by `new!/3` and pinned refused by `check/1`.
+
+    | the call | `new!/3` raised before | `new!/3` raises now |
+    |---|---|---|
+    | a name that is not one name token, `"conveyor speed"`, `""`, `:g`, `{1, 2}` | nothing, the struct kept | ``"conveyor speed" cannot name a global: a name is a letter or `_`, then letters, digits or `_` `` |
+    | a configuration file's keyword in any case, a name with `.` parts or brackets, `task`, `a.b`, `g[1]` | nothing | `` `task` is a keyword and cannot name a global ``, `` `a.b` cannot name a global: `.` is kept for a path… `` |
+    | a type that is none, `:float`, `"bool"`, `{:array, :ton, [2]}`, sizes no list of integers | nothing; with a wrong value, the value's line alone | ``global `speed` has type :float: a global is :bool, …`` |
+    | an array of a bad size, `{:array, :int, [0]}`, four dimensions, past 65,536 elements | nothing | `` `g` is declared with a dimension of 0, `[0]`: … `` |
+    | a location that is no text or not one token, `5`, `:panel`, `""` | nothing | ``global `speed` is at 5, which is not a location: …`` |
+    | a location not in its one spelling, or no location, or on a keyword's device, `panel.I.0`, `panel.x.0`, `task.i.0` | nothing | `` `panel.I.0` is not a location as written: … so it is written `panel.i.0` `` |
+    | any initial value on a located global, `initial: 1, at: "panel.i.0"` | nothing for a value the type holds; the type's line for one it does not | `` `eye_1` is an input point: its value comes from the input image, so it takes no initial value ``, whatever the value |
+    | `retain: true` on a located global | nothing | `` `g` is an input point, and a located global takes no `retain`: … `` |
+    | several mistakes | the value's lines alone | every line `check/1` gives, in its order: the host's alone, or the diagnostics |
+    | a value its type does not hold, with no location | `check/1`'s line (decision 555) | the same |
+
+    `configuration_test.exs`: a describe of decisions 576 and 577, six tests, each
+    message pinned whole beside what `check/1` says of the same struct built by hand,
+    decision 577's three examples and 576's at three values, an output point, a located
+    array and a located real; several mistakes in one call, the host's four and four
+    diagnostics in order, the host's alone where both; a name, a type and a location of
+    each wrong kind; and what takes another global kept and refused by `check/1`.
+    Decision 555's describe changed as the leave allows: its test of what stayed
+    `check/1`'s pins the refusals now; RV-30's F1 rows pin the lines `check/1` raises of
+    each, the name's or the type's heading them, and hold `check/1` to them; and its walk
+    takes the location too, ten locations with three values, and holds `new!/3` to
+    `check/1` at every draw, some 39,000: kept exactly where `check/1` takes the global,
+    the struct the one built by hand, and raising exactly `check/1`'s lines otherwise,
+    nothing but an `ArgumentError` out of either. Each draw is checked in a configuration
+    that runs a lamp's one rung, a third of the base configuration's cost; the base keeps
+    RV-30's check that `check/1` lets nothing else out of it. Its reach, each name, type and location that is a
+    global's kept and refused, each that is none refused only, and over the walk a
+    global kept, raised and diagnosed. `typespec_test.exs`: every type at its ends
+    located too, and the four structs `new!/2,3` kept outside `Global.t()` each refused.
+  - *A long number quoted cut* (decision 583, `201fd25`). The compile cuts a literal past
+    `Logex.Lexer.longest_number/0`, 10,000 characters, to its first 24 and `…`, saying
+    how many it has. `Logex.Lexer` gives the same cut to a number from Elixir:
+    `shown_number/1`, `quoted_number/1` and `inspected/2`, internal, the start and the
+    count read from the number's bits, one power of ten and one division, never from
+    its whole text, whose making grows with the square of its digits (a second for
+    320,000 digits, nine for a million); the compile's own message unchanged, its 24 the
+    one constant. `Logex.Tag.new!/5`'s refusals (`Logex.Declarations`), `Global.new!/3`'s
+    and `check/1`'s quote every number through it, and every value they show through
+    `inspected/2`, a long number inside it cut: an initial value, an element's, an
+    array's sizes and count, a task's interval, priority and watchdog, a connection's
+    constant, an element's line, and a name, a type, a location or a qualifier that is a
+    number. `Global.new!("total_boxes", :dint, initial: 10 ** 100_000)` raises
+    `` `total_boxes` is a dint: `100000000000000000000000…` (100001 characters) is
+    outside -2147483648 to 2147483647 ``. No pin quoted a long number whole, so none
+    changed; the pins of numbers of 10,000 characters or fewer, `type_table_test.exs`'s
+    and `validation_test.exs`'s, are as they were. `configuration_test.exs`, a describe of
+    four tests: twelve refusals of the three pinned whole, a sign and a value that is no
+    number among them, and `check/1`'s of a task's three numbers, a constant and a line;
+    the compile's cut beside the host's of the same 10,001 nines, the edge, 10,000
+    characters whole and 10,001 cut, with and without a sign, and three numbers' starts
+    and lengths read exactly; a long text and list shown as `inspect/1` shows them; and
+    the growth, `new!/3`, `Logex.Tag.new!/5` and `check/1` at 80,000 and 320,000 digits
+    in the same run, four times the digits under twice the reductions, 1.31 to 1.51
+    measured, where the whole text took 16 (235,096 and 3,795,848), and the message the
+    same but for the count, under 200 bytes.
+  - *CI's comments on its two caches* (decision 580, with this record): the `_build` cache's says it
+    holds the PLT too, `!_build/dialyzer` taking nothing out, and why a copy from either
+    is the right one or is not used; the PLT cache's that it matters where the other
+    misses. No key, path or step changed. `scripts_test.exs` reads no comment of the
+    workflow (`ci_lines/0` drops them), so its pins are unchanged, and no test reads the
+    change: reverting it is red nowhere, and no mutant is made of it.
+  - *The marks* (with this record). Made: `trip_test.exs`'s moduledoc and `started!/1`'s comment,
+    RV-30's question 4, decision 578; `docs/organisation.md`'s note under decision 550,
+    question 7 of RV-30's review, decision 581; its note under decision 555, questions 1
+    and 2, decisions 575 and 576 to 577, and the review's note under it, questions 2
+    and 3, decisions 576 and 577; `Logex.Configuration.Global`'s moduledoc and
+    `new!/3`'s doc, questions 2 and 3, rewritten for decisions 576 and 577; and
+    `typespec_test.exs`'s two, question 3, decision 577. Decisions 579 and 582 had no
+    mark. Left as they stand, none of 575–583 settling them: none of RV-30's.
+  - *The cost against the parent* (`263fc95`; `w31/cost31.exs`, each count in a process
+    of its own whose heap no collection visits, the least of seven):
+
+    | the call | parent | tip |
+    |---|---|---|
+    | `Global.new!/3`, a global kept, `"total_boxes"`, `:dint`, `initial: 1200, retain: true` | 32 | 277 |
+    | a located global kept, `"eye_1"`, `:bool`, `at: "panel.i.0"` | 28 | 418 |
+    | a value its type does not hold refused, `:sint` with 300 | 93 | 262 |
+    | a located global's value, `initial: 2, at: "panel.i.0"`, refused for the type before and for the location now | 94 | 440 |
+    | `"conveyor speed"`, kept before and refused now | 29 | 267 |
+    | `initial: 10 ** 100_000` refused | 364,525 | 20,721 |
+    | `Logex.Tag.new!/5`, a tag kept | 111 | 107 |
+    | `Logex.Tag.new!/5`, `10 ** 100_000` refused | 363,657 | 20,727 |
+    | `check/1` of README's plant | 18,631 | 19,235 |
+    | `new!/1` of README's plant from Elixir | 18,509 | 19,113 |
+
+    `Global.new!/3` of a global kept pays for its name read as one token by the lexer,
+    and its location's, where it read neither; `check/1` and `new!/1` of README's plant
+    pay 3 % more, every global's rules a call into the judge; a long number's refusal
+    costs some 20,000 reductions where it cost 364,000 at 100,000 digits, and grows by
+    less than half for four times the digits where it grew sixteen times.
+  - *The mutation table* (`scripts/mutate.sh` in a clone at each commit, each patch
+    judged by the full suite; patches and logs under `w31/m31/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `a01_value_alone` | `new!/3` judges the value alone again | red: `configuration_test.exs` 11, `typespec_test.exs` 1 |
+    | `a02_said_alone` | the host's lines alone, no diagnostic raised | red: `configuration_test.exs` 10 |
+    | `a03_located_value_kept` | a located global's value its type holds kept | red: `configuration_test.exs` 3 |
+    | `a04_name_unjudged` | a keyword's or a dotted name's line not raised | red: `configuration_test.exs` 3 |
+    | `a05_location_unjudged` | a location's spelling not judged | red: `configuration_test.exs` 3 (and `readme_test.exs` 1, the examples' project rebuilding the changed `lib/`) |
+    | `a06_order_changed` | the location's line before the name's | red: `configuration_test.exs` 2 (and `edit_test.exs:3062`, a growth of 29.1 against 28, and `retain_period_test.exs:700`, a message 100 ms late, at a load of 18, each green twice alone) |
+    | `a07_both_kinds_told` | the diagnostics told beside the host's lines | red: `configuration_test.exs` 8, `typespec_test.exs` 1 |
+    | `a08_first_line_alone` | the first line alone raised | red: `configuration_test.exs` 6 |
+    | `a09_no_options_unjudged` | `new!/2`, and no options, judge nothing | red: `configuration_test.exs` 4, `typespec_test.exs` 1 |
+    | `a10_name_host_line_dropped` | a name that is no name not told, by `check/1` too | red: `configuration_test.exs` 7, `typespec_test.exs` 1 |
+    | `b01_number_whole` | no cut: a long number quoted whole | red: `configuration_test.exs` 3 (and `readme_test.exs` 1, as `a05`) |
+    | `b02_cut_sooner` | cut past 9,999 characters, not 10,000 | red: `configuration_test.exs` 1 |
+    | `b03_sign_uncounted` | a negative number's sign not counted | red: `configuration_test.exs` 2 |
+    | `b04_estimate_unsettled` | an estimate one short of the digits taken as it is | red: `configuration_test.exs` 2 |
+    | `b05_inspect_whole` | a long number inside a value shown whole | red: `configuration_test.exs` 2 (and `readme_test.exs` 1, as `a05`) |
+    | `b06_tag_quoted_whole` | `Logex.Tag.new!/5` quotes the number whole | red: `configuration_test.exs` 3 |
+    | `b07_global_quoted_whole` | the judge quotes a global's number whole | red: `configuration_test.exs` 3 |
+    | `b08_task_quoted_whole` | a task's interval quoted whole | red: `configuration_test.exs` 1 |
+    | `b09_check_shown_whole` | `check/1`'s values shown whole | red: `configuration_test.exs` 2 |
+    | `b10_start_longer` | 25 characters kept, the compile's too | red: `compile_total_test.exs` 2, `configuration_test.exs` 2 |
+    | `b11_sizes_whole` | an array's sizes quoted whole | red: `configuration_test.exs` 1 |
+    | `c01_respell_no_point` | a misspelled location names no point for the value | red: `configuration_test.exs` 2 |
+    | `c02_retain_reads_location` | `retain` judged against the location's spelling, not its point | red: `configuration_test.exs` 2 |
+    | `c03_array_reads_location` | a located array judged against the spelling, not its point | red: `configuration_test.exs` 1 |
+    | `c04_value_reads_location` | the value judged against the spelling, not its point | red: `configuration_test.exs` 1 |
+    | `c05_long_example_whole` | a long constant's example quoted with its number whole | red: `array_configuration_test.exs` 1 |
+    | `c06_long_never` | no number taken as long | red: `array_configuration_test.exs` 1 (and `readme_test.exs` 1, as `a05`) |
+
+    None survives. Each changes `lib/` and each is red by the suite, so Dialyzer was
+    not run on them; it is green at each commit, in its gate. The `c` rows, the review's
+    mendings, were run at `d3d9ac2`. The `a` and `b` rows were run at
+    `0652ccb` and `201fd25`, before the walk was made lighter (the gate, below); the
+    lighter walk, run with `configuration_test.exs` against `a03` to `a06`, the mutants
+    it caught, is red on each as it was.
+
+  - *The gate*: `GATE-OK` at each commit, five steps, Dialyzer the fifth: `0652ccb`
+    3,272 (3,261 tests and 11 doctests), 361 s, after a first gate of the same work
+    red by `type_table_test.exs`'s rule that `lib/` gives a type no article by hand, the
+    judge's `a #{kind}`, mended by moving `kind/1` into the judge as `a #{kind(element)}`;
+    `201fd25` 3,276, 333 s; and this record, 3,276, after its first gate, red: under
+    the load of another workflow's suites the walk, 57,500 draws each checked in the
+    base configuration, 10 s alone, passed ExUnit's 60 s and timed out. It takes some
+    39,000 draws now, each in the lamp's configuration, 2.8 s alone, its rule and reach
+    as they were; RV-30's check of the base configuration kept beside it. `scripts/docs.sh` `DOCS-OK` before
+    each. CI and Docs green on `0652ccb` (45176163145, 45176163124) and `201fd25`
+    (45186807946, 45186808013).
+  - *The test lines taken out*, 98 in all against the parent, each replaced: in
+    `configuration_test.exs` (+712 −83) decision 555's describe, its test of what stayed
+    `check/1`'s, nine pins of a struct kept, a located global's value, a type that is
+    none and an array of size 0, changed to their refusals (576, 577), with its name and
+    comments; RV-30's F1 rows, eleven messages that a line `check/1` now gives first
+    heads (577); the walk's reach, which held each name and type kept and raised, now
+    each that is none raised only (577), its name and comment, and
+    `only_argument_errors/1`, replaced by `drawn/1`, which keeps the escape it caught and
+    gives the lines, the check of the base configuration kept with it; in
+    `typespec_test.exs` (+20 −11) the comment and the loop of the four structs kept
+    outside `t()`, now refused (577); and in `trip_test.exs` (+2 −4) the two marks of
+    question 4, now decision 578. No pin of a number quoted whole changed (583): none
+    quoted one past 10,000 characters. `scripts_test.exs` is unchanged (580). The test
+    runs that went red once in the mutation runs at a load of 18, `edit_test.exs:3062`
+    (a growth bound, 29.1 against 28) and `retain_period_test.exs:700` (a message 100 ms
+    late), each passed twice run again alone; neither is touched here.
+  - *CLAUDE.md*: `lib/logex/configuration.ex`'s line names `Judge`, the one judge of a
+    global, where it named `Initial`, the judge of its value.
+  - *Provisional readings, and questions for the maintainer*, each the closest reading of
+    the record, marked where it stands.
+    1. *How long a number is before it is cut* (decision 583: "as a compile cuts a long
+       literal it quotes"). A test harness gives a totaliser `Global.new!("total_boxes",
+       :dint, initial: 10 ** 9_000)`. (a) As built: quoted whole, 9,001 digits, as a
+       compile quotes a literal of up to 10,000 characters, and cut past that; the log
+       line is 9 KB. (b) Cut sooner for a host's refusal, at 60 characters as a store's
+       refusal cuts a text it quotes, its line then short whatever the number, and a
+       host's cut no longer the compile's.
+    2. *A long value that is no number* (RV-30's review, M21). A lamp panel's global is
+       given a 5,000-character text by mistake, `Global.new!("lamp", :bool, initial:
+       String.duplicate("a", 5_000))`. (a) As built: shown as `inspect/1` shows it, a
+       text to 4,096 bytes and a list to 200 elements in all, each long number in it cut,
+       a 4 KB line. (b) A text or a list cut at 60 bytes as the store's refusals cut one.
+       (c) Shown whole. A name or a location that is text is quoted whole, not through
+       `inspect/1`, in `check/1`'s lines and so now in `new!/3`'s (RV-31's review, F4): a
+       100,000-character name with a wrong value, or a 200,000-character location, gives
+       a line of 100 KB or 200 KB, as `check/1` gave before; (a) and (b) would reach
+       those too, (c) is as built for them.
+    3. *Which refusals cut* (decision 583 names three). A host calls
+       `Logex.Configuration.new!(10 ** 100_000)`, or `Logex.Configuration.initial/1` of a
+       global built by hand with that value. (a) As built: the three the decision names,
+       `Logex.Tag.new!/5`, `Global.new!/3` and `check/1`, and `new!/1` through
+       `check/1`; `new!/1`'s own refusal of what is no keyword list, `compile/3`'s and
+       `compile_file/1`'s of an argument that is no text, `initial/1` and `watchdog/1`
+       quote it whole, a hundred thousand digits; so does `new!/1`'s own line of an
+       element brought with a line, `%Global{line: 10 ** 100_000}`, a million digits
+       taking 9 s and a megabyte (RV-31's review, F2). (b) Every refusal of the host
+       contract through the one cut.
+    4. *A test's name* (decision 580). `scripts_test.exs`'s test of the PLT's cache is
+       named "… cached by the toolchain's versions and the script alone, apart from
+       _build's cache", which the workflow's comment no longer says. (a) As built: left,
+       the leave reaching that file by the comment alone. (b) The name made true, a line
+       of a test changed by no decision.
+    5. *A located global whose location is misspelled* (RV-31's review, F1; decision
+       576: "any initial value on a located global ... one refusal"). A box counter's
+       photo-eye is declared `Global.new!("eye_1", :bool, initial: 1, at:
+       "panel.I.0")`, its `I` capital. (a) Before the review: told only that `panel.I.0`
+       is written `panel.i.0`; mended, told the point takes no initial value: two
+       refusals in turn. (b) As built since the review, provisional: the location is the
+       point it names for the value, the list and `retain`, so one refusal tells both,
+       the point's line and the spelling's, in `new!/3` and in `check/1`, a
+       configuration file's `var_global eye_1 bool 1 at panel.I.0` the same. A location
+       that is none, `panel.x.0`, names no point in either: a value beside it is judged
+       against the type, kept where the type holds it, and `retain` beside it told "is
+       located", as before and as pinned before RV-31. (c) A location that is none read
+       as located for the value too, `` `eye_1` is located: a located global takes no
+       initial value ``, changing `check/1`'s lines a configuration file has had since
+       M5-13. IEC writes a location as `%IX0.0`, its letters part of the one token, so
+       it has no second spelling to read; that a point takes no initial value is
+       logex's own rule (decision 576). In Logix an I/O tag is its module's, named by
+       the module's configuration, so a misspelled address names no tag and an alias to
+       it is refused when the routine is verified (unverified against a controller).
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
