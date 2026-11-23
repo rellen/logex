@@ -40,7 +40,7 @@ observed pattern across four separate audits of these documents. A plausible-sou
 statement about this codebase is roughly a coin flip.
 
 So: run it. Paste the real output. If you cannot run it, say so and mark the claim
-`unverified` — `docs/naming.md` does this in eight places and is more trustworthy for it.
+`unverified` — `docs/naming.md` does this throughout and is more trustworthy for it.
 Never close the gap with a guess.
 
 ---
