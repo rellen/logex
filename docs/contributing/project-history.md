@@ -49,7 +49,7 @@ gantt
   M5 data types : 2026-10-21, 2026-10-28
   M6 retained values : 2026-10-27, 2026-11-02
   Review, RV-1 to RV-19 : 2026-11-01, 2026-11-13
-  RV-20 to RV-29, DOC-1 step 1 : 2026-11-12, 2026-11-17
+  RV-20 to RV-30, DOC-1 step 1 : 2026-11-12, 2026-11-17
 ```
 
 Figure: the blocks of work by date. Milestone 1 took 4 weeks. Each later block took 1
@@ -205,7 +205,7 @@ entry of the item in `PLAN.md` names.
 
 | Item | What it does | Decisions |
 |---|---|---|
-| RV-30 | Dialyzer as the fifth step of `scripts/gate.sh`, with `-Wunmatched_returns`. The function that declares a global from Elixir refuses a wrong initial value | 549 to 555 |
+| RV-31 | `Logex.Configuration.Global.new!/3` refuses each error of 1 global when it is called: its name, its type, its location and an initial value beside a location. A refusal cuts a long number that it quotes. The comment of CI on its caches | 576, 577, 580 and 583 |
 | DOC-1, steps 2, 3 | The pages of this site, a short README, then a review of the whole | 546 to 548, 556 to 572 |
 | RV-23 | Each "provisional" mark traced to its decision, or put to the maintainer | 519 |
 | RV-25 | The runner and the contract test file split by concern, with no change of behaviour | 515 |

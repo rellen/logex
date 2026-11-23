@@ -349,9 +349,9 @@ A real-clock test obeys these rules:
 
 ### CI cannot skip a gate
 
-The gate of `CONTRIBUTING.md`, "Before you commit", is 4 commands, each judged by its exit
-code. `scripts/gate.sh` runs them in order. CI runs the same 4, then Dialyzer, on each
-push and each pull request.
+The gate of `CONTRIBUTING.md`, "Before you commit", is 5 commands, each judged by its exit
+code, the fifth `scripts/dialyzer.sh` (decision 549). `scripts/gate.sh` runs them in
+order. CI runs the same 5 on each push and each pull request.
 
 `scripts_test.exs` compares the keys of each step of the CI workflow with a fixed list.
 Thus no step has an `if:` or a `continue-on-error:` that can skip a gate or let its

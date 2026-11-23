@@ -74,7 +74,8 @@ that command, until you do.
 ### The toolchain
 
 Elixir 1.20.4 on Erlang/OTP 28, the pair `mix.exs`, `shell.nix`, `flake.nix`,
-`.tool-versions` and CI pin. `nix develop` (or `nix-shell`) gives it, and so does
+`.tool-versions` and CI pin; `guides/howto/install-and-run.md` shows a reader's
+`.tool-versions` with the same two lines, which a change of the pair changes too. `nix develop` (or `nix-shell`) gives it, and so does
 [asdf](https://asdf-vm.com) from `.tool-versions`: `asdf plugin add erlang`, `asdf plugin
 add elixir`, then `asdf install` in the checkout. `mix.exs` requires `~> 1.20`, so on an
 older Elixir `mix` aborts before it runs anything; install the pinned pair rather than

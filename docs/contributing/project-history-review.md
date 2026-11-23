@@ -112,7 +112,7 @@ review as done.
 ## The items after the review
 
 Decisions 513 to 521 started items RV-20 to RV-25. The answers to their questions, and
-to the questions of the items after them, started RV-26 to RV-30. The table gives the
+to the questions of the items after them, started RV-26 to RV-31. The table gives the
 items in the sequence that they merged into `main`. The last column gives the decisions
 that the entry of the item in `PLAN.md` names, then the day that the item merged, in
 2026.
@@ -128,14 +128,16 @@ that the entry of the item in `PLAN.md` names, then the day that the item merged
 | RV-24 | Typespecs on the host contract, and Dialyzer in CI | 515. Merged 11-15 |
 | DOC-1, step 1 | The site of the documentation, its checks, the tutorial and the glossary | 546 to 548. Merged 11-15 |
 | RV-29 | A store with no resource line and a count that does not read gets the refusal of its count first. The refusal of a renamed configuration gives the full way out | 541 to 545. Merged 11-16 |
+| RV-30 | `scripts/dialyzer.sh` is the fifth step of `scripts/gate.sh`, with `-Wunmatched_returns`. `Logex.Configuration.Global.new!/3` refuses a wrong initial value when it is called | 549 to 555. Merged 11-16 (565f057) |
 
-The answers to the questions of these items are in 3 groups:
+The answers to the questions of these items are in 4 groups:
 
-- 549 to 555: the answers to RV-24, which RV-30 builds.
-  [Project history](project-history.md#the-work-that-waits) gives RV-30 with the other
-  work that waits.
+- 549 to 555: the answers to RV-24, which RV-30 built.
 - 556 to 572: the answers to DOC-1 step 1.
 - 573 and 574: the answers to RV-29.
+- 575 to 583: the answers to RV-30. RV-31 builds 576, 577, 580 and 583.
+  [Project history](project-history.md#the-work-that-waits) gives RV-31 with the other
+  work that waits.
 
 ## Why the review ran this way
 

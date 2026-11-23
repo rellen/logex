@@ -69,6 +69,7 @@ no test measures the time of a round (`docs/organisation.md` §4.11, "Risks"):
 | A [device](../../guides/reference/glossary.md#device) hung in its read (`trip_test.exs`) | The runner [trips](../../guides/reference/glossary.md#trip) with `{:io, "drive", :timeout}` |
 | A device that waits for the runner (`trip_test.exs`) | The runner hears the device at each poll |
 | A bad reading at a restart (`trip_test.exs`) | A device gives a bad reading while the restart reads the device before it. Nothing trips |
+| A tight loop of forces from 100 processes (`runner_test.exs`) | A task of 10 ms keeps its periods. The runner serves at most half of the callers in a round (decisions 396 and 465) |
 | A device that answers 700 ms late (`api_contract_test.exs`, on the manual clock) | The walk opens a device, or reads it again at a restart, 700 ms late in real time. Nothing trips, and the runner refuses nothing (decisions 398 and 439) |
 
 The 2 s test asserts `rounds <= now + 1`. That count is over the whole run. It shows
@@ -87,6 +88,14 @@ A test on the real clock waits for a message, never for a time:
 - Count what the rule is about. A wait for 1 message also passes a process that sends
   that message at only 1 poll in 30.
 - Give each margin of real time hundreds of milliseconds if the rule lets you.
+
+A plant with a short idle watchdog runs where the VM has no other work
+([`CONTRIBUTING.md`, "Things that will bite you"](../../CONTRIBUTING.md#things-that-will-bite-you)).
+The runner gives each call to a device the idle watchdog and a poll period in real time,
+also on the manual clock. Beside the other tests of the suite, on a busy machine, a
+device can wait past that time, and the runner trips. Thus the module of such a test is
+not async: `trip_test.exs` has `async: false`, and ExUnit runs it after each async
+module. Do not give the test a longer watchdog than its rule needs.
 
 ### Load runs
 

@@ -39,14 +39,14 @@ This page does not use these words for a
 
 ## Status
 
-Accepted. No later record replaces this record. Decision 549 makes
-`scripts/dialyzer.sh` the fifth step of `scripts/gate.sh`.
+Accepted. No later record replaces this record. Decision 549 made
+`scripts/dialyzer.sh` the fifth step of `scripts/gate.sh`, and RV-30 built it (565f057).
 [0022. Typespecs and Dialyzer](0022-typespecs-and-dialyzer.md) gives Dialyzer and that
 step.
 
 ## Date
 
-2026-11-15, the date of decisions 541 and 542, the last decisions of this record. The
+2026-11-15, the date of decisions 541, 542 and 549, the last decisions of this record. The
 pin is of 2026-09-09 (`37b64c9`), and CI is of 2026-10-14 (`970dede`).
 
 ## Context
@@ -94,18 +94,18 @@ revision, and each revision has release notes (decisions 515 and 541).
 
 ## Decision
 
-logex builds on 1 toolchain: Elixir 1.20.4 on Erlang/OTP 28. Each commit passes 4 gates,
-and a script judges each gate by its exit code. CI runs the same 4 gates on the last
+logex builds on 1 toolchain: Elixir 1.20.4 on Erlang/OTP 28. Each commit passes 5 gates,
+and a script judges each gate by its exit code. CI runs the same 5 gates on the last
 commit of each push. The suite compares `CHANGELOG.md` with section 7 at each commit. A
 release step exists, and the maintainer plans no release.
 
 ```mermaid
 flowchart TD
   c["A commit"]
-  g["scripts/gate.sh:<br>the 4 gates,<br>failed.exs judges the suite"]
+  g["scripts/gate.sh:<br>the 5 gates,<br>failed.exs judges the suite,<br>Dialyzer the fifth"]
   p["git push to main"]
   m["main"]
-  ci["CI on the last commit of the push:<br>the 4 gates, failed.exs,<br>then Dialyzer"]
+  ci["CI on the last commit of the push:<br>the 5 gates, failed.exs<br>judges the suite"]
   r["scripts/release.sh:<br>6 checks"]
   t["A tag vX.Y.Z"]
   c --> g --> p --> m --> ci
@@ -147,7 +147,7 @@ Runs on Elixir 1.20.4 recorded the figures of cost in
 code with these figures ([0019. Cost in reductions](0019-cost-in-reductions.md)). On
 another Elixir, these tests can fail. Nobody has run logex on Elixir 1.17 to 1.19.
 
-### 4 gates, each judged by its exit code
+### 5 gates, each judged by its exit code
 
 `CONTRIBUTING.md` lists the gates in
 [Before you commit](../../CONTRIBUTING.md#before-you-commit). `scripts/gate.sh` runs them
@@ -161,6 +161,8 @@ in this sequence and stops at the first red gate:
 4. `mix test --warnings-as-errors`, then `elixir scripts/failed.exs --exit N`, refuse a
    test that fails and a warning in a test file. `scripts/failed.exs` also refuses a
    suite that does not finish.
+5. `scripts/dialyzer.sh` refuses a warning of Dialyzer (decision 549). It runs only when
+   the suite passes.
 
 The flag of gate 4 is necessary, because `mix compile` never compiles the tests. From
 `ee91fe5` to `4a1079c`, 6 commits passed while the type checker gave 2 warnings in
@@ -191,13 +193,13 @@ the 1 failed run in 7, because the runs after it passed.
 
 ### CI runs the same gates
 
-CI runs the 4 gates, 1 step for each gate (`PLAN.md` B3). CI judges each step by its own
+CI runs the 5 gates, 1 step for each gate (`PLAN.md` B3). CI judges each step by its own
 exit code. The step of the suite does what gate 4 of `scripts/gate.sh` does. It deletes
 the failures manifest, runs `mix test --warnings-as-errors` and gives its exit code to
 `elixir scripts/failed.exs --exit`.
 
-After the 4 gates, CI runs `scripts/dialyzer.sh` (decision 515). `scripts/gate.sh` runs
-the 4 gates and not Dialyzer.
+The last step of CI is `scripts/dialyzer.sh` (decision 515), the fifth gate of
+`scripts/gate.sh` (decision 549).
 
 `test/logex/scripts_test.exs` compares the keys of each step of `ci.yml` with a fixed
 list. No step has an `if:`, which can skip a step. No step has `continue-on-error:`. On
@@ -293,9 +295,8 @@ The costs:
   `nix develop` writes it again (`PLAN.md` B4).
 - The gate runs the full suite, which takes some minutes.
 - A commit inside a push of several commits gets no run of CI.
-- `scripts/gate.sh` runs the 4 gates and not Dialyzer, so a commit can pass the gate and
-  then fail the step of Dialyzer in CI. Decision 549 makes `scripts/dialyzer.sh` the
-  fifth step of `scripts/gate.sh`.
+- Dialyzer makes the gate longer (decision 549). With its PLT kept, it adds about 10 s to
+  27 s. The first time on a computer, it adds about 1 minute.
 - Each commit that records a decision also changes `CHANGELOG.md`.
 - The release step ran only against a stand-in `gh` and a scratch origin, never for
   a real release.
@@ -331,6 +332,7 @@ rules in [The toolchain](../../CONTRIBUTING.md#the-toolchain) and
 | 515 | CI names the tests that failed, a release step, and Dialyzer in CI |
 | 541 | The maintainer plans no release. 4 questions of the release step stay open |
 | 542 | The suite compares the changelog with section 7 at each commit |
+| 549 | `scripts/dialyzer.sh` is the fifth gate of `scripts/gate.sh` |
 | B3 | CI runs the 4 gates on each push and each pull request |
 | B4 | `shell.nix` and `flake.nix` give OTP 28 and Elixir 1.20 |
 | B6 | The metadata of `mix.exs`, and no `:logger` |

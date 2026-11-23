@@ -22,9 +22,8 @@ flowchart TD
   red --> mutants["Mutation table, for a new rule"]
   mutants --> cost["Cost tests, for a new pass"]
   cost --> load["Load run, for a new real-clock or runner test"]
-  load --> gate["scripts/gate.sh"]
-  gate --> dialyzer["scripts/dialyzer.sh"]
-  dialyzer --> ci["CI on the commit"]
+  load --> gate["scripts/gate.sh, with scripts/dialyzer.sh its fifth step"]
+  gate --> ci["CI on the commit"]
 ```
 
 Figure: the checks of a change to `lib/`, from the first to the last. A check with "for"
@@ -115,6 +114,12 @@ Some conventions have a test that reads files and not values:
   language with no stanza there.
 - `claude_md_test.exs` reads `CLAUDE.md`. It refuses a file of `lib/` or `test/` that
   `CLAUDE.md` does not name.
+- `dropped_answers_test.exs` reads the syntax trees of `lib/`. It refuses an answer that
+  the code drops with `_ = ...` and that its list does not name with the reason
+  (decision 550).
+- `scratch_test.exs` reads the syntax tree of each test file. It refuses a name in the
+  temporary directory of the computer that does not hold the OS process number of the
+  VM. Thus 2 suites on 1 computer share no scratch directory.
 
 ### The gate
 
@@ -126,11 +131,11 @@ order:
 2. `mix compile --force --warnings-as-errors`
 3. `MIX_ENV=test mix compile --force --warnings-as-errors`
 4. `mix test --warnings-as-errors`
+5. `scripts/dialyzer.sh` (decision 549)
 
 The gate stops at the first step that fails. It judges the suite by its exit code, as CI
 does. It takes 7 to 10 minutes. It prints `GATE-OK`, or `GATE-FAIL rc=<n>` and the tests
-that failed. CI runs the same 4 steps and then `scripts/dialyzer.sh`. Run
-`scripts/dialyzer.sh` also before you push a change to `lib/`.
+that failed, or the step and its log. CI runs the same 5 steps.
 
 ## Why it is built this way
 

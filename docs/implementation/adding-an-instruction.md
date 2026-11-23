@@ -280,7 +280,9 @@ Then write the tests and the code:
 4. Add the mnemonic to the program of the test "each instruction a compile gives has its
    mnemonic's signature" in `instructionize_test.exs`. Without it, that test fails.
 5. Add the 2 clauses of `evaluate/3` in `lib/logex/runtime.ex`. The tests of steps 1
-   and 2 pass.
+   and 2 pass. A clause can drop an answer on purpose. Write it as `_ = ...`. Add its
+   line, with the reason, to the list of `test/logex/dropped_answers_test.exs` (decision
+   550). Without the line, that test fails.
 6. Make the changes of [Instructions of a special kind](#instructions-of-a-special-kind)
    that apply.
 7. Run `mix test --warnings-as-errors`. Judge it by its exit code: it must be 0.
@@ -298,7 +300,8 @@ Then write the tests and the code:
    - [Diagnostics](../../guides/reference/diagnostics.md), for each new message
    - [What logex does not have](../../guides/reference/not-supported.md), if the
      instruction is on it
-10. Run `mix format`, then `scripts/gate.sh`. It must print `GATE-OK`.
+10. Run `mix format`, then `scripts/gate.sh`. It must print `GATE-OK`. Its fifth step is
+    Dialyzer.
 11. Write in the commit message that the mnemonic is a reserved word. Name the programs
     and the function blocks that it breaks: each with a tag of that name.
 

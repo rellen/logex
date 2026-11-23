@@ -34,11 +34,10 @@ path of a commit from your computer to the site of the documentation.
 
 ```mermaid
 flowchart TD
-  change["Your change"] --> gate["scripts/gate.sh: 4 gates"]
-  gate --> dialyzer["scripts/dialyzer.sh"]
-  dialyzer --> docs_local["scripts/docs.sh, if you changed a page"]
+  change["Your change"] --> gate["scripts/gate.sh: 5 gates, Dialyzer the fifth"]
+  gate --> docs_local["scripts/docs.sh, if you changed a page"]
   docs_local --> push["git push"]
-  push --> ci["ci.yml: the 4 gates, then Dialyzer"]
+  push --> ci["ci.yml: the 5 gates"]
   push --> docs["docs.yml: scripts/docs.sh"]
   docs --> pages["GitHub Pages, from main only"]
 ```
@@ -140,7 +139,7 @@ can miss a second edit of the same size in the same second as the build before i
 
 ## The gates
 
-A commit must pass 4 gates, in this order:
+A commit must pass 5 gates, in this order:
 
 | Gate | Command | It refuses |
 |---|---|---|
@@ -148,10 +147,11 @@ A commit must pass 4 gates, in this order:
 | 2 | `mix compile --force --warnings-as-errors` | A warning in any module of `lib/`, also in a file that you did not change |
 | 3 | `MIX_ENV=test mix compile --force --warnings-as-errors` | A warning in `lib/` when it compiles in the `test` environment |
 | 4 | `mix test --warnings-as-errors` | A test that fails and a warning in a test file. With `scripts/failed.exs`, also a suite that does not finish |
+| 5 | `scripts/dialyzer.sh` | A warning of Dialyzer, for example a spec that the code does not keep or an answer that the code drops ([Dialyzer](#dialyzer)) |
 
 ### `scripts/gate.sh`
 
-`scripts/gate.sh [log] [mix test args]` runs the 4 gates. You can start it from any
+`scripts/gate.sh [log] [mix test args]` runs the 5 gates. You can start it from any
 directory of the clone. It stops at the first gate that fails.
 
 ```mermaid
@@ -160,11 +160,13 @@ flowchart TD
   compile --> test_compile["Gate 3: mix compile, test"]
   test_compile --> suite["Gate 4: mix test --warnings-as-errors"]
   suite --> failed["scripts/failed.exs --exit"]
-  failed --> ok["GATE-OK"]
+  failed --> dialyzer["Gate 5: scripts/dialyzer.sh"]
+  dialyzer --> ok["GATE-OK"]
   format -. fails .-> fail["GATE-FAIL rc=n"]
   compile -. fails .-> fail
   test_compile -. fails .-> fail
   failed -. fails .-> named["GATE-FAIL rc=n, then the tests"]
+  dialyzer -. fails .-> step["GATE-FAIL rc=n, then the step and the log"]
 ```
 
 Figure: the steps of `scripts/gate.sh`. A dotted arrow is a step that exits with a code
@@ -235,15 +237,22 @@ module with its `@spec` declarations and with the PLT. The PLT holds `erts`, `ke
 `stdlib` and `elixir`. Its file is under `_build/dialyzer/`, and its name holds the
 versions of the toolchain and the applications.
 
-- The script uses the default warnings of Dialyzer and 5 more: `-Wextra_return`,
-  `-Wmissing_return`, `-Wunderspecs`, `-Woverlapping_contract` and `-Wopaque_union`.
+- The script uses the default warnings of Dialyzer and 6 more: `-Wextra_return`,
+  `-Wmissing_return`, `-Wunderspecs`, `-Woverlapping_contract`, `-Wopaque_union` and
+  `-Wunmatched_returns`.
 - It prints `DIALYZER-OK`, or `DIALYZER-FAIL rc=<n>`. Code 2 means that Dialyzer found
-  a warning. Code 1 is a run of Dialyzer that failed for another cause. If the compile
-  fails, the script exits with the code of Mix.
-- The first run builds the PLT and takes about 1 minute. A later run takes about 15 s.
+  a warning. Code 1 is a run of Dialyzer that failed for another cause. Code 127 means
+  that no `dialyzer` is on the path. If the compile fails, the script exits with the code
+  of Mix.
+- The first run builds the PLT and takes about 1 minute. A later run took 17 s to 27 s on
+  a computer of 4 cores.
 
-`scripts/gate.sh` does not run Dialyzer. `ci.yml` runs it after the 4 gates. Run
-`scripts/dialyzer.sh` before you push a change to `lib/`. Correct a warning in the code.
+`scripts/gate.sh` runs it as its fifth step, after the suite passes (decision 549), and
+`ci.yml` runs it as its last step. A red fifth step prints `GATE-FAIL rc=<n>`, then a line
+that names the step and the log. With `-Wunmatched_returns`, Dialyzer refuses a call
+whose answer the code drops. Write `_ = ...` where the code drops an answer on purpose,
+and add its line to `test/logex/dropped_answers_test.exs` with the reason (decision 550).
+Correct a warning in the code.
 Do not hide it with an `@dialyzer` attribute, a wider `@spec` or `no_return()`.
 
 ## CI
@@ -253,7 +262,7 @@ GitHub Actions runs 2 workflows on each push and each pull request. Each workflo
 
 `ci.yml`, the workflow "CI":
 
-- Its steps are the 4 gates, 1 step each, then `scripts/dialyzer.sh`.
+- Its steps are the 5 gates, 1 step each.
 - It is red when a step exits with a code that is not 0.
 - Its step of the suite does the same as `scripts/gate.sh`. It deletes the failures
   manifest, runs `mix test --warnings-as-errors` and then `elixir scripts/failed.exs
@@ -317,8 +326,10 @@ To change the pinned versions:
 4. Change the versions in the test `its toolchain is the pair CI pins` of
    `test/logex/docs_test.exs`.
 5. Change the versions in `CLAUDE.md`, `CONTRIBUTING.md`, `README.md`, the comment at
-   the head of `shell.nix` and each page that names them. Find them with
-   `grep -rn '1\.20' --include=*.md .`.
+   the head of `shell.nix` and each page that names them. Step 1 of
+   [Install logex and run a program](../../guides/howto/install-and-run.md) shows the 2
+   lines of a `.tool-versions`. A reader copies them. Find them with
+   `grep -rn '1\.20\|28\.5' --include=*.md .`.
 6. Run `scripts/gate.sh` and `scripts/dialyzer.sh` on the new toolchain.
 
 These tests fail on a wrong change:
