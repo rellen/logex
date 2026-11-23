@@ -840,7 +840,8 @@ defmodule Logex.Runner do
     484 (RV-18) a device unheard for four times the idle watchdog and a poll period
     (decision 491: four idle watchdogs and one poll period, not four of both), counted from
     when it was last heard, trips the line whatever the runner's lateness, as a Logix
-    connection faults after four missed packets at its RPI, where while every wake was
+    connection times out once it hears nothing for its timeout, at least 100 ms and
+    growing with the RPI (decision 134), where while every wake was
     late by more than the idle watchdog no device was judged and a hung input card tripped
     only at the first look on time; the trip by the cap reads as any silent device's,
     `{:io, device, :timeout}`, the device killed and named in `status/1`'s `unzeroed`
