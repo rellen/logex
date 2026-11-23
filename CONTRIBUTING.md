@@ -62,8 +62,8 @@ expensive trap this project had (`PLAN.md` §2·M0-3). The lexer and parser are 
 `.ex` files now, and Elixir 1.20's compiler compares size and content as well as mtime, so
 little of it is left: measured on 1.20.4, an edit in the same second as the last build is
 picked up, and only a *second* same-size edit landing in that same second was lost — once
-in five attempts. If an edit to the lexer or parser seems to do nothing, `mix compile
---force` settles it.
+in five attempts. The same holds for every file of `lib/`, not the front end alone: if an
+edit to any of them seems to do nothing, `mix compile --force` settles it.
 
 A checkout built before the rewrite keeps the old front end's modules in `_build` after
 pulling. The first build of an environment that was built before the pull deletes the
