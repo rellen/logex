@@ -6,7 +6,7 @@ This record is for a contributor who changes what a start brings back. Examples 
 [timer](../../guides/reference/glossary.md#timer) at a restart, and the events at which
 the [runner](../../guides/reference/glossary.md#runner) writes its
 [store](../../guides/reference/glossary.md#store). The record says why only what a
-program marks `retain` comes back, and why logex has no pre-scan. It also says why no
+program or a configuration marks `retain` comes back, and why logex has no pre-scan. It also says why no
 [rising edge](../../guides/reference/glossary.md#rising-edge) of a program fires in a
 [first scan](../../guides/reference/glossary.md#first-scan), and why no timer counts the
 time of a stop. [What this means for a change](#what-this-means-for-a-change) gives the

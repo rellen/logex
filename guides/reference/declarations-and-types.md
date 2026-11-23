@@ -446,7 +446,7 @@ Wrong texts 34 to 44 show the [diagnostics](#the-diagnostics) of the rules of an
 | An integer type or a bit string type | An integer literal in the range of the type: `var tare int -120`, `var mask word 16#00ff` |
 | A real type | A real literal in the range of the type: `var ratio real 0.5`. An integer literal is also correct: `var ratio real 1`. |
 | An integer literal for a real type | The real type must hold the integer exactly. A `real` holds each integer from -16777216 to 16777216. An `lreal` holds each integer from -9007199254740992 to 9007199254740992. |
-| A real literal that is too near 0 | A literal that is more than 0.0 and less than the smallest real value of the type is an error. A negative literal has the same limit: `-1.0e-46` is an error for a `real`. |
+| A real literal that is too near 0 | logex changes the literal to the nearest value of the type. If the literal is not 0.0 and that value is nearer 0.0 than the smallest positive value of the type, the literal is an error. `1.0e-38` is an error for a `real`, and `1.1754943e-38` compiles as the smallest positive value. A negative literal has the same limit. [Literals](literals.md) gives each limit. |
 | A real literal that is not exactly a value of the type | The program compiles, and the tag starts at the nearest value of the type. |
 | The warning for such a literal | logex gives a warning if the literal is a different number from the shortest literal for the value of the tag. `var r real 0.1234567891` gives ``line 1: warning: `0.1234567891` is more precise than a real keeps: it is held as 0.12345679``. |
 | No warning for such a literal | `var r real 0.1` and `var r real 0.10` give no warning. `0.1` is the shortest literal for the value `0.10000000149011612`, and `0.10` is the same number. |
@@ -563,7 +563,8 @@ logex applies these rules in these places:
 | Place | Rule |
 |---|---|
 | `move` | The type of the tag that `move` reads must be the type of the tag that it writes, or widen into that type. |
-| An arithmetic instruction such as `add`, a bitwise instruction such as `and`, and `sqrt` | The instruction calculates in the type of the tag that it writes. The type of each tag that it reads must be that type, or widen into it. |
+| An arithmetic instruction such as `add`, the instructions `and`, `or` and `xor`, and `sqrt` | The instruction calculates in the type of the tag that it writes. The type of each tag that it reads must be that type, or widen into it. |
+| `not`, a shift such as `shl` and a rotate such as `rol` | The instruction calculates in the type of the tag that it reads. Then it widens the result by its value into the type of the tag that it writes. |
 | A typed conversion, such as `dint_to_int` | The tag that the instruction reads has the type `dint`, or a type that widens into `dint`. The tag that it writes has exactly the type `int`. |
 | A comparison of an integer with a real | The integer type must widen into the real type. logex compares 2 integers of different types by their values, with no widening. |
 | A comparison with a bit string | A bit string compares only with a bit string. The 2 bit strings can have different numbers of bits. |

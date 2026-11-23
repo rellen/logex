@@ -311,7 +311,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 
 | Line | Why the start failed |
 |---|---|
-| 1 | `init/3` of the adapter gave `{:error, :econnrefused, state}`. The reason is the error of `init/3`. |
+| 1 | `init/3` of the adapter gave `{:error, :econnrefused}`. The reason is the error of `init/3`. |
 | 2 | The first read gave `{:error, :eio, state}`. The reason is the cause of an I/O fault. |
 | 3 | The first read gave the value 2 for a `bool` point. |
 | 4 | A different process has the name. |

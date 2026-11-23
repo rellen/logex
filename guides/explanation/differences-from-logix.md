@@ -57,6 +57,7 @@ ideas.
 | An integer result that is too large for its type | The value wraps. The instruction passes the power that it gets | The value wraps, and the instruction passes no power |
 | `move 16#ffff i`, where `i` is an `int` | The tag gets −1 | A [diagnostic](../reference/glossary.md#diagnostic): `16#ffff` is the number 65535, and an `int` cannot hold it |
 | A literal with a letter for its type: `5U`, `5L`, `1.5L` | A correct literal | A diagnostic |
+| `not` of a narrower source into a wider tag | The source gets 0 bits before the NOT: the NOT of a SINT −1 into a DINT gives `16#ffff_ff00` | `not` calculates in the type of its source, then widens the result by its value: 0 |
 | A value into a smaller integer type | The move keeps the low bits: 129 becomes −127 in a SINT | logex refuses the `move`. The typed conversion `dint_to_sint` gives the same value and passes no power |
 | An array of timers | An instruction can get its element from a tag in the subscript | An instruction runs an element with a literal subscript only: `ton lane_t[2] 30`. A member can have a tag in its subscript: `lane_t[n].dn` |
 
@@ -76,7 +77,7 @@ Each statement about Logix on this page is from a publication of its vendor.
 
 | Publication | Statement, with its page |
 |---|---|
-| 1756-RM018A | A subscript (884). A bit number in a tag (885). `sqrt` (474). A result that is too large (868). `16#ffff` (869). A literal with a letter (870). A smaller type (872, 874) |
+| 1756-RM018A | A subscript (884). A bit number in a tag (885). `sqrt` (474). A result that is too large (868). `16#ffff` (869). A literal with a letter (870). `not` of a narrower source (871). A smaller type (872, 874) |
 | 1756-RM094N | A bit of an integer (86). An array of timers (85, 86) |
 | 1756-PM004L | An array (34 to 36). A bit of an element, and the range of a bit number (44) |
 | 1756-PM014O | A major fault and its handler (9, 20) |

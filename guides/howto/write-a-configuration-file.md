@@ -347,7 +347,8 @@ also gives the file, and the line if there is one.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task, a global or a tag. The message has the same form for each. | Write the name that the message gives. |
+| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task or a global. The message has the same form for each. | Write the name that the message gives. |
+| `` `m1` runs `motor`, which declares no `strat` — did you mean `start`? `` | A spelling error in the name of a tag of an instance, on a connection line | Write the name that the message gives. |
 | `` unknown program type `pump`: there is no `pump.ld` beside `` | No program file of that name beside the `.logex` file | Put the file there, or correct the `program` line. |
 | `` `m1` leaves its var_inputs `overtemp` and `reset` unconnected `` | A tag with no connection, or a spelling error in the name of the tag. The message is on the `program` line. | Connect each tag that the message names. |
 | `` `k1` is already driven by `m1.motor` `` | 2 tags that write 1 global | Give each tag its own global. |

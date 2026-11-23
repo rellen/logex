@@ -348,9 +348,8 @@ diagnostic of `xnor`.
 
 A [Logix](glossary.md#logix) controller fills a narrower source with 0 bits before its
 NOT. Thus its NOT of an `sint` -1 into a `dint` gives `16#ffff_ff00`, and logex gives 0.
-The explanation of the [dialect](glossary.md#dialect),
-[The dialect and IEC 61131-3](../explanation/the-dialect-and-iec.md), gives the
-differences from Logix.
+[How logex differs from Logix](../explanation/differences-from-logix.md#what-is-different-in-behaviour)
+gives this difference and its source.
 
 ## Shifts and rotates
 

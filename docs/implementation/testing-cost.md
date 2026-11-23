@@ -130,7 +130,7 @@ plant of `README.md`, each stage whole and for 1 rung (decision 481):
 |---|---|---|---|
 | Compile of `motor.ld` | 8,649 | 999.2 | 8,712 |
 | 100 [scans](../../guides/reference/glossary.md#scan) of the motor | 44,606 | 3,110.0 | 44,706 |
-| 100 [cycles](../../guides/reference/glossary.md#cycle) of the [plant](../../guides/reference/glossary.md#plant) | 83,262 | 3,762.9 | 104,315 |
+| 100 [cycles](../../guides/reference/glossary.md#cycle) of the [plant](../../guides/reference/glossary.md#plant) | 83,262 | 3,762.9 | 83,386 |
 | 1 round of the plant on the runner | 1,662 | 37.5 | 1,714.0 |
 
 The cost for 1 rung is the difference between the motor with its 5 rungs written 16

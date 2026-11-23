@@ -182,7 +182,7 @@ Do 1 of these actions:
   restart does not end the edit, thus [assemble](../reference/glossary.md#assemble) it
   after the restart. [Edit a running plant](edit-a-running-plant.md) shows the steps.
 - Stop the runner. In the store, the line of a value gives its path, its type and the value. Change the
-  value on its line, for example `s1.slot int 8` to `s1.slot int 0`. Do not add or remove
+  value on its line, for example `s1.slot dint 8` to `s1.slot dint 0`. Do not add or remove
   a line. Then start a new runner. [Edit the store by hand](edit-the-store-by-hand.md)
   shows the steps.
 
