@@ -126,6 +126,7 @@ To work on the code:
 | Page | What it gives |
 |---|---|
 | [The toolchain and the gates](contributing/toolchain.md) | The pinned versions of Elixir and Erlang/OTP, how to install them, the gates and CI. Read it before your first build |
+| [The changelog and the release step](contributing/releasing.md) | The rules of `CHANGELOG.md`, which the suite checks at each commit, and the script that makes the Git tag of a release |
 | [Project history](contributing/project-history.md) | What logex has, milestone by milestone, and the review of the whole code |
 
 To write a page of the documentation:
