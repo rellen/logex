@@ -363,10 +363,10 @@ of `:erlang.bump_reductions(0)` alone, 1 reduction more, also failed that test.
 Each kind of cost test fails with its own message. The message points to the kind of
 change:
 
-- **A growth test.** The message gives the ratio. The quadratic warnings of `a34fa87`
-  grew 14.2 times. The test gives that ratio as "4x the tags took 14.2x the
-  reductions". Look for a new pass, or a walk that copies what it found, that grows
-  faster than its program.
+- **A growth test.** The message gives the ratio, in the form "4x the instructions took
+  Rx the reductions", with R the ratio that the run measured. The quadratic warnings of
+  `a34fa87` grew 14.2 times, by the record of `CONTRIBUTING.md`. Look for a new pass, or a
+  walk that copies what it found, that grows faster than its program.
 - **A bound.** The message gives the 2 counts, for example the first message after this
   list, from the catch mutant. Look at the path that the test names: the clause or the
   walk that only 1 of the 2 twins runs.

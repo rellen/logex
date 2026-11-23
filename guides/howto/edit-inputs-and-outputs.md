@@ -284,7 +284,7 @@ change its point.
 | An `ArgumentError` with `is not declared` | Your host sent an input that the program that it scans does not declare. | Do the duty for each `:unread` entry. Send only the inputs of the program that `Logex.Edit.running/1` returns. |
 | An `ArgumentError` with `cancel takes an edit` | The cancel came before the untest. The edit is under test. | Do an untest first. |
 | A new input stays at its [initial value](../reference/glossary.md#initial-value) | Your host sends an input only when its value changes. | Do the duty for each `:input` entry: send the value before the next scan. |
-| An output stays on after the edit, and no scan returns it | The output is a held output. | Read the `:held` entries of each report. Let your host write a safe value to the point. |
+| An output stays on after the edit, and no scan returns it | The output is a held output. | Read the `:held` entries of each report. Let your host write a value to the point. The correct value for a point of your machine is your decision. |
 
 ## See also
 

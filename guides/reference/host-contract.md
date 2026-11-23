@@ -184,7 +184,7 @@ the other values that each function refuses with an `ArgumentError`.
 
 | Call | Returns |
 |---|---|
-| `compile(source, opts)` | `{:ok, program}`, `{:ok, fb_type}` for the text of a function block, or `{:error, diagnostics}` |
+| `compile(source, opts)` | `{:ok, program}`, `{:ok, fb_type}` for the text of a function block, or `{:error, diagnostics}`. A function block type holds no warnings: compile the program that uses it with `compile_file/1` to see them |
 | `compile_file(path)` | The same results as `compile/2`. The name of the program is the name of the file |
 | `compile_files(paths)` | 1 result for each path, in the sequence of the paths |
 

@@ -162,6 +162,9 @@ GitHub.
 - Keep a page short. If a page that is not a reference has more than about 1,500 words,
   make 2 pages.
 - Link to a module or a function with its name in a code span: ExDoc makes the link.
+- Do not put a hidden module or function in a code span as `Module.fun/arity`: one with
+  `@moduledoc false` or `@doc false`. ExDoc warns, and `scripts/docs.sh` fails. Name its
+  file instead, for example `lib/logex/compiler/worker.ex`.
 - Link to a page with a relative link from the file of the page, as GitHub reads it. The
   build makes the link correct for the site.
 - Link to a file that is not a page with a relative link also. The build changes it to

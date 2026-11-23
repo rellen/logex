@@ -81,3 +81,7 @@ try do
 rescue
   error in ArgumentError -> IO.puts("force fan_out\n  #{error.message}")
 end
+
+# The script leaves no forces file behind.
+:ok = Runner.stop(runner)
+File.rm("not-supported.forces")

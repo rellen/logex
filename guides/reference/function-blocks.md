@@ -444,7 +444,7 @@ diagnostics and the warnings.
 | A function block in a function block | Give the inner type in `types:` when you compile the outer function block. Then give the outer type to the program. |
 | A function block in a type and in `types:` | The 2 must be the same version. A different version is an `ArgumentError`. |
 | A program that declares an inner type itself | Give that type in `types:` too. A type in `types:` that holds it does not give it to the program. |
-| The warnings | Only the warnings of the program. The warnings of a function block in `types:` do not come back. `Logex.compile_file/1` of the program gives them. |
+| The warnings | Only the warnings of the program. The warnings of a function block in `types:` do not come back. `Logex.compile_file/1` of the program gives them. A function block that `Logex.compile/2` compiles alone returns no warnings: a `%Logex.FbType{}` has no field for them. |
 
 [Wrong texts 31 to 35](#wrong-texts-31-to-35-the-option-types) show the diagnostic and
 the 4 messages of an `ArgumentError`.

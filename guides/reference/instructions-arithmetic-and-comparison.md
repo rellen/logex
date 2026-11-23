@@ -488,8 +488,8 @@ literal in a comparison of 2 literals.
 Each example is a program or a list of rungs, with a script that runs it. It is not
 necessary to read a script, because the page shows each line that it prints. To run a
 script, enter its command in the directory `examples` of the repository. Each script
-uses `Logex.Runtime.scan/2`, which gives 0 ms to each scan. These instructions do not
-read the time.
+that runs a scan uses `Logex.Runtime.scan/2`, which adds 0 ms to the time of the program
+at each scan. These instructions do not read the time.
 
 ### The scripts that run the examples
 
