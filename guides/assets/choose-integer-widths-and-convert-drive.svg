@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="449" viewBox="0 0 364 449" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of drive.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: move hz speed. Rung 2: add hz hz twice ote twice_ok. Rung 3: dint_to_sint level trim ote trim_ok. Rung 4: xic trim_ok move trim offset.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="448" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="437"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="437"/>
+<text class="dim" x="36" y="39" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="35" x2="68" y2="35"/>
+<line class="ink" x1="68" y1="35" x2="244" y2="35"/>
+<line class="ink" x1="324" y1="35" x2="346" y2="35"/>
+<rect class="box" x="244" y="22" width="80" height="68" rx="3"/>
+<line class="ink" x1="244" y1="48" x2="324" y2="48"/>
+<text class="op" x="284" y="39" text-anchor="middle">move</text>
+<text class="tag" x="314" y="62" text-anchor="end">hz</text>
+<text class="dim" x="254" y="80">to</text>
+<text class="tag" x="314" y="80" text-anchor="end">speed</text>
+<text class="dim" x="36" y="144" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="140" x2="68" y2="140"/>
+<line class="ink" x1="148" y1="140" x2="254" y2="140"/>
+<line class="ink" x1="324" y1="140" x2="346" y2="140"/>
+<rect class="box" x="68" y="127" width="80" height="86" rx="3"/>
+<line class="ink" x1="68" y1="153" x2="148" y2="153"/>
+<text class="op" x="108" y="144" text-anchor="middle">add</text>
+<text class="tag" x="138" y="167" text-anchor="end">hz</text>
+<text class="tag" x="138" y="185" text-anchor="end">hz</text>
+<text class="dim" x="78" y="203">to</text>
+<text class="tag" x="138" y="203" text-anchor="end">twice</text>
+<text class="tag" x="322" y="123" text-anchor="end">twice_ok</text>
+<line class="ink" x1="254" y1="140" x2="290" y2="140"/>
+<path class="ink" d="M 295 129 Q 285 140 295 151"/>
+<path class="ink" d="M 307 129 Q 317 140 307 151"/>
+<line class="ink" x1="312" y1="140" x2="324" y2="140"/>
+<text class="dim" x="36" y="267" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="263" x2="68" y2="263"/>
+<line class="ink" x1="178" y1="263" x2="260" y2="263"/>
+<line class="ink" x1="324" y1="263" x2="346" y2="263"/>
+<rect class="box" x="68" y="250" width="110" height="68" rx="3"/>
+<line class="ink" x1="68" y1="276" x2="178" y2="276"/>
+<text class="op" x="123" y="267" text-anchor="middle">dint_to_sint</text>
+<text class="tag" x="168" y="290" text-anchor="end">level</text>
+<text class="dim" x="78" y="308">to</text>
+<text class="tag" x="168" y="308" text-anchor="end">trim</text>
+<text class="tag" x="322" y="246" text-anchor="end">trim_ok</text>
+<line class="ink" x1="260" y1="263" x2="290" y2="263"/>
+<path class="ink" d="M 295 252 Q 285 263 295 274"/>
+<path class="ink" d="M 307 252 Q 317 263 307 274"/>
+<line class="ink" x1="312" y1="263" x2="324" y2="263"/>
+<text class="dim" x="36" y="372" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="368" x2="68" y2="368"/>
+<line class="ink" x1="132" y1="368" x2="236" y2="368"/>
+<line class="ink" x1="324" y1="368" x2="346" y2="368"/>
+<text class="tag" x="100" y="351" text-anchor="middle">trim_ok</text>
+<line class="ink" x1="68" y1="368" x2="93" y2="368"/>
+<line class="ink" x1="93" y1="357" x2="93" y2="379"/>
+<line class="ink" x1="107" y1="357" x2="107" y2="379"/>
+<line class="ink" x1="107" y1="368" x2="132" y2="368"/>
+<rect class="box" x="236" y="355" width="88" height="68" rx="3"/>
+<line class="ink" x1="236" y1="381" x2="324" y2="381"/>
+<text class="op" x="280" y="372" text-anchor="middle">move</text>
+<text class="tag" x="314" y="395" text-anchor="end">trim</text>
+<text class="dim" x="246" y="413">to</text>
+<text class="tag" x="314" y="413" text-anchor="end">offset</text>
+</svg>

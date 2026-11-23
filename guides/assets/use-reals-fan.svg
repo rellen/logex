@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="555" viewBox="0 0 364 555" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of fan.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: mul hz 60.0 speed. Rung 2: mul hz 60.0 precise. Rung 3: sqrt hz root ote root_ok. Rung 4: real_to_int speed rpm ote rpm_ok. Rung 5: real_trunc_int speed whole ote whole_ok.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="554" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="543"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="543"/>
+<text class="dim" x="36" y="39" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="35" x2="68" y2="35"/>
+<line class="ink" x1="68" y1="35" x2="244" y2="35"/>
+<line class="ink" x1="324" y1="35" x2="346" y2="35"/>
+<rect class="box" x="244" y="22" width="80" height="86" rx="3"/>
+<line class="ink" x1="244" y1="48" x2="324" y2="48"/>
+<text class="op" x="284" y="39" text-anchor="middle">mul</text>
+<text class="tag" x="314" y="62" text-anchor="end">hz</text>
+<text class="tag" x="314" y="80" text-anchor="end">60.0</text>
+<text class="dim" x="254" y="98">to</text>
+<text class="tag" x="314" y="98" text-anchor="end">speed</text>
+<text class="dim" x="36" y="145" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="141" x2="68" y2="141"/>
+<line class="ink" x1="68" y1="141" x2="230" y2="141"/>
+<line class="ink" x1="324" y1="141" x2="346" y2="141"/>
+<rect class="box" x="230" y="128" width="94" height="86" rx="3"/>
+<line class="ink" x1="230" y1="154" x2="324" y2="154"/>
+<text class="op" x="277" y="145" text-anchor="middle">mul</text>
+<text class="tag" x="314" y="168" text-anchor="end">hz</text>
+<text class="tag" x="314" y="186" text-anchor="end">60.0</text>
+<text class="dim" x="240" y="204">to</text>
+<text class="tag" x="314" y="204" text-anchor="end">precise</text>
+<text class="dim" x="36" y="268" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="264" x2="68" y2="264"/>
+<line class="ink" x1="140" y1="264" x2="260" y2="264"/>
+<line class="ink" x1="324" y1="264" x2="346" y2="264"/>
+<rect class="box" x="68" y="251" width="72" height="68" rx="3"/>
+<line class="ink" x1="68" y1="277" x2="140" y2="277"/>
+<text class="op" x="104" y="268" text-anchor="middle">sqrt</text>
+<text class="tag" x="130" y="291" text-anchor="end">hz</text>
+<text class="dim" x="78" y="309">to</text>
+<text class="tag" x="130" y="309" text-anchor="end">root</text>
+<text class="tag" x="322" y="247" text-anchor="end">root_ok</text>
+<line class="ink" x1="260" y1="264" x2="290" y2="264"/>
+<path class="ink" d="M 295 253 Q 285 264 295 275"/>
+<path class="ink" d="M 307 253 Q 317 264 307 275"/>
+<line class="ink" x1="312" y1="264" x2="324" y2="264"/>
+<text class="dim" x="36" y="373" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="369" x2="68" y2="369"/>
+<line class="ink" x1="170" y1="369" x2="268" y2="369"/>
+<line class="ink" x1="324" y1="369" x2="346" y2="369"/>
+<rect class="box" x="68" y="356" width="102" height="68" rx="3"/>
+<line class="ink" x1="68" y1="382" x2="170" y2="382"/>
+<text class="op" x="119" y="373" text-anchor="middle">real_to_int</text>
+<text class="tag" x="160" y="396" text-anchor="end">speed</text>
+<text class="dim" x="78" y="414">to</text>
+<text class="tag" x="160" y="414" text-anchor="end">rpm</text>
+<text class="tag" x="322" y="352" text-anchor="end">rpm_ok</text>
+<line class="ink" x1="268" y1="369" x2="290" y2="369"/>
+<path class="ink" d="M 295 358 Q 285 369 295 380"/>
+<path class="ink" d="M 307 358 Q 317 369 307 380"/>
+<line class="ink" x1="312" y1="369" x2="324" y2="369"/>
+<text class="dim" x="36" y="478" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="474" x2="68" y2="474"/>
+<line class="ink" x1="194" y1="474" x2="254" y2="474"/>
+<line class="ink" x1="324" y1="474" x2="346" y2="474"/>
+<rect class="box" x="68" y="461" width="126" height="68" rx="3"/>
+<line class="ink" x1="68" y1="487" x2="194" y2="487"/>
+<text class="op" x="131" y="478" text-anchor="middle">real_trunc_int</text>
+<text class="tag" x="184" y="501" text-anchor="end">speed</text>
+<text class="dim" x="78" y="519">to</text>
+<text class="tag" x="184" y="519" text-anchor="end">whole</text>
+<text class="tag" x="322" y="457" text-anchor="end">whole_ok</text>
+<line class="ink" x1="254" y1="474" x2="290" y2="474"/>
+<path class="ink" d="M 295 463 Q 285 474 295 485"/>
+<path class="ink" d="M 307 463 Q 317 474 307 485"/>
+<line class="ink" x1="312" y1="474" x2="324" y2="474"/>
+</svg>

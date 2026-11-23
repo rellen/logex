@@ -1,0 +1,8 @@
+// tally.logex -- a box counter whose count and total survive a warm restart
+var_global eye_1              bool at panel.i.0
+var_global retain total_boxes dint 0
+var_global case_full          bool
+
+program t1 tally
+  t1.eye  eye_1
+  t1.full case_full

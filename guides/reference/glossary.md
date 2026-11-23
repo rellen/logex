@@ -169,7 +169,7 @@ a bool array, a bit or a member.
 ### pulse coil
 
 A coil that is also a one-shot: `osr` and `osf`. It sets its pulse bit to 1 for 1 scan
-when the power flow to it changes.
+when the power flow to it rises (`osr`) or falls (`osf`).
 
 IEC 61131-3: a transition-sensing coil. Conventional set: OSR, One Shot Rising, and OSF,
 One Shot Falling.
@@ -230,6 +230,11 @@ example `t1.dn`.
 One binary digit of an integer tag or of a bit string tag, read as a bool. You write its
 number after a dot, for example `status.3`.
 
+### mask
+
+A literal with a 1 for each bit that a bitwise instruction keeps, sets or changes, for
+example `16#00ff` in `and status 16#00ff d`.
+
 ### initial value
 
 The value that a tag has when its instance starts. It is 0 if the declaration gives no
@@ -283,7 +288,7 @@ and the counters.
 ### timer
 
 An instance of a built-in function block type that measures time: `ton`, `tof`, `tp` or
-`rto`.
+`rto`, or a long timer.
 
 IEC 61131-3: a timer function block. Conventional set: a TIMER tag.
 
@@ -567,9 +572,29 @@ default.
 A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
 a number of milliseconds of rounds that the share sets.
 
+### event
+
+A record of a thing that occurred while a resource ran, for example a run of an instance,
+a fault or a trip. An event is a tuple, and its first atom is its kind, for example
+`{:trip, reason}`. `Logex.Runtime.cycle/3` gives the events of a cycle in a list. The
+runner sends each event to each subscriber in the message
+`{Logex.Runner, runner, event}`. `runner` is the pid of the runner, and `event` is the
+tuple.
+
+### subscriber
+
+A process that called `Logex.Runner.subscribe/1` or `Logex.Runner.subscribe/2`. The
+runner sends it the events of the kinds that it gave, or of the default kinds of
+`subscribe/1`.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
+
+### ExUnit test
+
+A `test` block of an ExUnit test module, which `mix test` runs. It is not the
+[test](#test) of an online edit.
 
 ### watchdog
 
@@ -600,6 +625,19 @@ The file in which a runner keeps its forces, so that they stay after the runner 
 ### store
 
 The file in which a runner keeps the retained values on the disk of the host.
+
+### fresh start
+
+A start of a new runner with `Logex.Runner.start_link/1`, for example after a stop or a
+crash. A fresh start of a runner that has a store is warm: it reads the retained values
+from the store. With the option `start: :cold`, it is cold: it writes the initial values
+over the store.
+
+### deploy
+
+A fresh start of a runner from changed files: a new version of a program file or of a
+configuration file. A deploy without `start: :cold` reads the retained values that the
+earlier files wrote in the store.
 
 ### retained image
 
