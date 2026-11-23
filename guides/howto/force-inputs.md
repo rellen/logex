@@ -360,7 +360,8 @@ and give a list of its values. An unforce of the array removes the force of each
 ```
 
 The status and the forces file give each forced element by its name, for example
-`zone_t[3]`. [Forcing](../reference/forcing.md) gives the rules for an array.
+`zone_t[3]`. [Example: an array of temperatures](../reference/forcing.md#example-an-array-of-temperatures)
+gives the rules for an array.
 
 ## Change the forces file when no runner runs
 
@@ -434,9 +435,10 @@ The runner option `write_limit:` gives the limit of the write time.
 
 ## See also
 
-- [Forcing](../reference/forcing.md): each rule of a force, the forces file and the 4
-  keys of the status.
-- [Runner](../reference/runner.md): the options of a runner, its status and its events.
+- [Forcing](../reference/forcing.md): each rule of a force, the forces file and the
+  [4 keys of the status](../reference/forcing.md#status).
+- [Runner](../reference/runner.md): the options of a runner, its status, its events and
+  [its files](../reference/runner.md#files).
 - [Run a plant on the clock](run-on-the-clock.md): start and stop a runner.
 - [Run a plant under a supervisor](run-under-a-supervisor.md): a runner with a name.
 - [Use an event task](use-an-event-task.md): a task that a trigger runs.

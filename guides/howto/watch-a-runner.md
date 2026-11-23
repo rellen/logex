@@ -89,7 +89,7 @@ no event to say that it stopped. The monitor of the watcher gives the `:DOWN` me
    | `{:ran, task, instance, now}` | At each run of each [instance](../reference/glossary.md#instance) |
    | `{:round, now, outputs}` | After each round, with the output [points](../reference/glossary.md#point) by the names of their [globals](../reference/glossary.md#global). A round that stops during its writes gives only the outputs of the [devices](../reference/glossary.md#device) that it reached. |
 
-   [Runner](../reference/runner.md) gives the rules of each event.
+   [Events](../reference/runner.md#events) gives the rules of each event.
 
 2. Make the file `watch-a-runner.exs` in the root directory of your project. Write the
    start of the watcher, a `GenServer`. Its `init/1` subscribes, monitors the runner and
@@ -420,8 +420,8 @@ links the watcher to the script. Thus the script stops, and its error starts wit
 
 ## See also
 
-- [Runner](../reference/runner.md): each key of the status map, each event and the rules
-  of a call.
+- [Runner](../reference/runner.md): each key of the [status map](../reference/runner.md#status),
+  each [event](../reference/runner.md#events) and the rules of a call.
 - [Run a plant on the clock](run-on-the-clock.md): start and stop a runner.
 - [Run a plant under a supervisor](run-under-a-supervisor.md): the child spec of the
   runner.
