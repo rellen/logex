@@ -69,6 +69,7 @@
   {"guides/howto/use-an-event-task.md", :howto, "How-to guides"},
   {"guides/howto/set-watchdogs.md", :howto, "How-to guides"},
   {"guides/howto/run-on-the-clock.md", :howto, "How-to guides"},
+  {"guides/howto/run-under-a-supervisor.md", :howto, "How-to guides"},
   {"guides/howto/test-on-the-manual-clock.md", :howto, "How-to guides"},
   {"guides/howto/watch-a-runner.md", :howto, "How-to guides"},
   {"guides/howto/force-inputs.md", :howto, "How-to guides"},
