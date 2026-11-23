@@ -170,6 +170,28 @@ defmodule Logex.QuotedTest do
     test("Logex.IO's and Logex.Runner's", ctx, do: told(runner_rows(ctx)))
 
     test("Logex.IO.Sim's, the clocks' and Logex.Tag's", ctx, do: told(tools_rows(ctx)))
+
+    # A line a program edited by hand gives that is no integer, a tuple or a text, is
+    # quoted as `inspect/1` shows it, where `"#{line}"` raised Protocol.UndefinedError out
+    # of the refusal for a tuple (provisional: `PLAN.md`'s RV-32, question 3).
+    test "a line that is no integer, quoted as inspect/1 shows it", %{p: p, s: s, scan: scan} do
+      at = fn line -> lined(retyped(p, "total", :bool), opaque(line)) end
+
+      declared =
+        &%{p | tags: Map.update!(p.tags, "lamp", fn tag -> %{tag | line: opaque(&1)} end)}
+
+      told([
+        {"an op's line, a scan's", fn -> Runtime.call(at.({:a, 1}), s, %{"start" => 1}, scan) end,
+         "a scan's `add` on line {:a, 1} computes in the type of `total`, a bool, which is " <>
+           "no integer type: the program was edited by hand after it was handed in and checked"},
+        {"an op's line, handed in", fn -> Runtime.instance(at.("7")) end,
+         ~s|`p`'s `add` on line "7" computes in the type of `total`, a bool, which is no | <>
+           "integer type: `p` was edited by hand after it compiled"},
+        {"a tag's line", fn -> Runtime.put_inputs(declared.({:a, 1}), s, %{"lamp" => 1}) end,
+         "input `lamp` is a var_output (declared on line {:a, 1}), not a var_input: only " <>
+           "a var_input is set from outside"}
+      ])
+    end
   end
 
   # the refusals of `Logex` and `Logex.Configuration`.
@@ -410,7 +432,8 @@ defmodule Logex.QuotedTest do
     ]
   end
 
-  # `Logex.Runtime`'s of a program edited by hand, where it is handed in and where a scan reaches what the hand changed.
+  # `Logex.Runtime`'s of a program edited by hand, where it is handed in and where a scan
+  # reaches what the hand changed.
   defp edited_rows(%{big: big, p: p, s: s, scan: scan}) do
     o = &opaque/1
 
@@ -833,7 +856,8 @@ defmodule Logex.QuotedTest do
   describe "lib/ shows a value only through the one cut" do
     # Every `inspect/1,2` lib/ calls, by its syntax trees: none but the cut's own, in
     # `Logex.Lexer.inspected/2`, so that a refusal written from now on quotes a value
-    # through it or is red here.
+    # through it or is red here, outside the host contract too (provisional: `PLAN.md`'s
+    # RV-32, question 2).
     defp inspects({:def, _, [{:inspected, _, _} | _]}, acc, _file), do: {nil, acc}
 
     defp inspects({:inspect, meta, args} = node, acc, file) when is_list(args),

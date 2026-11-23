@@ -109,7 +109,8 @@ defmodule Logex.Lexer do
   # (decision 584), and any other value as `inspect/1` shows it, with its limits, each long
   # number in it cut (`inspected/2`, decision 585). Since decision 586 (RV-32) every
   # refusal of the host contract that quotes a value the host gave quotes it through
-  # these, and `inspected/2` is the one call of `inspect/1` in lib/ (`quoted_test.exs`).
+  # these, and `inspected/2` is the one call of `inspect/1` in lib/, outside the host
+  # contract too (`quoted_test.exs`; provisional: `PLAN.md`'s RV-32, question 2).
   @shown_start 24
   @past_positive Integer.pow(10, @longest_number)
   @past_negative -Integer.pow(10, @longest_number - 1)

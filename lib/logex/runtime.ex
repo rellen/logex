@@ -274,7 +274,9 @@ defmodule Logex.Runtime do
   alone may be set by its name, `%{"steps[3]" => 5}`, every other kept, one subscript a
   dimension, each a number within it, and one call setting an array whole or by its
   elements, each once; and an array var_output is given as such a list. Every input problem in one call
-  comes in one raise, a line each, in key order. Inputs merge into the instance, so a host
+  comes in one raise, a line each, in key order, however many there are, each value
+  through the one cut (decision 586; provisional: `PLAN.md`'s RV-32, question 1). Inputs
+  merge into the instance, so a host
   sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
@@ -2835,10 +2837,11 @@ defmodule Logex.Runtime do
 
   defp on_line(%Tag{line: nil}), do: ""
 
-  defp on_line(%Tag{line: line}) when is_integer(line),
-    do: " (declared on line #{Logex.Lexer.shown_number(line)})"
-
-  defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
+  # Decision 586 (RV-32): a line through the one cut, a long one's start and count, and
+  # one a program edited by hand gives that is no integer as `inspect/1` shows it, where
+  # a tuple raised `Protocol.UndefinedError` out of the refusal (provisional: `PLAN.md`'s
+  # RV-32, question 3).
+  defp on_line(%Tag{line: line}), do: " (declared on line #{Logex.Lexer.inspected(line)})"
 
   # The configuration, checked again: check/1 raises the host's mistakes itself, and a
   # diagnostic raises as `Logex.Configuration.new!/1`'s do, formatted, a line each.
@@ -5483,6 +5486,8 @@ defmodule Logex.Runtime do
 
   defp computes_in({:ok, type}, _at, _destination), do: type
 
+  # An op's line through the one cut, a value of a program edited by hand however it was
+  # edited (decision 586; provisional: `PLAN.md`'s RV-32, question 3).
   defp computes_in({:error, what}, {op, line}, destination),
     do:
       raise(
