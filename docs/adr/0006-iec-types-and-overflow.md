@@ -715,7 +715,7 @@ Where the rules are in the code:
 | The range in a message | `Logex.Declarations.misfit/2` | `integer_width_test.exs` |
 | The name of a conversion | `Logex.Declarations.conversion/2` | `type_table_test.exs`, `integer_width_test.exs`, `bit_string_test.exs` |
 | The wrap and its power | `wrapped/2`, private in `Logex.Runtime` | `arithmetic_test.exs` |
-| The limits of a real | `Logex.Real.max/1`, `min/1`, `in_range?/2` and `flushed?/2` | `real_test.exs` |
+| The limits of a real | The largest and the smallest value, the range and the flush to 0.0, in the internal module of [`lib/logex/real.ex`](../../lib/logex/real.ex) | `real_test.exs` |
 | The typed counters | `Logex.FbType.rules/1` | `typed_counter_test.exs` |
 
 ## Alternatives considered
