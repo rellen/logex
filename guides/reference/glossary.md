@@ -533,6 +533,22 @@ The process that runs a resource on a clock and through devices: `Logex.Runner`.
 One step of the runner: it takes the inputs from the devices, runs a cycle and writes
 the outputs to the devices.
 
+### poll period
+
+The time between 2 reads of the adapter by the process of a device, on the clock of the
+runner. The option `poll:` of `Logex.Runner` sets it, 10 ms by default.
+
+### share
+
+The part of the time that the runner keeps for its own work, such as the calls of the
+host. The option `overhead:` of `Logex.Runner` sets it, from 10 % to 90 %, and 20 % by
+default.
+
+### slot
+
+A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
+a number of milliseconds of rounds that the share sets.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
@@ -543,6 +559,11 @@ A limit of time for a task or for the runner. The runner trips if the work takes
 than the limit.
 
 Conventional set: a watchdog.
+
+### idle watchdog
+
+The limit of time for the work of the runner between 2 rounds, such as a call of the
+host. The option `idle:` of `Logex.Runner` sets it, 500 ms by default.
 
 ### trip
 
