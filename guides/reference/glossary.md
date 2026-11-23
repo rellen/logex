@@ -492,6 +492,14 @@ IEC 61131-3: a global variable. Conventional set: a controller-scope tag.
 A line of a configuration that joins an input or an output of an instance to a global or
 to a constant.
 
+### access path
+
+A string that names 1 value of a resource: a global, or an instance, its tag and the
+members of the tag, joined by `.`. Examples are `estop`, `m1.fault` and `m1.t1.acc`.
+`Logex.Runtime.get/2` reads the value at an access path.
+
+IEC 61131-3: an access path.
+
 ### point
 
 One input or one output of a device, at an address. A located global is at a point.
