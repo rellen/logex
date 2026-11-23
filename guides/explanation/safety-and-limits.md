@@ -97,9 +97,13 @@ Their work can make a [round](../reference/glossary.md#round) late.
 ### logex can miss a short pulse on an input point
 
 A pulse is a change of an input point to 1 and back to 0. The runner keeps only the
-latest value of each input point. Thus a program can miss a pulse that is shorter than
-the interval of its task. A signal that a program must not miss must hold its new value
-until the program reads it.
+latest value of each input point. A pulse shorter than the time between 2 reads of its
+device is missed, unless the device reports it. A pulse that the device reports is also
+missed, unless it is the trigger of an event task or a round runs while it holds.
+
+Thus the program can miss a pulse shorter than the interval of its task and the time
+between 2 reads of its device. A signal that a program must not miss must hold its new
+value until the program reads it.
 [Short pulses on input points](short-pulses.md) shows a program that misses a pulse, and
 gives the time that a signal must hold.
 

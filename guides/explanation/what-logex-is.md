@@ -21,8 +21,9 @@ the [outputs](../reference/glossary.md#output).
 > logex is not a safety controller, and it has no certificate for industrial use. An
 > emergency stop must work while logex does not run: after logex stops, after logex
 > fails, and if logex never starts. Make each safety function with hardwired circuits or
-> with a safety controller. Read [Safety and limits](safety-and-limits.md) before you
-> connect logex to a machine.
+> with a safety-rated controller. Design and validate it to the functional-safety
+> standards that apply: logex makes no claim against any of them. Read
+> [Safety and limits](safety-and-limits.md) before you connect logex to a machine.
 
 ## Who logex is for
 
