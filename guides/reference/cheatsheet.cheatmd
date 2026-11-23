@@ -1,7 +1,567 @@
 # Instruction cheatsheet
 
-This page is a stub. The finished cheatsheet will show the instruction set on 1 page.
+This page is for a reader who writes a [rung](glossary.md#rung) and looks up the form of
+an [instruction](glossary.md#instruction). It gives the 40 instructions and the 182
+[conversions](glossary.md#conversion) of logex on 1 page. Each card gives the
+[operands](glossary.md#operand) and what the instruction does on a
+[true rung](glossary.md#true-rung) and on a [false rung](glossary.md#false-rung). Each
+card links to the page with the full rules.
+
+> #### Warning {: .warning}
+>
+> Do not use logex for a [safety function](glossary.md#safety-function). logex is not a
+> safety controller. The emergency stop that cuts the power of a machine must work with
+> no part of logex. [What logex does not have](not-supported.md) gives each limit.
+
+The cards use these letters:
+
+- `a` and `b`: the values that an instruction reads. A value is a [tag](glossary.md#tag),
+  a member, an element, a bit or a [literal](glossary.md#literal), as the instruction
+  lets.
+- `d`: the tag, member, element or bit that an instruction writes.
+- `s` and `p`: the storage bit and the pulse bit of a one-shot.
+- `t`: a timer. `c`: a counter. `f`: an instance of a function block.
+- `n`: a number of bits. `l`: a label.
+
+Power in is the [power flow](glossary.md#power-flow) to an instruction. Power out is the
+power flow that the instruction gives to the next instruction. A run of an instruction is
+1 time that a [scan](glossary.md#scan) does the instruction. A scan does not do the
+instructions of a rung that a [jump](glossary.md#jump) skips.
+
+## Rungs and operands
+
+### Series and branches
+
+<!-- unchecked: 3 forms of a rung, each compiled with a, b and d declared bool -->
+```text
+xic a xic b ote d
+( xic a | xic b ) ote d
+( xic a | ( xic b | xio a ) ) ote d
+```
+
+| Item | Rule |
+|---|---|
+| Instructions in series | Line 1: `d` is 1 if `a` and `b` are 1. |
+| A [branch](glossary.md#branch) | Line 2: `d` is 1 if `a` or `b` is 1. A branch has 1 [leg](glossary.md#leg) or more. A leg can hold a branch, as in line 3. |
+| Each leg | logex runs every leg, from the first leg to the last, also after an earlier leg passes power. Thus an `ote` in a later leg writes in each scan. |
+| A later leg | It reads the values that an earlier leg writes in the same scan. |
+| The end of a rung | A newline. A rung is 1 line. |
+| A rung that writes nothing | An error. A rung must write a tag, a member or a bit, run an instance, keep a storage bit or jump. A rung of 1 `lbl` alone is correct if a `jmp` names the label. |
+| `XIC`, `Xic` | The same [mnemonic](glossary.md#mnemonic) as `xic`. A mnemonic is a [reserved word](glossary.md#reserved-word). |
+
+[Source syntax](source-syntax.md) gives each rule of a line, a rung and a branch.
+
+### An example
+
+This [program](glossary.md#program) has a [seal-in](glossary.md#seal-in), a [timer](glossary.md#timer), a
+[counter](glossary.md#counter) and a comparison.
+
+<!-- file: cheatsheet.ld -->
+```text
+var_input start bool
+var_input stop bool
+var_input eye bool
+var_output motor bool
+var_output full bool
+var delay ton
+var boxes ctu
+
+( xic start | xic motor ) xio stop ote motor
+xic motor ton delay 2000
+xic delay.dn xic eye ctu boxes 12
+ge boxes.cv 10 ote full
+```
+
+<!-- rung: cheatsheet.ld -->
+![The 4 rungs of cheatsheet.ld as a ladder drawing. Rung 1: a branch with the contacts start and motor, then the xio contact stop, then the coil motor. Rung 2: the contact motor, then a box ton with the name delay and the preset 2000. Rung 3: the contacts delay.dn and eye, then a box ctu with the name boxes and the preset 12. Rung 4: a box ge with boxes.cv and 10, then the coil full.](../assets/cheatsheet.svg)
+
+In the drawing, a [contact](glossary.md#contact) is 2 vertical lines. The contact of
+`xio` also has a slash. A [coil](glossary.md#coil) is 2 arcs. `ton`, `ctu` and `ge` are
+boxes.
+
+### Operands
+
+| Operand | Example |
+|---|---|
+| A tag | `motor` |
+| A [member](glossary.md#member) | `delay.dn`, `boxes.cv` |
+| An [element](glossary.md#element) | `lamps[2]` |
+| An element, its subscript in a tag | `lamps[slot]` |
+| A [bit](glossary.md#bit) | `status.3` |
+| A bit, its number in a tag | `status.[slot]` |
+| An integer literal | `12`, `-120`, `30_000`, `16#ff`, `2#0101` |
+| A real literal | `60.0`, `-0.25`, `1.5e3` |
+
+A member is a value of an [instance](glossary.md#instance). An element is 1 value of an
+[array](glossary.md#array). A bit is 1 bit of an integer or of a
+[bit string](glossary.md#bit-string).
+
+If the [host](glossary.md#host) gives a [state](glossary.md#state) with no value for a
+tag, the tag reads as 0. [Source syntax](source-syntax.md#names) gives each form of a
+name. [Literals](literals.md) gives each form of a number.
+
+## Contacts and coils
+{: .col-2}
+
+### Contacts
+
+| Text | Passes power if | Operand |
+|---|---|---|
+| `xic a` | `a` is 1 | A bool |
+| `xio a` | `a` is 0 | A bool |
+
+A contact writes nothing.
+
+### Coils
+
+| Text | True rung | False rung |
+|---|---|---|
+| `ote d` | Writes 1 | Writes 0 |
+| `otl d` | Writes 1 | Writes nothing |
+| `otu d` | Writes 0 | Writes nothing |
+
+`d` is a bool. A coil passes on its power in, so more instructions can come after it.
+No instruction writes a `var_input` tag. `otl` is the [latch](glossary.md#latch) and
+`otu` is the [unlatch](glossary.md#unlatch).
+
+[Instructions: contacts and coils](instructions-contacts-and-coils.md) gives the full
+rules.
+
+## One-shots
+
+### `ons`, `osr` and `osf`
+
+<!-- unchecked: the forms of the 3 one-shots -->
+```text
+ons s
+osr s p
+osf s p
+```
+
+| Mnemonic | What it does | Power out |
+|---|---|---|
+| `ons` | Passes power for 1 scan when its power in goes from false to true | True in that scan only |
+| `osr` | Writes 1 to `p` for 1 scan when its power in goes from false to true. Writes 0 to `p` in each other run. | Its power in |
+| `osf` | Writes 1 to `p` for 1 scan when its power in goes from true to false. Writes 0 to `p` in each other run. | Its power in |
+
+`s` is the [storage bit](glossary.md#storage-bit) and `p` is the
+[pulse bit](glossary.md#pulse-bit). Each is a bool that the instruction writes.
+
+### Rules of the one-shots
+
+| Item | Rule |
+|---|---|
+| The [first scan](glossary.md#first-scan) | No [rising edge](glossary.md#rising-edge) and no [falling edge](glossary.md#falling-edge). The instruction gives no pulse. |
+| An [online edit](glossary.md#online-edit) | An edit that adds the instruction or changes its rung blocks it 1 time. It gives no pulse in the next scan that runs it. [Online edit](online-edit.md#one-shots-and-pulse-coils) gives each case. |
+| The storage bit | It holds the power in of the last run. 2 [one-shots](glossary.md#one-shot) cannot have the same storage bit. `s` cannot also be `p`. |
+| Another instruction that writes `s` | A [warning](glossary.md#warning) |
+| Another instruction that writes `p` | A warning |
+| An element or a bit as `s` or `p` | It takes a literal [subscript](glossary.md#subscript) or bit number, not a tag: `lamps[2]`, not `lamps[slot]`. |
+| A rung that a jump skips | The one-shot does not change. In its next run, it compares its power in with the power in of its last run. |
+
+[Instructions: contacts and coils](instructions-contacts-and-coils.md#one-shots) gives
+the full rules.
+
+## Timers
+
+### `ton`, `tof`, `tp` and `rto`
+
+<!-- unchecked: the forms of the 4 timers, each with the preset 3000 ms -->
+```text
+ton t 3000
+tof t 3000
+tp t 3000
+rto t 3000
+```
+
+| Mnemonic | `dn` is 1 | `tt` is 1 |
+|---|---|---|
+| `ton`, on-delay | After the rung is true for 3000 ms, until the rung goes false | While the rung is true and `dn` is 0 |
+| `tof`, off-delay | While the rung is true, and for 3000 ms after it goes false | For 3000 ms after the rung goes false |
+| `tp`, pulse | After the pulse, while the rung stays true | For 3000 ms after a rising edge: the pulse |
+| `rto`, retentive | After the rung is true for a total of 3000 ms, until a reset | While the rung is true, `dn` is 0 and `r` is 0 |
+
+Declare `t` with the [type](glossary.md#type) of the mnemonic: `var t ton` for `ton`. A
+false rung sets `acc`, `dn` and `tt` of a `ton` to 0. An `rto` keeps `acc` and `dn` on a
+false rung. A rung that writes 1 to `t.r` resets an `rto`. logex has no `res`
+instruction.
+
+### Rules of a timer
+
+| Item | Rule |
+|---|---|
+| The preset | An integer literal: 0 to 2147483647 ms. A tag is an error. To set the preset from a tag, write the tag to `t.pre` with a `move` on an earlier rung. |
+| A [long timer](glossary.md#long-timer) | Declare it with a long type: `var t ton_ltime`. The mnemonic stays `ton`. The preset and `acc` are in ns. The preset is 0 to 9223372036854775807. |
+| The time of a long timer | It measures whole ms. A preset that is not a whole number of ms gives a warning. |
+| The place on a rung | Last on its path. No instruction comes after it. |
+| The result | Read `t.dn` on a different rung. |
+| The instruction that runs it | Only 1 instruction can run a timer. A 2nd one is an error. |
+| The time | The host gives each scan the time in ms since the last scan. A timer adds that time. It does not count scans. |
+| A rung that a jump skips | The timer does not change. In its next run, it adds all the time since its last run. |
+| `tp` on the first scan | It gives no pulse. |
+
+### Members of a timer
+
+| Member | Holds |
+|---|---|
+| `pre` | The [preset](glossary.md#preset) |
+| `acc` | The time that the timer measures, in ms, or in ns for a long timer |
+| `dn` | Done: the result |
+| `tt` | Timing |
+| `en` | The power in of the last run |
+| `r` | Reset, only of `rto` and `rto_ltime` |
+
+A rung can write `pre`, `acc` and `r`. It cannot write `dn`, `tt` or `en`.
+
+[Instructions: timers and counters](instructions-timers-and-counters.md#timers) gives the
+full rules.
+
+## Counters
+
+### `ctu`, `ctd` and `ctud`
+
+<!-- unchecked: the forms of the 2 counter instructions, each with the preset 12 -->
+```text
+ctu c 12
+ctd c 12
+```
+
+| Mnemonic | Each rising edge | Result |
+|---|---|---|
+| `ctu` | Adds 1 to `cv` | `q` is 1 when `cv` is `pv` or more |
+| `ctd` | Subtracts 1 from `cv` | `q` is 1 when `cv` is 0 or less |
+
+A `ctu` and a `ctd` can run 1 `ctud` counter. They must have the same preset. The
+counter has `qu`, 1 when `cv` is `pv` or more, and `qd`, 1 when `cv` is 0 or less.
+
+A rung that writes 1 to `c.r` sets `cv` to 0. A rung that writes 1 to `c.ld` sets `cv` to
+`pv`. The counter does this in its next run. Rungs 3 and 4 of this program do it for
+the `ctud` counter `stock`:
+
+<!-- file: shelf.ld -->
+```text
+var_input eye_in bool
+var_input eye_out bool
+var_input clear bool
+var_input fill bool
+var stock ctud
+
+xic eye_in ctu stock 40
+xic eye_out ctd stock 40
+xic clear ote stock.r
+xic fill ote stock.ld
+```
+
+### Rules of a counter
+
+| Item | Rule |
+|---|---|
+| The preset | An integer literal: -2147483648 to 2147483647. A tag is an error. To set the preset from a tag, write the tag to `c.pv` with a `move` on an earlier rung. |
+| A [typed counter](glossary.md#typed-counter) | Declare it with a typed type: `var c ctu_int`. The mnemonic stays `ctu`. The preset is a value of the type of its count. |
+| `cv` at the start | 0. Thus `q` of a `ctd` is 1 from the first scan, until `ld` loads `pv`. |
+| The limit of the count | The count stops at the largest value of its type and sets `ov`. It stops at the smallest value and sets `un`. Each stays 1 until `r` or `ld` sets the count. |
+| The place on a rung | Last on its path. No instruction comes after it. |
+| The first scan | It does not count. |
+| A rung that a jump skips | The counter does not change. In its next run, it compares its power in with the power in of its last run. |
+
+### Members of a counter
+
+| Member | Holds |
+|---|---|
+| `pv` | The preset |
+| `cv` | The count |
+| `q`, `qu`, `qd` | The result |
+| `r` | Reset, not of `ctd` |
+| `ld` | Load, not of `ctu` |
+| `ov`, `un` | Overflow and underflow |
+| `cu`, `cd` | The power in of the last run |
+
+A rung can write `pv`, `r` and `ld`. It cannot write the other members.
+
+[Instructions: timers and counters](instructions-timers-and-counters.md#counters) gives
+the full rules.
+
+## Move and arithmetic
+
+### `move`
+
+<!-- unchecked: the form of move -->
+```text
+move a d
+```
+
+| Rung | What `move` does |
+|---|---|
+| True | Writes the value of `a` to `d` |
+| False | Writes nothing |
+
+`a` has the type of `d`, or a type that [widens](glossary.md#widen) into it, for example
+a `usint` into a `dint`. For each other type, use a conversion. A literal must fit `d`.
+The mnemonic is `move`, not `mov`.
+
+### Arithmetic
+
+<!-- unchecked: the forms of the 8 arithmetic instructions -->
+```text
+add a b d
+sub a b d
+mul a b d
+div a b d
+mod a b d
+neg a d
+abs a d
+sqrt a d
+```
+
+| Mnemonic | Writes to `d` |
+|---|---|
+| `add` | `a + b` |
+| `sub` | `a - b` |
+| `mul` | `a * b` |
+| `div` | `a / b`. An integer quotient goes toward 0. |
+| `mod` | The remainder of `a / b`, integers only. Its sign is the sign of `a`. |
+| `neg` | `-a`. `d` is a signed type or a real. |
+| `abs` | The absolute value of `a` |
+| `sqrt` | The square root of `a`. `d` is a `real` or an `lreal`. |
+
+| Mnemonic | Sources | Value in `d` |
+|---|---|---|
+| `sub` | 0 and 1, into a `usint` | 255 |
+| `div` | -7 and 2 | -3 |
+| `mod` | -7 and 3 | -1 |
+| `neg` | -2.5 | 2.5 |
+| `sqrt` | 16 | 4.0 |
+
+Each source has the type of `d`, or a type that widens into it. On a true rung, each
+instruction works in the type of `d`. It reads its sources before it writes, so
+`add total flow total` is correct. On a false rung, each instruction writes nothing and
+passes no power.
+
+If each source is a literal, logex gives a warning: the result never changes. A `move`
+of a literal gives no warning.
+
+### Results that do not fit
+
+| Case | Value in `d` | Power out |
+|---|---|---|
+| An integer result out of the range of `d` | It [wraps](glossary.md#wrap): 2147483647 + 1 is -2147483648 in a `dint` | False |
+| A real result out of the range of `d` | The largest value of the type, with the sign | False |
+| `div` or `mod` by 0 | 0, or 0.0 in a real | False |
+| `sqrt` of a negative value | 0.0 | False |
+| Each other result | The result. A real result is the nearest value of the type. | True |
+
+`div` or `mod` by 0 gives the minor [fault](glossary.md#fault) `:divide_by_zero`. `sqrt`
+of a negative value gives the minor fault `:negative_sqrt`. A wrap or a real result out
+of the range gives no fault. A literal 0 divisor and a literal negative source of `sqrt`
+are errors.
+
+[Instructions: arithmetic and comparison](instructions-arithmetic-and-comparison.md)
+gives the full rules.
+
+## Comparisons
+{: .col-2}
+
+### `eq`, `ne`, `lt`, `gt`, `le` and `ge`
+
+<!-- unchecked: the form of a comparison, with eq as the mnemonic -->
+```text
+eq a b
+```
+
+| Mnemonic | Passes power if |
+|---|---|
+| `eq` | `a = b` |
+| `ne` | `a` is not equal to `b` |
+| `lt` | `a < b` |
+| `gt` | `a > b` |
+| `le` | `a <= b` |
+| `ge` | `a >= b` |
+
+### Rules of a comparison
+
+| Item | Rule |
+|---|---|
+| The operands | 2 numbers, or 2 bit strings |
+| An integer and a real | Correct if the integer type widens into the real type: an `int` and a `real`. A `dint` and a `real` are an error. |
+| 2 integer types | logex compares the values: a `sint` -1 is less than a `udint` 0. |
+| A bit string and an integer tag | An error. Convert 1 of them first. |
+| A bit string and an integer literal | Correct if the type holds the value: a `word` and `255` |
+| A literal that the type of the other operand cannot hold | An error: a `usint` and `300` |
+| A literal at the limit of the type | A warning if the result never changes: `ge` with a `usint` and `0` |
+| 2 literals | A warning |
+| A false rung | No power |
+
+[Instructions: arithmetic and comparison](instructions-arithmetic-and-comparison.md#comparisons)
+gives the full rules.
+
+## Bitwise
+{: .col-2}
+
+### `and`, `or`, `xor` and `not`
+
+<!-- unchecked: the forms of the 4 bitwise logic instructions -->
+```text
+and a b d
+or a b d
+xor a b d
+not a d
+```
+
+| Mnemonic | Each bit of `d` |
+|---|---|
+| `and` | 1 if the bit is 1 in `a` and in `b` |
+| `or` | 1 if the bit is 1 in `a` or in `b` |
+| `xor` | 1 if the bit is 1 in only 1 of `a` and `b` |
+| `not` | The opposite of the bit of `a` |
+
+With `2#1100` and `2#1010`, `and` gives `2#1000`, `or` gives `2#1110` and `xor` gives
+`2#0110`. `not` of the `byte` `2#0000_1111` is `2#1111_0000`. The operands are all bools
+and bit strings, or all integers.
+
+### `shl`, `shr`, `rol` and `ror`
+
+<!-- unchecked: the forms of the 2 shifts and the 2 rotates -->
+```text
+shl a n d
+shr a n d
+rol a n d
+ror a n d
+```
+
+| Mnemonic | What it does |
+|---|---|
+| `shl` | Moves the bits of `a` to the left by `n` places. It puts 0 in each empty bit. |
+| `shr` | Moves the bits of `a` to the right by `n` places. It puts 0 in each empty bit. |
+| `rol` | Rotates the bits of `a` to the left by `n` places |
+| `ror` | Rotates the bits of `a` to the right by `n` places |
+
+| Case | Result |
+|---|---|
+| The bits | A shift or a rotate uses each bit of the type of `a`, also the sign bit. `shr` of the `int` -2 by 1 gives 32767. |
+| `n` equal to the width or more | A shift writes 0. A rotate uses the remainder of `n` divided by the width. |
+| A tag `n` that is negative | It writes `a` with no shift and passes no power. |
+| A literal negative `n` | An error |
+
+On a false rung, a bitwise instruction writes nothing and passes no power. If each source
+is a literal, logex gives a warning: the result never changes.
+[Instructions: bitwise](instructions-bitwise.md) gives the full rules.
+
+## Conversions
+
+### The 4 groups
+
+<!-- unchecked: the form of a conversion, with dint_to_sint as the mnemonic -->
+```text
+dint_to_sint a d
+```
+
+| Group | Number | Example |
+|---|---|---|
+| Integer | 56 | `dint_to_sint` |
+| Bit string | 76 | `word_to_int` |
+| Real | 34 | `real_to_int` |
+| Truncation | 16 | `real_trunc_int` |
+
+The mnemonic is the source type, `_to_` or `_trunc_`, and the destination type.
+
+| Group | A value that does not fit |
+|---|---|
+| Integer | It wraps: 129 is -127 in a `sint`. |
+| Bit string | It keeps the low bits. |
+| Real | Into an integer: the nearest integer, wrapped. Into a `real`: the largest value, with the sign. |
+| Truncation | The integer part, wrapped |
+
+A bit string conversion passes its power in. The other conversions pass no power if the
+value does not fit.
+
+### Values
+
+| Conversion | Result |
+|---|---|
+| `real_to_int` of 2.5 | 2 |
+| `real_to_int` of 3.5 | 4 |
+| `real_trunc_int` of -1.6 | -1 |
+| `int_to_dword` of -1 | `16#0000ffff` |
+| `word_to_int` of `16#ffff` | -1 |
+| `dint_to_real` of 16777217 | 16777216.0 |
+
+A tie goes to the even integer: 2.5 gives 2 and 3.5 gives 4. On a false rung, a
+conversion writes nothing and passes no power. A bool has no conversion. A literal
+source gives a warning. [Conversions](conversions.md) gives the full rules and the 182
+mnemonics.
+
+## Jump and call
+
+### `jmp`, `lbl` and `cal`
+
+> #### Warning {: .warning}
+>
+> Do not put the stop of a machine only on a rung that a `jmp` can skip. A rung that the
+> scan does not run writes nothing. An [output](glossary.md#output) that is 1 stays 1.
+
+<!-- unchecked: the forms of jmp, lbl and cal, with 1 var_input and 1 var_output in the block of f -->
+```text
+jmp l
+lbl l
+cal f a d
+```
+
+| Mnemonic | True rung | False rung |
+|---|---|---|
+| `jmp` | The rest of its rung runs. Then the scan does not run the rungs between this rung and the rung of the label `l`. | It jumps nowhere. |
+| `lbl` | Gives the [label](glossary.md#label) `l` to its rung | The same |
+| `cal` | Copies `a` into the `var_input` tag of the instance `f`, runs the rungs of `f` and copies its `var_output` tag to `d` | Copies nothing and runs nothing |
+
+### Rules of a jump and a call
+
+| Item | Rule |
+|---|---|
+| A jump | Forward only, to a later rung of the same [routine](glossary.md#routine). 1 `jmp` on a rung. |
+| `lbl` | First on its rung. A label that no `jmp` names is a warning. |
+| The instruction that runs an instance | Only 1 `cal` can run an instance. A 2nd one is an error. |
+| A rung that the scan does not run | Each tag keeps its value. Timers, counters and one-shots do not change. In its next run, a timer adds all the time since its last run. |
+| The operands of `cal` | The instance, then a value for each `var_input`, then a tag for each `var_output` of the [function block](glossary.md#function-block). Each group is in the sequence of its [declarations](glossary.md#declaration). |
+| Power out | The power in, for the 3 instructions |
+
+[Instructions: jump and call](instructions-jump-and-call.md) gives the full rules.
+
+## Power out and faults
+{: .col-2}
+
+### What comes after an instruction
+
+| Instruction | Power out |
+|---|---|
+| A contact, a comparison | Its result |
+| A coil, `osr`, `osf`, `move`, `jmp`, `lbl`, `cal` | Its power in |
+| `ons` | True for 1 scan at a rising edge |
+| An arithmetic instruction, an integer conversion, a real conversion, a truncation | Its power in, but false if the value does not fit or after a fault |
+| A bit string conversion | Its power in |
+| `and`, `or`, `xor`, `not` | Its power in |
+| A shift or a rotate | Its power in, but false for a negative tag `n` |
+| A timer or a counter instruction | No instruction can come after it. |
+
+On a false rung, the power out of each instruction is false.
+
+### Faults
+
+| Fault | Kind and cause |
+|---|---|
+| `:divide_by_zero` | [Minor](glossary.md#minor-fault): `div` or `mod` by 0 |
+| `:negative_sqrt` | Minor: `sqrt` of a negative value |
+| `:index_out_of_range` | [Major](glossary.md#major-fault): a tag subscript outside the array |
+| `:bit_out_of_range` | Major: a tag bit number outside the type |
+
+An instruction with a fault passes no power. The scan runs the next instruction.
+[Faults](faults.md) gives what logex does with each fault.
 
 ## See also
 
 - [Glossary](glossary.md): the technical words of logex.
+- [Source syntax](source-syntax.md): lines, rungs, branches and names.
+- [Declarations and types](declarations-and-types.md): the types of a tag.
+- [Function blocks](function-blocks.md): the members of each type of instance.
+- [Warnings](warnings.md): each warning of logex.
+- [Online edit](online-edit.md): what an edit does to a one-shot, a timer and a counter.
+- [What logex does not have](not-supported.md): the instructions that logex does not have.
+- [Your first program](../tutorials/first-program.md): the first 6 instructions in a program.
