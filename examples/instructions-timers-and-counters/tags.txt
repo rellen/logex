@@ -1,0 +1,17 @@
+var_input  eye        bool
+var_input  slot       dint
+var_input  wait_ms    dint
+var_output lamp       bool
+var        speed      dint
+var        delay      ton
+var        run_on     tof
+var        horn_pulse tp
+var        lube       rto
+var        cure       ton_ltime
+var        boxes      ctu
+var        hopper     ctd
+var        stock      ctud
+var        cases      ctu_int
+var        parts      ctd_udint
+var        lanes      ton[4]
+var        bins       ctu[4]

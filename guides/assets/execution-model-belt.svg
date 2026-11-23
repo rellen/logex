@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="404" height="332" viewBox="0 0 404 332" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of belt.ld</title>
+<desc id="description">3 rungs between two power rails. Rung 1: xio belt ote ready_lamp. Rung 2: ( xic start | xic belt ote held ) xio stop ote belt. Rung 3: ( xic eye ote box_seen | xic box_seen ote box_lamp ).</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="403" height="331" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="320"/>
+<line class="rail" x1="386" y1="14" x2="386" y2="320"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="114" y1="52" x2="278" y2="52"/>
+<line class="ink" x1="364" y1="52" x2="386" y2="52"/>
+<text class="tag" x="91" y="35" text-anchor="middle">belt</text>
+<line class="ink" x1="68" y1="52" x2="84" y2="52"/>
+<line class="ink" x1="84" y1="41" x2="84" y2="63"/>
+<line class="ink" x1="98" y1="41" x2="98" y2="63"/>
+<line class="ink" x1="98" y1="52" x2="114" y2="52"/>
+<line class="ink" x1="86" y1="61" x2="96" y2="43"/>
+<text class="tag" x="362" y="35" text-anchor="end">ready_lamp</text>
+<line class="ink" x1="278" y1="52" x2="330" y2="52"/>
+<path class="ink" d="M 335 41 Q 325 52 335 63"/>
+<path class="ink" d="M 347 41 Q 357 52 347 63"/>
+<line class="ink" x1="352" y1="52" x2="364" y2="52"/>
+<text class="dim" x="36" y="120" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="116" x2="68" y2="116"/>
+<line class="ink" x1="262" y1="116" x2="318" y2="116"/>
+<line class="ink" x1="364" y1="116" x2="386" y2="116"/>
+<line class="ink" x1="68" y1="116" x2="68" y2="172"/>
+<line class="ink" x1="200" y1="116" x2="200" y2="172"/>
+<text class="tag" x="104" y="99" text-anchor="middle">start</text>
+<line class="ink" x1="80" y1="116" x2="97" y2="116"/>
+<line class="ink" x1="97" y1="105" x2="97" y2="127"/>
+<line class="ink" x1="111" y1="105" x2="111" y2="127"/>
+<line class="ink" x1="111" y1="116" x2="128" y2="116"/>
+<line class="ink" x1="68" y1="116" x2="80" y2="116"/>
+<line class="ink" x1="128" y1="116" x2="200" y2="116"/>
+<text class="tag" x="103" y="155" text-anchor="middle">belt</text>
+<line class="ink" x1="80" y1="172" x2="96" y2="172"/>
+<line class="ink" x1="96" y1="161" x2="96" y2="183"/>
+<line class="ink" x1="110" y1="161" x2="110" y2="183"/>
+<line class="ink" x1="110" y1="172" x2="126" y2="172"/>
+<line class="ink" x1="126" y1="172" x2="142" y2="172"/>
+<text class="tag" x="165" y="155" text-anchor="middle">held</text>
+<line class="ink" x1="142" y1="172" x2="154" y2="172"/>
+<path class="ink" d="M 159 161 Q 149 172 159 183"/>
+<path class="ink" d="M 171 161 Q 181 172 171 183"/>
+<line class="ink" x1="176" y1="172" x2="188" y2="172"/>
+<line class="ink" x1="68" y1="172" x2="80" y2="172"/>
+<line class="ink" x1="188" y1="172" x2="200" y2="172"/>
+<line class="ink" x1="200" y1="116" x2="216" y2="116"/>
+<text class="tag" x="239" y="99" text-anchor="middle">stop</text>
+<line class="ink" x1="216" y1="116" x2="232" y2="116"/>
+<line class="ink" x1="232" y1="105" x2="232" y2="127"/>
+<line class="ink" x1="246" y1="105" x2="246" y2="127"/>
+<line class="ink" x1="246" y1="116" x2="262" y2="116"/>
+<line class="ink" x1="234" y1="125" x2="244" y2="107"/>
+<text class="tag" x="341" y="99" text-anchor="middle">belt</text>
+<line class="ink" x1="318" y1="116" x2="330" y2="116"/>
+<path class="ink" d="M 335 105 Q 325 116 335 127"/>
+<path class="ink" d="M 347 105 Q 357 116 347 127"/>
+<line class="ink" x1="352" y1="116" x2="364" y2="116"/>
+<text class="dim" x="36" y="240" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="236" x2="68" y2="236"/>
+<line class="ink" x1="248" y1="236" x2="386" y2="236"/>
+<line class="ink" x1="68" y1="236" x2="68" y2="292"/>
+<line class="ink" x1="248" y1="236" x2="248" y2="292"/>
+<text class="tag" x="103" y="219" text-anchor="middle">eye</text>
+<line class="ink" x1="80" y1="236" x2="96" y2="236"/>
+<line class="ink" x1="96" y1="225" x2="96" y2="247"/>
+<line class="ink" x1="110" y1="225" x2="110" y2="247"/>
+<line class="ink" x1="110" y1="236" x2="126" y2="236"/>
+<line class="ink" x1="126" y1="236" x2="142" y2="236"/>
+<text class="tag" x="210" y="219" text-anchor="end">box_seen</text>
+<line class="ink" x1="142" y1="236" x2="178" y2="236"/>
+<path class="ink" d="M 183 225 Q 173 236 183 247"/>
+<path class="ink" d="M 195 225 Q 205 236 195 247"/>
+<line class="ink" x1="200" y1="236" x2="212" y2="236"/>
+<line class="ink" x1="68" y1="236" x2="80" y2="236"/>
+<line class="ink" x1="212" y1="236" x2="248" y2="236"/>
+<text class="tag" x="115" y="275" text-anchor="middle">box_seen</text>
+<line class="ink" x1="80" y1="292" x2="108" y2="292"/>
+<line class="ink" x1="108" y1="281" x2="108" y2="303"/>
+<line class="ink" x1="122" y1="281" x2="122" y2="303"/>
+<line class="ink" x1="122" y1="292" x2="150" y2="292"/>
+<line class="ink" x1="150" y1="292" x2="166" y2="292"/>
+<text class="tag" x="234" y="275" text-anchor="end">box_lamp</text>
+<line class="ink" x1="166" y1="292" x2="202" y2="292"/>
+<path class="ink" d="M 207 281 Q 197 292 207 303"/>
+<path class="ink" d="M 219 281 Q 229 292 219 303"/>
+<line class="ink" x1="224" y1="292" x2="236" y2="292"/>
+<line class="ink" x1="68" y1="292" x2="80" y2="292"/>
+<line class="ink" x1="236" y1="292" x2="248" y2="292"/>
+</svg>

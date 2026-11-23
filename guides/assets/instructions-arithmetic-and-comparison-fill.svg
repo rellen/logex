@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="490" viewBox="0 0 364 490" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of fill.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: add total flow total ote total_ok. Rung 2: xio total_ok otl overflow. Rung 3: ge total setpoint ote full. Rung 4: xio full ote valve. Rung 5: div total minutes per_minute.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="489" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="478"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="478"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="148" y1="52" x2="254" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<rect class="box" x="68" y="39" width="80" height="86" rx="3"/>
+<line class="ink" x1="68" y1="65" x2="148" y2="65"/>
+<text class="op" x="108" y="56" text-anchor="middle">add</text>
+<text class="tag" x="138" y="79" text-anchor="end">total</text>
+<text class="tag" x="138" y="97" text-anchor="end">flow</text>
+<text class="dim" x="78" y="115">to</text>
+<text class="tag" x="138" y="115" text-anchor="end">total</text>
+<text class="tag" x="322" y="35" text-anchor="end">total_ok</text>
+<line class="ink" x1="254" y1="52" x2="290" y2="52"/>
+<path class="ink" d="M 295 41 Q 285 52 295 63"/>
+<path class="ink" d="M 307 41 Q 317 52 307 63"/>
+<line class="ink" x1="312" y1="52" x2="324" y2="52"/>
+<text class="dim" x="36" y="179" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="175" x2="68" y2="175"/>
+<line class="ink" x1="138" y1="175" x2="254" y2="175"/>
+<line class="ink" x1="324" y1="175" x2="346" y2="175"/>
+<text class="tag" x="103" y="158" text-anchor="middle">total_ok</text>
+<line class="ink" x1="68" y1="175" x2="96" y2="175"/>
+<line class="ink" x1="96" y1="164" x2="96" y2="186"/>
+<line class="ink" x1="110" y1="164" x2="110" y2="186"/>
+<line class="ink" x1="110" y1="175" x2="138" y2="175"/>
+<line class="ink" x1="98" y1="184" x2="108" y2="166"/>
+<text class="tag" x="322" y="158" text-anchor="end">overflow</text>
+<line class="ink" x1="254" y1="175" x2="290" y2="175"/>
+<path class="ink" d="M 295 164 Q 285 175 295 186"/>
+<path class="ink" d="M 307 164 Q 317 175 307 186"/>
+<line class="ink" x1="312" y1="175" x2="324" y2="175"/>
+<text class="op" x="301" y="179" text-anchor="middle">L</text>
+<text class="dim" x="36" y="243" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="239" x2="68" y2="239"/>
+<line class="ink" x1="148" y1="239" x2="278" y2="239"/>
+<line class="ink" x1="324" y1="239" x2="346" y2="239"/>
+<rect class="box" x="68" y="226" width="80" height="68" rx="3"/>
+<line class="ink" x1="68" y1="252" x2="148" y2="252"/>
+<text class="op" x="108" y="243" text-anchor="middle">ge</text>
+<text class="tag" x="138" y="266" text-anchor="end">total</text>
+<text class="tag" x="138" y="284" text-anchor="end">setpoint</text>
+<text class="tag" x="301" y="222" text-anchor="middle">full</text>
+<line class="ink" x1="278" y1="239" x2="290" y2="239"/>
+<path class="ink" d="M 295 228 Q 285 239 295 250"/>
+<path class="ink" d="M 307 228 Q 317 239 307 250"/>
+<line class="ink" x1="312" y1="239" x2="324" y2="239"/>
+<text class="dim" x="36" y="348" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="344" x2="68" y2="344"/>
+<line class="ink" x1="114" y1="344" x2="276" y2="344"/>
+<line class="ink" x1="324" y1="344" x2="346" y2="344"/>
+<text class="tag" x="91" y="327" text-anchor="middle">full</text>
+<line class="ink" x1="68" y1="344" x2="84" y2="344"/>
+<line class="ink" x1="84" y1="333" x2="84" y2="355"/>
+<line class="ink" x1="98" y1="333" x2="98" y2="355"/>
+<line class="ink" x1="98" y1="344" x2="114" y2="344"/>
+<line class="ink" x1="86" y1="353" x2="96" y2="335"/>
+<text class="tag" x="322" y="327" text-anchor="end">valve</text>
+<line class="ink" x1="276" y1="344" x2="290" y2="344"/>
+<path class="ink" d="M 295 333 Q 285 344 295 355"/>
+<path class="ink" d="M 307 333 Q 317 344 307 355"/>
+<line class="ink" x1="312" y1="344" x2="324" y2="344"/>
+<text class="dim" x="36" y="395" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="391" x2="68" y2="391"/>
+<line class="ink" x1="68" y1="391" x2="206" y2="391"/>
+<line class="ink" x1="324" y1="391" x2="346" y2="391"/>
+<rect class="box" x="206" y="378" width="118" height="86" rx="3"/>
+<line class="ink" x1="206" y1="404" x2="324" y2="404"/>
+<text class="op" x="265" y="395" text-anchor="middle">div</text>
+<text class="tag" x="314" y="418" text-anchor="end">total</text>
+<text class="tag" x="314" y="436" text-anchor="end">minutes</text>
+<text class="dim" x="216" y="454">to</text>
+<text class="tag" x="314" y="454" text-anchor="end">per_minute</text>
+</svg>

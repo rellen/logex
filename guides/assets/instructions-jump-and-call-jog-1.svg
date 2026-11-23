@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="406" height="133" viewBox="0 0 406 133" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of jog.ld</title>
+<desc id="description">1 rung between two power rails. Rung 1: xio manual jmp auto ote auto_lamp.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="405" height="132" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="121"/>
+<line class="rail" x1="388" y1="14" x2="388" y2="121"/>
+<text class="note dim" x="54" y="34">in auto, jump over the manual section</text>
+<text class="dim" x="36" y="74" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="70" x2="68" y2="70"/>
+<line class="ink" x1="232" y1="70" x2="288" y2="70"/>
+<line class="ink" x1="366" y1="70" x2="388" y2="70"/>
+<text class="tag" x="96" y="53" text-anchor="middle">manual</text>
+<line class="ink" x1="68" y1="70" x2="89" y2="70"/>
+<line class="ink" x1="89" y1="59" x2="89" y2="81"/>
+<line class="ink" x1="103" y1="59" x2="103" y2="81"/>
+<line class="ink" x1="103" y1="70" x2="124" y2="70"/>
+<line class="ink" x1="91" y1="79" x2="101" y2="61"/>
+<line class="ink" x1="124" y1="70" x2="140" y2="70"/>
+<rect class="box" x="140" y="57" width="92" height="50" rx="3"/>
+<line class="ink" x1="140" y1="83" x2="232" y2="83"/>
+<text class="op" x="186" y="74" text-anchor="middle">jmp</text>
+<text class="dim" x="150" y="97">label</text>
+<text class="tag" x="222" y="97" text-anchor="end">auto</text>
+<text class="tag" x="364" y="53" text-anchor="end">auto_lamp</text>
+<line class="ink" x1="288" y1="70" x2="332" y2="70"/>
+<path class="ink" d="M 337 59 Q 327 70 337 81"/>
+<path class="ink" d="M 349 59 Q 359 70 349 81"/>
+<line class="ink" x1="354" y1="70" x2="366" y2="70"/>
+</svg>

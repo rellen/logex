@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="577" height="360" viewBox="0 0 577 360" role="img" aria-labelledby="title description">
+<title id="title">cal s3 on a false rung: s3 and belt_3 keep their values</title>
+<desc id="description">8 scans, 10 ms a scan. Each signal after each scan, from scan 1: auto: 1, 1, 1, 0, 0, 0, 1, 1. stop: 0, 0, 0, 0, 1, 0, 0, 0. belt_1: 1, 1, 1, 1, 0, 0, 0, 0. s3.stop: 0, 0, 0, 0, 0, 0, 0, 0. s3.run: 0, 1, 1, 1, 1, 1, 1, 1. belt_3: 0, 1, 1, 1, 1, 1, 1, 1.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="576" height="359" rx="6"/>
+<text class="head" x="14" y="24">cal s3 on a false rung: s3 and belt_3 keep their values</text>
+<text class="dim" x="14" y="334">scan</text>
+<text class="dim" x="14" y="348">time</text>
+<line class="grid" x1="104.1" y1="36" x2="104.1" y2="318"/>
+<line class="grid" x1="160.1" y1="36" x2="160.1" y2="318"/>
+<line class="grid" x1="216.1" y1="36" x2="216.1" y2="318"/>
+<line class="grid" x1="272.1" y1="36" x2="272.1" y2="318"/>
+<line class="grid" x1="328.1" y1="36" x2="328.1" y2="318"/>
+<line class="grid" x1="384.1" y1="36" x2="384.1" y2="318"/>
+<line class="grid" x1="440.1" y1="36" x2="440.1" y2="318"/>
+<line class="grid" x1="496.1" y1="36" x2="496.1" y2="318"/>
+<line class="grid" x1="552.1" y1="36" x2="552.1" y2="318"/>
+<text class="tag" x="14" y="61">auto</text>
+<line class="grid" x1="104.1" y1="70" x2="552.1" y2="70"/>
+<polyline class="wave" points="104.1,70 104.1,44 160.1,44 160.1,44 216.1,44 216.1,44 272.1,44 272.1,70 328.1,70 328.1,70 384.1,70 384.1,70 440.1,70 440.1,44 496.1,44 496.1,44 552.1,44"/>
+<text class="tag" x="14" y="109">stop</text>
+<line class="grid" x1="104.1" y1="118" x2="552.1" y2="118"/>
+<polyline class="wave" points="104.1,118 104.1,118 160.1,118 160.1,118 216.1,118 216.1,118 272.1,118 272.1,118 328.1,118 328.1,92 384.1,92 384.1,118 440.1,118 440.1,118 496.1,118 496.1,118 552.1,118"/>
+<text class="tag" x="14" y="157">belt_1</text>
+<line class="grid" x1="104.1" y1="166" x2="552.1" y2="166"/>
+<polyline class="wave" points="104.1,166 104.1,140 160.1,140 160.1,140 216.1,140 216.1,140 272.1,140 272.1,140 328.1,140 328.1,166 384.1,166 384.1,166 440.1,166 440.1,166 496.1,166 496.1,166 552.1,166"/>
+<text class="tag" x="14" y="205">s3.stop</text>
+<line class="grid" x1="104.1" y1="214" x2="552.1" y2="214"/>
+<polyline class="wave" points="104.1,214 104.1,214 160.1,214 160.1,214 216.1,214 216.1,214 272.1,214 272.1,214 328.1,214 328.1,214 384.1,214 384.1,214 440.1,214 440.1,214 496.1,214 496.1,214 552.1,214"/>
+<text class="tag" x="14" y="253">s3.run</text>
+<line class="grid" x1="104.1" y1="262" x2="552.1" y2="262"/>
+<polyline class="wave" points="104.1,262 104.1,262 160.1,262 160.1,236 216.1,236 216.1,236 272.1,236 272.1,236 328.1,236 328.1,236 384.1,236 384.1,236 440.1,236 440.1,236 496.1,236 496.1,236 552.1,236"/>
+<text class="tag" x="14" y="301">belt_3</text>
+<line class="grid" x1="104.1" y1="310" x2="552.1" y2="310"/>
+<polyline class="wave" points="104.1,310 104.1,310 160.1,310 160.1,284 216.1,284 216.1,284 272.1,284 272.1,284 328.1,284 328.1,284 384.1,284 384.1,284 440.1,284 440.1,284 496.1,284 496.1,284 552.1,284"/>
+<text class="dim" x="104.1" y="334" text-anchor="middle">1</text>
+<text class="dim" x="104.1" y="348" text-anchor="middle">10 ms</text>
+<text class="dim" x="160.1" y="334" text-anchor="middle">2</text>
+<text class="dim" x="160.1" y="348" text-anchor="middle">20 ms</text>
+<text class="dim" x="216.1" y="334" text-anchor="middle">3</text>
+<text class="dim" x="216.1" y="348" text-anchor="middle">30 ms</text>
+<text class="dim" x="272.1" y="334" text-anchor="middle">4</text>
+<text class="dim" x="272.1" y="348" text-anchor="middle">40 ms</text>
+<text class="dim" x="328.1" y="334" text-anchor="middle">5</text>
+<text class="dim" x="328.1" y="348" text-anchor="middle">50 ms</text>
+<text class="dim" x="384.1" y="334" text-anchor="middle">6</text>
+<text class="dim" x="384.1" y="348" text-anchor="middle">60 ms</text>
+<text class="dim" x="440.1" y="334" text-anchor="middle">7</text>
+<text class="dim" x="440.1" y="348" text-anchor="middle">70 ms</text>
+<text class="dim" x="496.1" y="334" text-anchor="middle">8</text>
+<text class="dim" x="496.1" y="348" text-anchor="middle">80 ms</text>
+</svg>

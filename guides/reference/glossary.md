@@ -147,15 +147,27 @@ A rung that keeps its output on with a contact of the same output.
 
 ### one-shot
 
-An instruction that is true for 1 scan when its input changes: `ons`, `osr` and `osf`.
+An instruction that gives a signal for 1 scan when the power flow to it changes: `ons`,
+`osr` and `osf`. An `ons` passes power for that scan. An `osr` or an `osf` sets its pulse
+bit to 1 for that scan.
 
 ### storage bit
 
-The bool tag in which a one-shot keeps the power flow of its last run.
+The bool in which a one-shot keeps the power flow of its last run. It is a bool tag, an
+element of a bool array or a bit.
 
 ### pulse bit
 
-The bool tag that an `osr` or an `osf` sets to 1 for 1 scan.
+The bool that an `osr` or an `osf` sets to 1 for 1 scan. It is a bool tag, an element of
+a bool array, a bit or a member.
+
+### pulse coil
+
+A coil that is also a one-shot: `osr` and `osf`. It sets its pulse bit to 1 for 1 scan
+when the power flow to it changes.
+
+IEC 61131-3: a transition-sensing coil. Conventional set: OSR, One Shot Rising, and OSF,
+One Shot Falling.
 
 ## Tags and types
 
@@ -177,8 +189,8 @@ The first word of a declaration. It tells where the value of the tag comes from:
 
 ### type
 
-The set of values that a tag can hold. A type is an elementary type, an array of an
-elementary type, or a function block type.
+The set of values that a tag can hold. A type is an elementary type, a function block
+type, or an array of 1 of these 2.
 
 ### elementary type
 
@@ -222,6 +234,29 @@ value.
 
 The word `retain` or `non_retain` after the section word of a declaration.
 
+### widen
+
+To put a value of 1 type into a tag of a wider type with no conversion. logex widens a
+type only into a type that holds each value of the first type.
+
+IEC 61131-3: an implicit type conversion.
+
+### conversion
+
+An instruction that reads a value and writes it in the type that its mnemonic names last.
+The mnemonic names 2 types, for example `dint_to_sint` or `real_trunc_int`. logex has 182
+conversions. Use a conversion where the first type does not widen into the second.
+
+IEC 61131-3: a typed conversion function, for example DINT_TO_SINT.
+
+### wrap
+
+To keep the low bits of an integer result that its type cannot hold. The value then goes
+to the other end of the range of the type. Example: in an `sint`, 127 + 1 wraps to -128.
+An arithmetic instruction, or a conversion between 2 number types, that wraps a result
+passes no power. A conversion to or from a bit string keeps the low bits and passes
+power.
+
 ### reserved word
 
 A word that cannot be the name of a tag, for example a mnemonic or a type word.
@@ -247,12 +282,27 @@ An instance of a built-in function block type that measures time: `ton`, `tof`, 
 
 IEC 61131-3: a timer function block. Conventional set: a TIMER tag.
 
+### long timer
+
+A timer that measures time in nanoseconds: an instance of `ton_ltime`, `tof_ltime`,
+`tp_ltime` or `rto_ltime`. The preset of a timer of a different type is a time in
+milliseconds.
+
+IEC 61131-3: a timer with the ending `_LTIME`, for example TON_LTIME.
+
 ### counter
 
 An instance of a built-in function block type that counts rising edges: `ctu`, `ctd` or
 `ctud`.
 
 IEC 61131-3: a counter function block. Conventional set: a COUNTER tag.
+
+### typed counter
+
+A counter with a type word that names the integer type of its count, for example
+`ctu_int`. A counter with the type word `ctu`, `ctd` or `ctud` counts in a `dint`.
+
+IEC 61131-3: a counter with the type in its name, for example CTU_INT.
 
 ### preset
 
@@ -261,7 +311,13 @@ instruction on the rung gives it.
 
 ### rising edge
 
-A change of a bool from 0 to 1 between 2 runs of an instruction.
+A change of the power flow to an instruction from false to true, between 2 runs of the
+instruction. For a bool: a change from 0 to 1.
+
+### falling edge
+
+A change of the power flow to an instruction from true to false, between 2 runs of the
+instruction. For a bool: a change from 1 to 0.
 
 ## Runs
 
@@ -302,12 +358,13 @@ A new start of an instance or of a resource.
 
 ### cold restart
 
-A restart that sets each tag to its initial value.
+A restart that sets each tag that is not an input to its initial value. An input keeps
+its value.
 
 ### warm restart
 
-A restart that keeps the value of each tag that has the qualifier `retain`. Each other
-tag starts at its initial value.
+A restart that keeps the value of each tag that has the qualifier `retain`, and of each
+input. Each other tag starts at its initial value.
 
 ### retain
 
@@ -391,17 +448,37 @@ The task that runs each program instance that has no timed task.
 
 IEC 61131-3: a program with no task. Conventional set: the continuous task.
 
+### timed task
+
+A periodic task or an event task: each task that is not the continuous task.
+
 ### trigger
 
 The bool global that makes an event task due on its rising edge.
+
+### sample
+
+The value of the trigger of an event task that a cycle reads, 1 time in each cycle. The
+task is due when the sample is 1 and the sample of the last cycle is 0.
 
 ### priority
 
 The rank of a task. The priority 0 is the highest.
 
+### due
+
+A task is due when logex must run it in a cycle. A periodic task is due when the time
+of the resource reaches its due time. An event task is due when its trigger rises. An
+event task with an interval is also due at each interval while its trigger is 0.
+
 ### cycle
 
 One pass of a resource: it runs each task that is due at the time that the host gives.
+
+### overlap
+
+A due time of a task with an interval that passes with no run of the task, because a
+cycle came late. logex counts each overlap. `Logex.Runtime.overlaps/1` gives the count of each task.
 
 ### global
 
@@ -415,6 +492,14 @@ IEC 61131-3: a global variable. Conventional set: a controller-scope tag.
 A line of a configuration that joins an input or an output of an instance to a global or
 to a constant.
 
+### access path
+
+A string that names 1 value of a resource: a global, or an instance, its tag and the
+members of the tag, joined by `.`. Examples are `estop`, `m1.fault` and `m1.t1.acc`.
+`Logex.Runtime.get/2` reads the value at an access path.
+
+IEC 61131-3: an access path.
+
 ### point
 
 One input or one output of a device, at an address. A located global is at a point.
@@ -424,6 +509,19 @@ One input or one output of a device, at an address. A located global is at a poi
 A global with the word `at` and the address of a point.
 
 IEC 61131-3: a located variable. Conventional set: an alias tag on an I/O member.
+
+### location
+
+The text that names a point in a configuration, for example `panel.i.0`. It has 3
+parts: the name of a device, the letter `i` or `q`, and an address. The letter `i` is
+for an input point, and the letter `q` is for an output point.
+
+IEC 61131-3: a direct representation, such as `%IX1.1`.
+
+### address
+
+The integers of a location after `i` or `q`, with the highest level first. An adapter
+gets the address as a list: the location `rack.i.2.4` has the address `[2, 4]`.
 
 ### device
 
@@ -448,6 +546,22 @@ The process that runs a resource on a clock and through devices: `Logex.Runner`.
 One step of the runner: it takes the inputs from the devices, runs a cycle and writes
 the outputs to the devices.
 
+### poll period
+
+The time between 2 reads of the adapter by the process of a device, on the clock of the
+runner. The option `poll:` of `Logex.Runner` sets it, 10 ms by default.
+
+### share
+
+The part of the time that the runner keeps for its own work, such as the calls of the
+host. The option `overhead:` of `Logex.Runner` sets it, from 10 % to 90 %, and 20 % by
+default.
+
+### slot
+
+A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
+a number of milliseconds of rounds that the share sets.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
@@ -458,6 +572,11 @@ A limit of time for a task or for the runner. The runner trips if the work takes
 than the limit.
 
 Conventional set: a watchdog.
+
+### idle watchdog
+
+The limit of time for the work of the runner between 2 rounds, such as a call of the
+host. The option `idle:` of `Logex.Runner` sets it, 500 ms by default.
 
 ### trip
 
@@ -511,6 +630,22 @@ The step of an online edit that makes the new program the only program.
 
 The step of an online edit that removes the new program and keeps the old program.
 
+### forecast
+
+The list of entries that the accept of an online edit returns. A test that the host does
+at that moment returns the same entries in its report.
+
+### switch
+
+A test or an untest of an online edit. Between 2 scans, logex moves the state of the
+instance from the program that stops to the program that starts.
+
+### candidate
+
+The new program or the new configuration of an online edit. The messages of logex call
+it `the candidate`, and call the program or the configuration that runs `the running
+program` or `the running configuration`.
+
 ## Standards and vendors
 
 ### IEC 61131-3
@@ -528,6 +663,12 @@ this vocabulary, as [`docs/naming.md`](../../docs/naming.md) does not.
 
 A family of industrial controllers. A page can compare the behaviour of logex with the
 behaviour of a Logix controller.
+
+### safety function
+
+A function of a machine that protects persons, for example an emergency stop, a guard
+interlock or a light curtain. A failure of the function can cause an injury. logex must
+not do a safety function.
 
 ## Instruction mnemonics
 

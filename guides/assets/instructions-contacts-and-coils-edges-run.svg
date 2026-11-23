@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="584" height="312" viewBox="0 0 584 312" role="img" aria-labelledby="title description">
+<title id="title">ons, osr and osf: 1 pulse for each box at the eye of a conveyor</title>
+<desc id="description">8 scans, 10 ms a scan. Each signal after each scan, from scan 1: eye: 1, 1, 0, 0, 1, 1, 0, 0. new_box: 0, 0, 0, 0, 1, 0, 0, 0. box_in: 0, 0, 0, 0, 1, 0, 0, 0. eye_lamp: 1, 1, 0, 0, 1, 1, 0, 0. box_out: 0, 0, 1, 0, 0, 0, 1, 0.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="583" height="311" rx="6"/>
+<text class="head" x="14" y="24">ons, osr and osf: 1 pulse for each box at the eye of a conveyor</text>
+<text class="dim" x="14" y="286">scan</text>
+<text class="dim" x="14" y="300">time</text>
+<line class="grid" x1="111.5" y1="36" x2="111.5" y2="270"/>
+<line class="grid" x1="167.5" y1="36" x2="167.5" y2="270"/>
+<line class="grid" x1="223.5" y1="36" x2="223.5" y2="270"/>
+<line class="grid" x1="279.5" y1="36" x2="279.5" y2="270"/>
+<line class="grid" x1="335.5" y1="36" x2="335.5" y2="270"/>
+<line class="grid" x1="391.5" y1="36" x2="391.5" y2="270"/>
+<line class="grid" x1="447.5" y1="36" x2="447.5" y2="270"/>
+<line class="grid" x1="503.5" y1="36" x2="503.5" y2="270"/>
+<line class="grid" x1="559.5" y1="36" x2="559.5" y2="270"/>
+<text class="tag" x="14" y="61">eye</text>
+<line class="grid" x1="111.5" y1="70" x2="559.5" y2="70"/>
+<polyline class="wave" points="111.5,70 111.5,44 167.5,44 167.5,44 223.5,44 223.5,70 279.5,70 279.5,70 335.5,70 335.5,44 391.5,44 391.5,44 447.5,44 447.5,70 503.5,70 503.5,70 559.5,70"/>
+<text class="tag" x="14" y="109">new_box</text>
+<line class="grid" x1="111.5" y1="118" x2="559.5" y2="118"/>
+<polyline class="wave" points="111.5,118 111.5,118 167.5,118 167.5,118 223.5,118 223.5,118 279.5,118 279.5,118 335.5,118 335.5,92 391.5,92 391.5,118 447.5,118 447.5,118 503.5,118 503.5,118 559.5,118"/>
+<text class="tag" x="14" y="157">box_in</text>
+<line class="grid" x1="111.5" y1="166" x2="559.5" y2="166"/>
+<polyline class="wave" points="111.5,166 111.5,166 167.5,166 167.5,166 223.5,166 223.5,166 279.5,166 279.5,166 335.5,166 335.5,140 391.5,140 391.5,166 447.5,166 447.5,166 503.5,166 503.5,166 559.5,166"/>
+<text class="tag" x="14" y="205">eye_lamp</text>
+<line class="grid" x1="111.5" y1="214" x2="559.5" y2="214"/>
+<polyline class="wave" points="111.5,214 111.5,188 167.5,188 167.5,188 223.5,188 223.5,214 279.5,214 279.5,214 335.5,214 335.5,188 391.5,188 391.5,188 447.5,188 447.5,214 503.5,214 503.5,214 559.5,214"/>
+<text class="tag" x="14" y="253">box_out</text>
+<line class="grid" x1="111.5" y1="262" x2="559.5" y2="262"/>
+<polyline class="wave" points="111.5,262 111.5,262 167.5,262 167.5,262 223.5,262 223.5,236 279.5,236 279.5,262 335.5,262 335.5,262 391.5,262 391.5,262 447.5,262 447.5,236 503.5,236 503.5,262 559.5,262"/>
+<text class="dim" x="111.5" y="286" text-anchor="middle">1</text>
+<text class="dim" x="111.5" y="300" text-anchor="middle">10 ms</text>
+<text class="dim" x="167.5" y="286" text-anchor="middle">2</text>
+<text class="dim" x="167.5" y="300" text-anchor="middle">20 ms</text>
+<text class="dim" x="223.5" y="286" text-anchor="middle">3</text>
+<text class="dim" x="223.5" y="300" text-anchor="middle">30 ms</text>
+<text class="dim" x="279.5" y="286" text-anchor="middle">4</text>
+<text class="dim" x="279.5" y="300" text-anchor="middle">40 ms</text>
+<text class="dim" x="335.5" y="286" text-anchor="middle">5</text>
+<text class="dim" x="335.5" y="300" text-anchor="middle">50 ms</text>
+<text class="dim" x="391.5" y="286" text-anchor="middle">6</text>
+<text class="dim" x="391.5" y="300" text-anchor="middle">60 ms</text>
+<text class="dim" x="447.5" y="286" text-anchor="middle">7</text>
+<text class="dim" x="447.5" y="300" text-anchor="middle">70 ms</text>
+<text class="dim" x="503.5" y="286" text-anchor="middle">8</text>
+<text class="dim" x="503.5" y="300" text-anchor="middle">80 ms</text>
+</svg>

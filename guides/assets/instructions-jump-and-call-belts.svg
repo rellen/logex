@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="428" height="481" viewBox="0 0 428 481" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of belts.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: cal s1 start_1 stop belt_1. Rung 2: cal s2 start_2 stop belt_2. Rung 3: xic auto cal s3 start_3 stop belt_3. Rung 4: xic s1.run xic s2.run xic s3.run ote all_run.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="427" height="480" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="469"/>
+<line class="rail" x1="410" y1="14" x2="410" y2="469"/>
+<text class="dim" x="36" y="39" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="35" x2="68" y2="35"/>
+<line class="ink" x1="68" y1="35" x2="272" y2="35"/>
+<line class="ink" x1="388" y1="35" x2="410" y2="35"/>
+<rect class="box" x="272" y="22" width="116" height="104" rx="3"/>
+<line class="ink" x1="272" y1="48" x2="388" y2="48"/>
+<text class="op" x="330" y="39" text-anchor="middle">cal</text>
+<text class="tag" x="378" y="62" text-anchor="end">s1</text>
+<text class="dim" x="282" y="80">start</text>
+<text class="tag" x="378" y="80" text-anchor="end">start_1</text>
+<text class="dim" x="282" y="98">stop</text>
+<text class="tag" x="378" y="98" text-anchor="end">stop</text>
+<text class="dim" x="282" y="116">run</text>
+<text class="tag" x="378" y="116" text-anchor="end">belt_1</text>
+<text class="dim" x="36" y="163" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="159" x2="68" y2="159"/>
+<line class="ink" x1="68" y1="159" x2="272" y2="159"/>
+<line class="ink" x1="388" y1="159" x2="410" y2="159"/>
+<rect class="box" x="272" y="146" width="116" height="104" rx="3"/>
+<line class="ink" x1="272" y1="172" x2="388" y2="172"/>
+<text class="op" x="330" y="163" text-anchor="middle">cal</text>
+<text class="tag" x="378" y="186" text-anchor="end">s2</text>
+<text class="dim" x="282" y="204">start</text>
+<text class="tag" x="378" y="204" text-anchor="end">start_2</text>
+<text class="dim" x="282" y="222">stop</text>
+<text class="tag" x="378" y="222" text-anchor="end">stop</text>
+<text class="dim" x="282" y="240">run</text>
+<text class="tag" x="378" y="240" text-anchor="end">belt_2</text>
+<text class="dim" x="36" y="304" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="300" x2="68" y2="300"/>
+<line class="ink" x1="114" y1="300" x2="272" y2="300"/>
+<line class="ink" x1="388" y1="300" x2="410" y2="300"/>
+<text class="tag" x="91" y="283" text-anchor="middle">auto</text>
+<line class="ink" x1="68" y1="300" x2="84" y2="300"/>
+<line class="ink" x1="84" y1="289" x2="84" y2="311"/>
+<line class="ink" x1="98" y1="289" x2="98" y2="311"/>
+<line class="ink" x1="98" y1="300" x2="114" y2="300"/>
+<rect class="box" x="272" y="287" width="116" height="104" rx="3"/>
+<line class="ink" x1="272" y1="313" x2="388" y2="313"/>
+<text class="op" x="330" y="304" text-anchor="middle">cal</text>
+<text class="tag" x="378" y="327" text-anchor="end">s3</text>
+<text class="dim" x="282" y="345">start</text>
+<text class="tag" x="378" y="345" text-anchor="end">start_3</text>
+<text class="dim" x="282" y="363">stop</text>
+<text class="tag" x="378" y="363" text-anchor="end">stop</text>
+<text class="dim" x="282" y="381">run</text>
+<text class="tag" x="378" y="381" text-anchor="end">belt_3</text>
+<text class="dim" x="36" y="445" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="441" x2="68" y2="441"/>
+<line class="ink" x1="268" y1="441" x2="324" y2="441"/>
+<line class="ink" x1="388" y1="441" x2="410" y2="441"/>
+<text class="tag" x="96" y="424" text-anchor="middle">s1.run</text>
+<line class="ink" x1="68" y1="441" x2="89" y2="441"/>
+<line class="ink" x1="89" y1="430" x2="89" y2="452"/>
+<line class="ink" x1="103" y1="430" x2="103" y2="452"/>
+<line class="ink" x1="103" y1="441" x2="124" y2="441"/>
+<line class="ink" x1="124" y1="441" x2="140" y2="441"/>
+<text class="tag" x="168" y="424" text-anchor="middle">s2.run</text>
+<line class="ink" x1="140" y1="441" x2="161" y2="441"/>
+<line class="ink" x1="161" y1="430" x2="161" y2="452"/>
+<line class="ink" x1="175" y1="430" x2="175" y2="452"/>
+<line class="ink" x1="175" y1="441" x2="196" y2="441"/>
+<line class="ink" x1="196" y1="441" x2="212" y2="441"/>
+<text class="tag" x="240" y="424" text-anchor="middle">s3.run</text>
+<line class="ink" x1="212" y1="441" x2="233" y2="441"/>
+<line class="ink" x1="233" y1="430" x2="233" y2="452"/>
+<line class="ink" x1="247" y1="430" x2="247" y2="452"/>
+<line class="ink" x1="247" y1="441" x2="268" y2="441"/>
+<text class="tag" x="386" y="424" text-anchor="end">all_run</text>
+<line class="ink" x1="324" y1="441" x2="354" y2="441"/>
+<path class="ink" d="M 359 430 Q 349 441 359 452"/>
+<path class="ink" d="M 371 430 Q 381 441 371 452"/>
+<line class="ink" x1="376" y1="441" x2="388" y2="441"/>
+</svg>

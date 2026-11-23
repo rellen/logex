@@ -1,0 +1,5 @@
+// A second fan. The name of this file cannot name a program.
+var_input fan_on bool
+var_output fan bool
+
+xic fan_on ote fna

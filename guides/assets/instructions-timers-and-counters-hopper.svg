@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="349" viewBox="0 0 364 349" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of hopper.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: xic refill_pb ote hopper.ld. Rung 2: xic portion ctd hopper 3. Rung 3: xic hopper.q ote empty_lamp. Rung 4: move hopper.cv left.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="348" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="337"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="337"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="146" y1="52" x2="246" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="107" y="35" text-anchor="middle">refill_pb</text>
+<line class="ink" x1="68" y1="52" x2="100" y2="52"/>
+<line class="ink" x1="100" y1="41" x2="100" y2="63"/>
+<line class="ink" x1="114" y1="41" x2="114" y2="63"/>
+<line class="ink" x1="114" y1="52" x2="146" y2="52"/>
+<text class="tag" x="322" y="35" text-anchor="end">hopper.ld</text>
+<line class="ink" x1="246" y1="52" x2="290" y2="52"/>
+<path class="ink" d="M 295 41 Q 285 52 295 63"/>
+<path class="ink" d="M 307 41 Q 317 52 307 63"/>
+<line class="ink" x1="312" y1="52" x2="324" y2="52"/>
+<text class="dim" x="36" y="120" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="116" x2="68" y2="116"/>
+<line class="ink" x1="132" y1="116" x2="246" y2="116"/>
+<line class="ink" x1="324" y1="116" x2="346" y2="116"/>
+<text class="tag" x="100" y="99" text-anchor="middle">portion</text>
+<line class="ink" x1="68" y1="116" x2="93" y2="116"/>
+<line class="ink" x1="93" y1="105" x2="93" y2="127"/>
+<line class="ink" x1="107" y1="105" x2="107" y2="127"/>
+<line class="ink" x1="107" y1="116" x2="132" y2="116"/>
+<rect class="box" x="246" y="103" width="78" height="68" rx="3"/>
+<line class="ink" x1="246" y1="129" x2="324" y2="129"/>
+<text class="op" x="285" y="120" text-anchor="middle">ctd</text>
+<text class="tag" x="314" y="143" text-anchor="end">hopper</text>
+<text class="dim" x="256" y="161">preset</text>
+<text class="tag" x="314" y="161" text-anchor="end">3</text>
+<text class="dim" x="36" y="225" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="221" x2="68" y2="221"/>
+<line class="ink" x1="138" y1="221" x2="238" y2="221"/>
+<line class="ink" x1="324" y1="221" x2="346" y2="221"/>
+<text class="tag" x="103" y="204" text-anchor="middle">hopper.q</text>
+<line class="ink" x1="68" y1="221" x2="96" y2="221"/>
+<line class="ink" x1="96" y1="210" x2="96" y2="232"/>
+<line class="ink" x1="110" y1="210" x2="110" y2="232"/>
+<line class="ink" x1="110" y1="221" x2="138" y2="221"/>
+<text class="tag" x="322" y="204" text-anchor="end">empty_lamp</text>
+<line class="ink" x1="238" y1="221" x2="290" y2="221"/>
+<path class="ink" d="M 295 210 Q 285 221 295 232"/>
+<path class="ink" d="M 307 210 Q 317 221 307 232"/>
+<line class="ink" x1="312" y1="221" x2="324" y2="221"/>
+<text class="dim" x="36" y="272" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="268" x2="68" y2="268"/>
+<line class="ink" x1="68" y1="268" x2="236" y2="268"/>
+<line class="ink" x1="324" y1="268" x2="346" y2="268"/>
+<rect class="box" x="236" y="255" width="88" height="68" rx="3"/>
+<line class="ink" x1="236" y1="281" x2="324" y2="281"/>
+<text class="op" x="280" y="272" text-anchor="middle">move</text>
+<text class="tag" x="314" y="295" text-anchor="end">hopper.cv</text>
+<text class="dim" x="246" y="313">to</text>
+<text class="tag" x="314" y="313" text-anchor="end">left</text>
+</svg>

@@ -1,0 +1,7 @@
+// A seal-in. Its last line names `stp`, which no line declares.
+function_block seal
+var_input start bool
+var_input stop bool
+var_output run bool
+
+( xic start | xic run ) xio stp ote run
