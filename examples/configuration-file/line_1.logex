@@ -1,0 +1,36 @@
+// line_1.logex -- a conveyor, a box counter, 2 fans and a record of each stop
+task fast    interval 10 priority 1 watchdog 50
+task on_stop single estop priority 0
+task main    continuous watchdog 200
+
+var_global estop         bool    at panel.i.7
+var_global pb_start      bool    at panel.i.0
+var_global eye           bool    at panel.i.2
+var_global motor_k       bool    at panel.q.0
+var_global fan_k         bool[2] at panel.q.1
+var_global temps         real[2] at card.i.0
+var_global limits        real[2] 40.0 45.0
+var_global retain total  dint    0
+var_global total_at_stop dint
+
+program c1 belt with fast
+  c1.start pb_start
+  c1.stop  0
+  c1.motor motor_k
+
+program b1 box_count with fast
+  b1.eye eye
+
+program f1 fan_control
+  f1.temp  temps[0]
+  f1.limit limits[0]
+  f1.fan   fan_k[0]
+
+program f2 fan_control
+  f2.temp  temps[1]
+  f2.limit limits[1]
+  f2.fan   fan_k[1]
+
+program r1 stop_record with on_stop
+  r1.count         total
+  r1.count_at_stop total_at_stop

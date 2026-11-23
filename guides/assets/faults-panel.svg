@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="525" viewBox="0 0 364 525" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of panel.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: div boxes minutes per_minute ote rate_ok. Rung 2: sqrt pressure fan_speed ote fan_ok. Rung 3: xic drive.[sel] ote lamp. Rung 4: move speeds[zone] belt_sp ote belt_ok.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="524" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="513"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="513"/>
+<text class="note dim" x="54" y="34">the box counter: the boxes in each minute</text>
+<text class="dim" x="36" y="74" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="70" x2="68" y2="70"/>
+<line class="ink" x1="186" y1="70" x2="260" y2="70"/>
+<line class="ink" x1="324" y1="70" x2="346" y2="70"/>
+<rect class="box" x="68" y="57" width="118" height="86" rx="3"/>
+<line class="ink" x1="68" y1="83" x2="186" y2="83"/>
+<text class="op" x="127" y="74" text-anchor="middle">div</text>
+<text class="tag" x="176" y="97" text-anchor="end">boxes</text>
+<text class="tag" x="176" y="115" text-anchor="end">minutes</text>
+<text class="dim" x="78" y="133">to</text>
+<text class="tag" x="176" y="133" text-anchor="end">per_minute</text>
+<text class="tag" x="322" y="53" text-anchor="end">rate_ok</text>
+<line class="ink" x1="260" y1="70" x2="290" y2="70"/>
+<path class="ink" d="M 295 59 Q 285 70 295 81"/>
+<path class="ink" d="M 307 59 Q 317 70 307 81"/>
+<line class="ink" x1="312" y1="70" x2="324" y2="70"/>
+<text class="note dim" x="54" y="175">the fan: its speed is the square root of</text>
+<text class="note dim" x="54" y="189">the pressure</text>
+<text class="dim" x="36" y="229" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="225" x2="68" y2="225"/>
+<line class="ink" x1="178" y1="225" x2="268" y2="225"/>
+<line class="ink" x1="324" y1="225" x2="346" y2="225"/>
+<rect class="box" x="68" y="212" width="110" height="68" rx="3"/>
+<line class="ink" x1="68" y1="238" x2="178" y2="238"/>
+<text class="op" x="123" y="229" text-anchor="middle">sqrt</text>
+<text class="tag" x="168" y="252" text-anchor="end">pressure</text>
+<text class="dim" x="78" y="270">to</text>
+<text class="tag" x="168" y="270" text-anchor="end">fan_speed</text>
+<text class="tag" x="322" y="208" text-anchor="end">fan_ok</text>
+<line class="ink" x1="268" y1="225" x2="290" y2="225"/>
+<path class="ink" d="M 295 214 Q 285 225 295 236"/>
+<path class="ink" d="M 307 214 Q 317 225 307 236"/>
+<line class="ink" x1="312" y1="225" x2="324" y2="225"/>
+<text class="note dim" x="54" y="312">the lamp: the bit of the status word of</text>
+<text class="note dim" x="54" y="326">the drive that sel selects</text>
+<text class="dim" x="36" y="366" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="362" x2="68" y2="362"/>
+<line class="ink" x1="160" y1="362" x2="278" y2="362"/>
+<line class="ink" x1="324" y1="362" x2="346" y2="362"/>
+<text class="tag" x="114" y="345" text-anchor="middle">drive.[sel]</text>
+<line class="ink" x1="68" y1="362" x2="107" y2="362"/>
+<line class="ink" x1="107" y1="351" x2="107" y2="373"/>
+<line class="ink" x1="121" y1="351" x2="121" y2="373"/>
+<line class="ink" x1="121" y1="362" x2="160" y2="362"/>
+<text class="tag" x="301" y="345" text-anchor="middle">lamp</text>
+<line class="ink" x1="278" y1="362" x2="290" y2="362"/>
+<path class="ink" d="M 295 351 Q 285 362 295 373"/>
+<path class="ink" d="M 307 351 Q 317 362 307 373"/>
+<line class="ink" x1="312" y1="362" x2="324" y2="362"/>
+<text class="note dim" x="54" y="408">the conveyor: the speed of its zone</text>
+<text class="dim" x="36" y="448" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="444" x2="68" y2="444"/>
+<line class="ink" x1="178" y1="444" x2="260" y2="444"/>
+<line class="ink" x1="324" y1="444" x2="346" y2="444"/>
+<rect class="box" x="68" y="431" width="110" height="68" rx="3"/>
+<line class="ink" x1="68" y1="457" x2="178" y2="457"/>
+<text class="op" x="123" y="448" text-anchor="middle">move</text>
+<text class="tag" x="168" y="471" text-anchor="end">speeds[zone]</text>
+<text class="dim" x="78" y="489">to</text>
+<text class="tag" x="168" y="489" text-anchor="end">belt_sp</text>
+<text class="tag" x="322" y="427" text-anchor="end">belt_ok</text>
+<line class="ink" x1="260" y1="444" x2="290" y2="444"/>
+<path class="ink" d="M 295 433 Q 285 444 295 455"/>
+<path class="ink" d="M 307 433 Q 317 444 307 455"/>
+<line class="ink" x1="312" y1="444" x2="324" y2="444"/>
+</svg>

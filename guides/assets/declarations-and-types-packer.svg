@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="376" height="782" viewBox="0 0 376 782" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of packer.ld</title>
+<desc id="description">7 rungs between two power rails. Rung 1: xio estop ote motor. Rung 2: xic estop move 0 speed_sp. Rung 3: add weight tare net. Rung 4: gt net limits[product,1] ote heavy. Rung 5: xic boxes.q ote boxes.r. Rung 6: xic eye ctu boxes 12. Rung 7: xic boxes.q ons edge add cases 1 cases.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="375" height="781" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="770"/>
+<line class="rail" x1="358" y1="14" x2="358" y2="770"/>
+<text class="note dim" x="54" y="34">the conveyor runs if the e-stop is not</text>
+<text class="note dim" x="54" y="48">pressed</text>
+<text class="dim" x="36" y="88" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="84" x2="68" y2="84"/>
+<line class="ink" x1="116" y1="84" x2="288" y2="84"/>
+<line class="ink" x1="336" y1="84" x2="358" y2="84"/>
+<text class="tag" x="92" y="67" text-anchor="middle">estop</text>
+<line class="ink" x1="68" y1="84" x2="85" y2="84"/>
+<line class="ink" x1="85" y1="73" x2="85" y2="95"/>
+<line class="ink" x1="99" y1="73" x2="99" y2="95"/>
+<line class="ink" x1="99" y1="84" x2="116" y2="84"/>
+<line class="ink" x1="87" y1="93" x2="97" y2="75"/>
+<text class="tag" x="334" y="67" text-anchor="end">motor</text>
+<line class="ink" x1="288" y1="84" x2="302" y2="84"/>
+<path class="ink" d="M 307 73 Q 297 84 307 95"/>
+<path class="ink" d="M 319 73 Q 329 84 319 95"/>
+<line class="ink" x1="324" y1="84" x2="336" y2="84"/>
+<text class="dim" x="36" y="152" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="148" x2="68" y2="148"/>
+<line class="ink" x1="116" y1="148" x2="234" y2="148"/>
+<line class="ink" x1="336" y1="148" x2="358" y2="148"/>
+<text class="tag" x="92" y="131" text-anchor="middle">estop</text>
+<line class="ink" x1="68" y1="148" x2="85" y2="148"/>
+<line class="ink" x1="85" y1="137" x2="85" y2="159"/>
+<line class="ink" x1="99" y1="137" x2="99" y2="159"/>
+<line class="ink" x1="99" y1="148" x2="116" y2="148"/>
+<rect class="box" x="234" y="135" width="102" height="68" rx="3"/>
+<line class="ink" x1="234" y1="161" x2="336" y2="161"/>
+<text class="op" x="285" y="152" text-anchor="middle">move</text>
+<text class="tag" x="326" y="175" text-anchor="end">0</text>
+<text class="dim" x="244" y="193">to</text>
+<text class="tag" x="326" y="193" text-anchor="end">speed_sp</text>
+<text class="note dim" x="54" y="235">a box is heavy if its net weight is more</text>
+<text class="note dim" x="54" y="249">than the middle limit of its product</text>
+<text class="dim" x="36" y="272" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="268" x2="68" y2="268"/>
+<line class="ink" x1="68" y1="268" x2="270" y2="268"/>
+<line class="ink" x1="336" y1="268" x2="358" y2="268"/>
+<rect class="box" x="270" y="255" width="66" height="86" rx="3"/>
+<line class="ink" x1="270" y1="281" x2="336" y2="281"/>
+<text class="op" x="303" y="272" text-anchor="middle">add</text>
+<text class="tag" x="326" y="295" text-anchor="end">weight</text>
+<text class="tag" x="326" y="313" text-anchor="end">tare</text>
+<text class="dim" x="280" y="331">to</text>
+<text class="tag" x="326" y="331" text-anchor="end">net</text>
+<text class="dim" x="36" y="395" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="391" x2="68" y2="391"/>
+<line class="ink" x1="216" y1="391" x2="288" y2="391"/>
+<line class="ink" x1="336" y1="391" x2="358" y2="391"/>
+<rect class="box" x="68" y="378" width="148" height="68" rx="3"/>
+<line class="ink" x1="68" y1="404" x2="216" y2="404"/>
+<text class="op" x="142" y="395" text-anchor="middle">gt</text>
+<text class="tag" x="206" y="418" text-anchor="end">net</text>
+<text class="tag" x="206" y="436" text-anchor="end">limits[product,1]</text>
+<text class="tag" x="334" y="374" text-anchor="end">heavy</text>
+<line class="ink" x1="288" y1="391" x2="302" y2="391"/>
+<path class="ink" d="M 307 380 Q 297 391 307 402"/>
+<path class="ink" d="M 319 380 Q 329 391 319 402"/>
+<line class="ink" x1="324" y1="391" x2="336" y2="391"/>
+<text class="note dim" x="54" y="478">12 boxes fill 1 case</text>
+<text class="dim" x="36" y="518" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="514" x2="68" y2="514"/>
+<line class="ink" x1="132" y1="514" x2="272" y2="514"/>
+<line class="ink" x1="336" y1="514" x2="358" y2="514"/>
+<text class="tag" x="100" y="497" text-anchor="middle">boxes.q</text>
+<line class="ink" x1="68" y1="514" x2="93" y2="514"/>
+<line class="ink" x1="93" y1="503" x2="93" y2="525"/>
+<line class="ink" x1="107" y1="503" x2="107" y2="525"/>
+<line class="ink" x1="107" y1="514" x2="132" y2="514"/>
+<text class="tag" x="334" y="497" text-anchor="end">boxes.r</text>
+<line class="ink" x1="272" y1="514" x2="302" y2="514"/>
+<path class="ink" d="M 307 503 Q 297 514 307 525"/>
+<path class="ink" d="M 319 503 Q 329 514 319 525"/>
+<line class="ink" x1="324" y1="514" x2="336" y2="514"/>
+<text class="dim" x="36" y="582" text-anchor="end">6</text>
+<line class="ink" x1="46" y1="578" x2="68" y2="578"/>
+<line class="ink" x1="114" y1="578" x2="252" y2="578"/>
+<line class="ink" x1="336" y1="578" x2="358" y2="578"/>
+<text class="tag" x="91" y="561" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="578" x2="84" y2="578"/>
+<line class="ink" x1="84" y1="567" x2="84" y2="589"/>
+<line class="ink" x1="98" y1="567" x2="98" y2="589"/>
+<line class="ink" x1="98" y1="578" x2="114" y2="578"/>
+<rect class="box" x="252" y="565" width="84" height="68" rx="3"/>
+<line class="ink" x1="252" y1="591" x2="336" y2="591"/>
+<text class="op" x="294" y="582" text-anchor="middle">ctu</text>
+<text class="tag" x="326" y="605" text-anchor="end">boxes</text>
+<text class="dim" x="262" y="623">preset</text>
+<text class="tag" x="326" y="623" text-anchor="end">12</text>
+<text class="dim" x="36" y="687" text-anchor="end">7</text>
+<line class="ink" x1="46" y1="683" x2="68" y2="683"/>
+<line class="ink" x1="200" y1="683" x2="256" y2="683"/>
+<line class="ink" x1="336" y1="683" x2="358" y2="683"/>
+<text class="tag" x="100" y="666" text-anchor="middle">boxes.q</text>
+<line class="ink" x1="68" y1="683" x2="93" y2="683"/>
+<line class="ink" x1="93" y1="672" x2="93" y2="694"/>
+<line class="ink" x1="107" y1="672" x2="107" y2="694"/>
+<line class="ink" x1="107" y1="683" x2="132" y2="683"/>
+<line class="ink" x1="132" y1="683" x2="148" y2="683"/>
+<text class="tag" x="174" y="666" text-anchor="middle">edge</text>
+<line class="ink" x1="148" y1="683" x2="155" y2="683"/>
+<rect class="box" x="155" y="673" width="38" height="20" rx="3"/>
+<text class="op" x="174" y="687" text-anchor="middle">ons</text>
+<line class="ink" x1="193" y1="683" x2="200" y2="683"/>
+<rect class="box" x="256" y="670" width="80" height="86" rx="3"/>
+<line class="ink" x1="256" y1="696" x2="336" y2="696"/>
+<text class="op" x="296" y="687" text-anchor="middle">add</text>
+<text class="tag" x="326" y="710" text-anchor="end">cases</text>
+<text class="tag" x="326" y="728" text-anchor="end">1</text>
+<text class="dim" x="266" y="746">to</text>
+<text class="tag" x="326" y="746" text-anchor="end">cases</text>
+</svg>

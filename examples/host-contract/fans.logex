@@ -1,0 +1,20 @@
+// fans.logex -- 1 fan, its inputs at 2 devices
+task fast interval 10 priority 1
+
+var_global run    bool   at panel.i.0
+var_global level  usint  at card.i.0
+var_global hz     real   at card.i.1
+var_global limits int[3] at card.i.2
+var_global fan    bool   at panel.q.0
+var_global fan_hz real
+var_global steps  int[3]
+
+program f1 fan with fast
+  f1.run    run
+  f1.level  level
+  f1.trim   0
+  f1.hz     hz
+  f1.limits limits
+  f1.fan    fan
+  f1.fan_hz fan_hz
+  f1.steps  steps

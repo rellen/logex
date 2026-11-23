@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="756" height="292" viewBox="0 0 756 292" role="img" aria-labelledby="title description">
+<title id="title">ctu: boxes.cv goes up by 1 when eye comes on</title>
+<desc id="description">12 scans, 10 ms a scan. Each signal after each scan, from scan 1: eye: 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1. reset_pb: 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0. boxes.cv: 0, 0, 1, 1, 1, 2, 2, 3, 0, 0, 0, 1. boxes.q: 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="755" height="291" rx="6"/>
+<text class="head" x="14" y="24">ctu: boxes.cv goes up by 1 when eye comes on</text>
+<text class="dim" x="14" y="266">scan</text>
+<text class="dim" x="14" y="280">time</text>
+<line class="grid" x1="111.5" y1="36" x2="111.5" y2="250"/>
+<line class="grid" x1="163.2" y1="36" x2="163.2" y2="250"/>
+<line class="grid" x1="214.9" y1="36" x2="214.9" y2="250"/>
+<line class="grid" x1="266.5" y1="36" x2="266.5" y2="250"/>
+<line class="grid" x1="318.2" y1="36" x2="318.2" y2="250"/>
+<line class="grid" x1="369.9" y1="36" x2="369.9" y2="250"/>
+<line class="grid" x1="421.5" y1="36" x2="421.5" y2="250"/>
+<line class="grid" x1="473.2" y1="36" x2="473.2" y2="250"/>
+<line class="grid" x1="524.9" y1="36" x2="524.9" y2="250"/>
+<line class="grid" x1="576.5" y1="36" x2="576.5" y2="250"/>
+<line class="grid" x1="628.2" y1="36" x2="628.2" y2="250"/>
+<line class="grid" x1="679.9" y1="36" x2="679.9" y2="250"/>
+<line class="grid" x1="731.5" y1="36" x2="731.5" y2="250"/>
+<text class="tag" x="14" y="61">eye</text>
+<line class="grid" x1="111.5" y1="70" x2="731.5" y2="70"/>
+<polyline class="wave" points="111.5,70 111.5,44 163.2,44 163.2,70 214.9,70 214.9,44 266.5,44 266.5,44 318.2,44 318.2,70 369.9,70 369.9,44 421.5,44 421.5,70 473.2,70 473.2,44 524.9,44 524.9,44 576.5,44 576.5,44 628.2,44 628.2,70 679.9,70 679.9,44 731.5,44"/>
+<text class="tag" x="14" y="109">reset_pb</text>
+<line class="grid" x1="111.5" y1="118" x2="731.5" y2="118"/>
+<polyline class="wave" points="111.5,118 111.5,118 163.2,118 163.2,118 214.9,118 214.9,118 266.5,118 266.5,118 318.2,118 318.2,118 369.9,118 369.9,118 421.5,118 421.5,118 473.2,118 473.2,118 524.9,118 524.9,92 576.5,92 576.5,118 628.2,118 628.2,118 679.9,118 679.9,118 731.5,118"/>
+<text class="tag" x="14" y="171">boxes.cv</text>
+<line class="grid" x1="111.5" y1="194" x2="731.5" y2="194"/>
+<text class="dim" x="103.5" y="144" text-anchor="end">3</text>
+<text class="dim" x="103.5" y="198" text-anchor="end">0</text>
+<polyline class="wave" points="111.5,194 111.5,194 163.2,194 163.2,194 214.9,194 214.9,176 266.5,176 266.5,176 318.2,176 318.2,176 369.9,176 369.9,158 421.5,158 421.5,158 473.2,158 473.2,140 524.9,140 524.9,194 576.5,194 576.5,194 628.2,194 628.2,194 679.9,194 679.9,176 731.5,176"/>
+<text class="tag" x="14" y="233">boxes.q</text>
+<line class="grid" x1="111.5" y1="242" x2="731.5" y2="242"/>
+<polyline class="wave" points="111.5,242 111.5,242 163.2,242 163.2,242 214.9,242 214.9,242 266.5,242 266.5,242 318.2,242 318.2,242 369.9,242 369.9,242 421.5,242 421.5,242 473.2,242 473.2,216 524.9,216 524.9,242 576.5,242 576.5,242 628.2,242 628.2,242 679.9,242 679.9,242 731.5,242"/>
+<text class="dim" x="111.5" y="266" text-anchor="middle">1</text>
+<text class="dim" x="111.5" y="280" text-anchor="middle">10 ms</text>
+<text class="dim" x="163.2" y="266" text-anchor="middle">2</text>
+<text class="dim" x="163.2" y="280" text-anchor="middle">20 ms</text>
+<text class="dim" x="214.9" y="266" text-anchor="middle">3</text>
+<text class="dim" x="214.9" y="280" text-anchor="middle">30 ms</text>
+<text class="dim" x="266.5" y="266" text-anchor="middle">4</text>
+<text class="dim" x="266.5" y="280" text-anchor="middle">40 ms</text>
+<text class="dim" x="318.2" y="266" text-anchor="middle">5</text>
+<text class="dim" x="318.2" y="280" text-anchor="middle">50 ms</text>
+<text class="dim" x="369.9" y="266" text-anchor="middle">6</text>
+<text class="dim" x="369.9" y="280" text-anchor="middle">60 ms</text>
+<text class="dim" x="421.5" y="266" text-anchor="middle">7</text>
+<text class="dim" x="421.5" y="280" text-anchor="middle">70 ms</text>
+<text class="dim" x="473.2" y="266" text-anchor="middle">8</text>
+<text class="dim" x="473.2" y="280" text-anchor="middle">80 ms</text>
+<text class="dim" x="524.9" y="266" text-anchor="middle">9</text>
+<text class="dim" x="524.9" y="280" text-anchor="middle">90 ms</text>
+<text class="dim" x="576.5" y="266" text-anchor="middle">10</text>
+<text class="dim" x="576.5" y="280" text-anchor="middle">100 ms</text>
+<text class="dim" x="628.2" y="266" text-anchor="middle">11</text>
+<text class="dim" x="628.2" y="280" text-anchor="middle">110 ms</text>
+<text class="dim" x="679.9" y="266" text-anchor="middle">12</text>
+<text class="dim" x="679.9" y="280" text-anchor="middle">120 ms</text>
+</svg>

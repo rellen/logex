@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="801" height="292" viewBox="0 0 801 292" role="img" aria-labelledby="title description">
+<title id="title">tp: horn_pulse.tt is a pulse of 30 ms when fault comes on</title>
+<desc id="description">14 scans, 10 ms a scan. Each signal after each scan, from scan 1: fault: 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0. horn_pulse.acc: 0, 0, 0, 0, 10, 20, 30, 30, 0, 0, 10, 20, 0, 0 (preset 30). horn_pulse.tt: 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0. horn_pulse.dn: 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="800" height="291" rx="6"/>
+<text class="head" x="14" y="24">tp: horn_pulse.tt is a pulse of 30 ms when fault comes on</text>
+<text class="dim" x="14" y="266">scan</text>
+<text class="dim" x="14" y="280">time</text>
+<line class="grid" x1="156.2" y1="36" x2="156.2" y2="250"/>
+<line class="grid" x1="200.4" y1="36" x2="200.4" y2="250"/>
+<line class="grid" x1="244.7" y1="36" x2="244.7" y2="250"/>
+<line class="grid" x1="289" y1="36" x2="289" y2="250"/>
+<line class="grid" x1="333.3" y1="36" x2="333.3" y2="250"/>
+<line class="grid" x1="377.6" y1="36" x2="377.6" y2="250"/>
+<line class="grid" x1="421.9" y1="36" x2="421.9" y2="250"/>
+<line class="grid" x1="466.2" y1="36" x2="466.2" y2="250"/>
+<line class="grid" x1="510.4" y1="36" x2="510.4" y2="250"/>
+<line class="grid" x1="554.7" y1="36" x2="554.7" y2="250"/>
+<line class="grid" x1="599" y1="36" x2="599" y2="250"/>
+<line class="grid" x1="643.3" y1="36" x2="643.3" y2="250"/>
+<line class="grid" x1="687.6" y1="36" x2="687.6" y2="250"/>
+<line class="grid" x1="731.9" y1="36" x2="731.9" y2="250"/>
+<line class="grid" x1="776.2" y1="36" x2="776.2" y2="250"/>
+<text class="tag" x="14" y="61">fault</text>
+<line class="grid" x1="156.2" y1="70" x2="776.2" y2="70"/>
+<polyline class="wave" points="156.2,70 156.2,44 200.4,44 200.4,44 244.7,44 244.7,70 289,70 289,44 333.3,44 333.3,70 377.6,70 377.6,44 421.9,44 421.9,44 466.2,44 466.2,44 510.4,44 510.4,70 554.7,70 554.7,44 599,44 599,70 643.3,70 643.3,70 687.6,70 687.6,70 731.9,70 731.9,70 776.2,70"/>
+<text class="tag" x="14" y="123">horn_pulse.acc</text>
+<line class="grid" x1="156.2" y1="146" x2="776.2" y2="146"/>
+<text class="dim" x="148.2" y="96" text-anchor="end">30</text>
+<text class="dim" x="148.2" y="150" text-anchor="end">0</text>
+<line class="mark" x1="156.2" y1="92" x2="776.2" y2="92"/>
+<text class="marked" x="162.2" y="105">preset 30</text>
+<polyline class="wave" points="156.2,146 156.2,146 200.4,146 200.4,146 244.7,146 244.7,146 289,146 289,146 333.3,146 333.3,128 377.6,128 377.6,110 421.9,110 421.9,92 466.2,92 466.2,92 510.4,92 510.4,146 554.7,146 554.7,146 599,146 599,128 643.3,128 643.3,110 687.6,110 687.6,146 731.9,146 731.9,146 776.2,146"/>
+<text class="tag" x="14" y="185">horn_pulse.tt</text>
+<line class="grid" x1="156.2" y1="194" x2="776.2" y2="194"/>
+<polyline class="wave" points="156.2,194 156.2,194 200.4,194 200.4,194 244.7,194 244.7,194 289,194 289,168 333.3,168 333.3,168 377.6,168 377.6,168 421.9,168 421.9,194 466.2,194 466.2,194 510.4,194 510.4,194 554.7,194 554.7,168 599,168 599,168 643.3,168 643.3,168 687.6,168 687.6,194 731.9,194 731.9,194 776.2,194"/>
+<text class="tag" x="14" y="233">horn_pulse.dn</text>
+<line class="grid" x1="156.2" y1="242" x2="776.2" y2="242"/>
+<polyline class="wave" points="156.2,242 156.2,242 200.4,242 200.4,242 244.7,242 244.7,242 289,242 289,242 333.3,242 333.3,242 377.6,242 377.6,242 421.9,242 421.9,216 466.2,216 466.2,216 510.4,216 510.4,242 554.7,242 554.7,242 599,242 599,242 643.3,242 643.3,242 687.6,242 687.6,242 731.9,242 731.9,242 776.2,242"/>
+<text class="dim" x="200.4" y="266" text-anchor="middle">2</text>
+<text class="dim" x="200.4" y="280" text-anchor="middle">20 ms</text>
+<text class="dim" x="289" y="266" text-anchor="middle">4</text>
+<text class="dim" x="289" y="280" text-anchor="middle">40 ms</text>
+<text class="dim" x="377.6" y="266" text-anchor="middle">6</text>
+<text class="dim" x="377.6" y="280" text-anchor="middle">60 ms</text>
+<text class="dim" x="466.2" y="266" text-anchor="middle">8</text>
+<text class="dim" x="466.2" y="280" text-anchor="middle">80 ms</text>
+<text class="dim" x="554.7" y="266" text-anchor="middle">10</text>
+<text class="dim" x="554.7" y="280" text-anchor="middle">100 ms</text>
+<text class="dim" x="643.3" y="266" text-anchor="middle">12</text>
+<text class="dim" x="643.3" y="280" text-anchor="middle">120 ms</text>
+<text class="dim" x="731.9" y="266" text-anchor="middle">14</text>
+<text class="dim" x="731.9" y="280" text-anchor="middle">140 ms</text>
+</svg>

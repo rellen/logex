@@ -1,7 +1,7 @@
 defmodule Logex.IO.Sim do
   @moduledoc """
   A simulated device (M4-1, `docs/organisation.md` §4.11): an adapter whose device is a
-  small process the test owns, the fixture of every runner test and of README's example.
+  small process the test owns, the fixture of every runner test and of the examples'.
   A test starts one, binds it to a device by name, `io: %{"panel" => {Logex.IO.Sim, sim:
   panel}}`, sets its inputs and reads what was written to its outputs:
 

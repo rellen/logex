@@ -1071,8 +1071,9 @@ compiler, from text or from a program built as data. Recompiling a Spark-defined
 module through `Code.compile_string/2` took 74–95 ms for a 4-tag program and 0.5–0.7 s
 for a 200-tag one, against 22 µs and 1.7 ms for `Logex.compile/2` on the same two
 programs; it ran arbitrary code written in the edit; and an edit that failed validation
-unloaded the module that was running, because Elixir purges a module whose compilation
-raises. Spark is not adopted inside logex. An Elixir authoring package outside it may
+unloaded the module that was running, because Elixir purges a module whose body raises
+as it compiles (a syntax error leaves the old one loaded, a run on 1.20.4 of
+2026-11-23). Spark is not adopted inside logex. An Elixir authoring package outside it may
 come later, as a one-way seed that emits the same data (`PLAN.md` B9).
 
 **The edit cycle is staged, as the conventional family's is.**
@@ -3135,8 +3136,9 @@ bound to, ``no adapter is bound to the device `drive`, which `sp_1` (drive.q.0) 
 (drive.q.1) are at``; a bound device no point is at, ``the device `panle` is bound, but no
 point is at it — did you mean `panel`?``; an adapter that does not implement `Logex.IO`;
 options its adapter's `check/3` refuses; a poll period or a share out of its range; a
-clock that does not implement `Logex.Runner.Clock`; a forces file that cannot be read, or
-holds a force the configuration cannot take (decision 127). In a call, the runner rescues
+clock that does not implement `Logex.Runner.Clock`; a forces file that holds a force the
+configuration cannot take (decision 127; since decision 390 one that cannot be read starts
+the runner with no force, named in `status/1`'s `forces_unread`). In a call, the runner rescues
 the `ArgumentError`, replies `{:raise, exception}`, and the function raises it in the
 caller: a path that names nothing, an output point or a value that does not fit forced, a
 force on a runner started without `forces:`, a step with no edit accepted, a restart that

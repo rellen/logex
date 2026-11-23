@@ -1,0 +1,29 @@
+// line.logex -- a conveyor, a fan, a record of each stop and a box counter
+task belts interval 10 priority 1
+task fans  interval 50 priority 2
+task stops single estop priority 0
+task main  continuous
+
+var_global estop   bool at panel.i.0
+var_global pb_start bool at panel.i.1
+var_global eye     bool at panel.i.2
+var_global motor_k bool at panel.q.0
+var_global fan_k   bool at panel.q.1
+var_global minutes dint
+var_global motor_at_stop bool
+
+program c1 conveyor with belts
+  c1.start pb_start
+  c1.motor motor_k
+
+program f1 fan with fans
+  f1.belt motor_k
+  f1.fan  fan_k
+
+program s1 stop_record with stops
+  s1.motor   motor_k
+  s1.at_stop motor_at_stop
+
+program b1 box_count
+  b1.eye     eye
+  b1.minutes minutes

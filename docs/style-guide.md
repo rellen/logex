@@ -135,8 +135,9 @@ follow its principle for words: 1 word for 1 thing, and 1 meaning for 1 word.
 
 The pages define the behaviour of the engine. A wrong sentence is a defect.
 
-- Compare each claim with the code in `lib/` and with a test. The README has old
-  sentences. If the README and the code are different, the code is correct.
+- Compare each claim with the code in `lib/` and with a test. The legacy documents, the
+  kind `:legacy` of `docs/pages.exs`, have old sentences. If one of them and the code are
+  different, the code is correct.
 - Run the claim if you can. A small script settles a claim faster than a long read.
 - Quote a message exactly, in a code block.
 - Do not invent a feature, an option, a default or a limit.
@@ -162,6 +163,9 @@ GitHub.
 - Keep a page short. If a page that is not a reference has more than about 1,500 words,
   make 2 pages.
 - Link to a module or a function with its name in a code span: ExDoc makes the link.
+- Do not put a hidden module or function in a code span as `Module.fun/arity`: one with
+  `@moduledoc false` or `@doc false`. ExDoc warns, and `scripts/docs.sh` fails. Name its
+  file instead, for example `lib/logex/compiler/worker.ex`.
 - Link to a page with a relative link from the file of the page, as GitHub reads it. The
   build makes the link correct for the site.
 - Link to a file that is not a page with a relative link also. The build changes it to

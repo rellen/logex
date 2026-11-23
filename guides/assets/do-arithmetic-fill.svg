@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="659" viewBox="0 0 364 659" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of fill.ld</title>
+<desc id="description">7 rungs between two power rails. Rung 1: add total flow total ote total_ok. Rung 2: xio total_ok otl overflow. Rung 3: xic reset otu overflow. Rung 4: xic reset move 0 total. Rung 5: ge total setpoint ote full. Rung 6: xio full xio overflow ote valve. Rung 7: div total minutes per_minute.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="658" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="647"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="647"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="148" y1="52" x2="254" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<rect class="box" x="68" y="39" width="80" height="86" rx="3"/>
+<line class="ink" x1="68" y1="65" x2="148" y2="65"/>
+<text class="op" x="108" y="56" text-anchor="middle">add</text>
+<text class="tag" x="138" y="79" text-anchor="end">total</text>
+<text class="tag" x="138" y="97" text-anchor="end">flow</text>
+<text class="dim" x="78" y="115">to</text>
+<text class="tag" x="138" y="115" text-anchor="end">total</text>
+<text class="tag" x="322" y="35" text-anchor="end">total_ok</text>
+<line class="ink" x1="254" y1="52" x2="290" y2="52"/>
+<path class="ink" d="M 295 41 Q 285 52 295 63"/>
+<path class="ink" d="M 307 41 Q 317 52 307 63"/>
+<line class="ink" x1="312" y1="52" x2="324" y2="52"/>
+<text class="dim" x="36" y="179" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="175" x2="68" y2="175"/>
+<line class="ink" x1="138" y1="175" x2="254" y2="175"/>
+<line class="ink" x1="324" y1="175" x2="346" y2="175"/>
+<text class="tag" x="103" y="158" text-anchor="middle">total_ok</text>
+<line class="ink" x1="68" y1="175" x2="96" y2="175"/>
+<line class="ink" x1="96" y1="164" x2="96" y2="186"/>
+<line class="ink" x1="110" y1="164" x2="110" y2="186"/>
+<line class="ink" x1="110" y1="175" x2="138" y2="175"/>
+<line class="ink" x1="98" y1="184" x2="108" y2="166"/>
+<text class="tag" x="322" y="158" text-anchor="end">overflow</text>
+<line class="ink" x1="254" y1="175" x2="290" y2="175"/>
+<path class="ink" d="M 295 164 Q 285 175 295 186"/>
+<path class="ink" d="M 307 164 Q 317 175 307 186"/>
+<line class="ink" x1="312" y1="175" x2="324" y2="175"/>
+<text class="op" x="301" y="179" text-anchor="middle">L</text>
+<text class="dim" x="36" y="243" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="239" x2="68" y2="239"/>
+<line class="ink" x1="116" y1="239" x2="254" y2="239"/>
+<line class="ink" x1="324" y1="239" x2="346" y2="239"/>
+<text class="tag" x="92" y="222" text-anchor="middle">reset</text>
+<line class="ink" x1="68" y1="239" x2="85" y2="239"/>
+<line class="ink" x1="85" y1="228" x2="85" y2="250"/>
+<line class="ink" x1="99" y1="228" x2="99" y2="250"/>
+<line class="ink" x1="99" y1="239" x2="116" y2="239"/>
+<text class="tag" x="322" y="222" text-anchor="end">overflow</text>
+<line class="ink" x1="254" y1="239" x2="290" y2="239"/>
+<path class="ink" d="M 295 228 Q 285 239 295 250"/>
+<path class="ink" d="M 307 228 Q 317 239 307 250"/>
+<line class="ink" x1="312" y1="239" x2="324" y2="239"/>
+<text class="op" x="301" y="243" text-anchor="middle">U</text>
+<text class="dim" x="36" y="307" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="303" x2="68" y2="303"/>
+<line class="ink" x1="116" y1="303" x2="244" y2="303"/>
+<line class="ink" x1="324" y1="303" x2="346" y2="303"/>
+<text class="tag" x="92" y="286" text-anchor="middle">reset</text>
+<line class="ink" x1="68" y1="303" x2="85" y2="303"/>
+<line class="ink" x1="85" y1="292" x2="85" y2="314"/>
+<line class="ink" x1="99" y1="292" x2="99" y2="314"/>
+<line class="ink" x1="99" y1="303" x2="116" y2="303"/>
+<rect class="box" x="244" y="290" width="80" height="68" rx="3"/>
+<line class="ink" x1="244" y1="316" x2="324" y2="316"/>
+<text class="op" x="284" y="307" text-anchor="middle">move</text>
+<text class="tag" x="314" y="330" text-anchor="end">0</text>
+<text class="dim" x="254" y="348">to</text>
+<text class="tag" x="314" y="348" text-anchor="end">total</text>
+<text class="dim" x="36" y="412" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="408" x2="68" y2="408"/>
+<line class="ink" x1="148" y1="408" x2="278" y2="408"/>
+<line class="ink" x1="324" y1="408" x2="346" y2="408"/>
+<rect class="box" x="68" y="395" width="80" height="68" rx="3"/>
+<line class="ink" x1="68" y1="421" x2="148" y2="421"/>
+<text class="op" x="108" y="412" text-anchor="middle">ge</text>
+<text class="tag" x="138" y="435" text-anchor="end">total</text>
+<text class="tag" x="138" y="453" text-anchor="end">setpoint</text>
+<text class="tag" x="301" y="391" text-anchor="middle">full</text>
+<line class="ink" x1="278" y1="408" x2="290" y2="408"/>
+<path class="ink" d="M 295 397 Q 285 408 295 419"/>
+<path class="ink" d="M 307 397 Q 317 408 307 419"/>
+<line class="ink" x1="312" y1="408" x2="324" y2="408"/>
+<text class="dim" x="36" y="517" text-anchor="end">6</text>
+<line class="ink" x1="46" y1="513" x2="68" y2="513"/>
+<line class="ink" x1="200" y1="513" x2="276" y2="513"/>
+<line class="ink" x1="324" y1="513" x2="346" y2="513"/>
+<text class="tag" x="91" y="496" text-anchor="middle">full</text>
+<line class="ink" x1="68" y1="513" x2="84" y2="513"/>
+<line class="ink" x1="84" y1="502" x2="84" y2="524"/>
+<line class="ink" x1="98" y1="502" x2="98" y2="524"/>
+<line class="ink" x1="98" y1="513" x2="114" y2="513"/>
+<line class="ink" x1="86" y1="522" x2="96" y2="504"/>
+<line class="ink" x1="114" y1="513" x2="130" y2="513"/>
+<text class="tag" x="165" y="496" text-anchor="middle">overflow</text>
+<line class="ink" x1="130" y1="513" x2="158" y2="513"/>
+<line class="ink" x1="158" y1="502" x2="158" y2="524"/>
+<line class="ink" x1="172" y1="502" x2="172" y2="524"/>
+<line class="ink" x1="172" y1="513" x2="200" y2="513"/>
+<line class="ink" x1="160" y1="522" x2="170" y2="504"/>
+<text class="tag" x="322" y="496" text-anchor="end">valve</text>
+<line class="ink" x1="276" y1="513" x2="290" y2="513"/>
+<path class="ink" d="M 295 502 Q 285 513 295 524"/>
+<path class="ink" d="M 307 502 Q 317 513 307 524"/>
+<line class="ink" x1="312" y1="513" x2="324" y2="513"/>
+<text class="dim" x="36" y="564" text-anchor="end">7</text>
+<line class="ink" x1="46" y1="560" x2="68" y2="560"/>
+<line class="ink" x1="68" y1="560" x2="206" y2="560"/>
+<line class="ink" x1="324" y1="560" x2="346" y2="560"/>
+<rect class="box" x="206" y="547" width="118" height="86" rx="3"/>
+<line class="ink" x1="206" y1="573" x2="324" y2="573"/>
+<text class="op" x="265" y="564" text-anchor="middle">div</text>
+<text class="tag" x="314" y="587" text-anchor="end">total</text>
+<text class="tag" x="314" y="605" text-anchor="end">minutes</text>
+<text class="dim" x="216" y="623">to</text>
+<text class="tag" x="314" y="623" text-anchor="end">per_minute</text>
+</svg>

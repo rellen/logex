@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="741" height="244" viewBox="0 0 741 244" role="img" aria-labelledby="title description">
+<title id="title">12 scans, 500 ms apart: lamp comes on 3 s after go</title>
+<desc id="description">12 scans, 500 ms a scan. Each signal after each scan, from scan 1: go: 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1. t1.acc: 0, 0, 0, 0, 500, 1000, 1500, 2000, 2500, 3000, 3000, 3000 (preset 3000). lamp: 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="740" height="243" rx="6"/>
+<text class="head" x="14" y="24">12 scans, 500 ms apart: lamp comes on 3 s after go</text>
+<text class="dim" x="14" y="218">scan</text>
+<text class="dim" x="14" y="232">time</text>
+<line class="grid" x1="96.6" y1="36" x2="96.6" y2="202"/>
+<line class="grid" x1="148.3" y1="36" x2="148.3" y2="202"/>
+<line class="grid" x1="200.0" y1="36" x2="200.0" y2="202"/>
+<line class="grid" x1="251.6" y1="36" x2="251.6" y2="202"/>
+<line class="grid" x1="303.3" y1="36" x2="303.3" y2="202"/>
+<line class="grid" x1="355.0" y1="36" x2="355.0" y2="202"/>
+<line class="grid" x1="406.6" y1="36" x2="406.6" y2="202"/>
+<line class="grid" x1="458.3" y1="36" x2="458.3" y2="202"/>
+<line class="grid" x1="510.0" y1="36" x2="510.0" y2="202"/>
+<line class="grid" x1="561.6" y1="36" x2="561.6" y2="202"/>
+<line class="grid" x1="613.3" y1="36" x2="613.3" y2="202"/>
+<line class="grid" x1="665.0" y1="36" x2="665.0" y2="202"/>
+<line class="grid" x1="716.6" y1="36" x2="716.6" y2="202"/>
+<text class="tag" x="14" y="61">go</text>
+<line class="grid" x1="96.6" y1="70" x2="716.6" y2="70"/>
+<polyline class="wave" points="96.6,70 96.6,70 148.3,70 148.3,70 200,70 200,70 251.6,70 251.6,44 303.3,44 303.3,44 355,44 355,44 406.6,44 406.6,44 458.3,44 458.3,44 510,44 510,44 561.6,44 561.6,44 613.3,44 613.3,44 665,44 665,44 716.6,44"/>
+<text class="tag" x="14" y="123">t1.acc</text>
+<line class="grid" x1="96.6" y1="146" x2="716.6" y2="146"/>
+<text class="dim" x="88.6" y="96" text-anchor="end">3000</text>
+<text class="dim" x="88.6" y="150" text-anchor="end">0</text>
+<line class="mark" x1="96.6" y1="92" x2="716.6" y2="92"/>
+<text class="marked" x="102.6" y="105">preset 3000</text>
+<polyline class="wave" points="96.6,146 96.6,146 148.3,146 148.3,146 200,146 200,146 251.6,146 251.6,146 303.3,146 303.3,137 355,137 355,128 406.6,128 406.6,119 458.3,119 458.3,110 510,110 510,101 561.6,101 561.6,92 613.3,92 613.3,92 665,92 665,92 716.6,92"/>
+<text class="tag" x="14" y="185">lamp</text>
+<line class="grid" x1="96.6" y1="194" x2="716.6" y2="194"/>
+<polyline class="wave" points="96.6,194 96.6,194 148.3,194 148.3,194 200,194 200,194 251.6,194 251.6,194 303.3,194 303.3,194 355,194 355,194 406.6,194 406.6,194 458.3,194 458.3,194 510,194 510,194 561.6,194 561.6,168 613.3,168 613.3,168 665,168 665,168 716.6,168"/>
+<text class="dim" x="96.6" y="218" text-anchor="middle">1</text>
+<text class="dim" x="96.6" y="232" text-anchor="middle">500 ms</text>
+<text class="dim" x="148.3" y="218" text-anchor="middle">2</text>
+<text class="dim" x="148.3" y="232" text-anchor="middle">1 s</text>
+<text class="dim" x="200.0" y="218" text-anchor="middle">3</text>
+<text class="dim" x="200.0" y="232" text-anchor="middle">1.5 s</text>
+<text class="dim" x="251.6" y="218" text-anchor="middle">4</text>
+<text class="dim" x="251.6" y="232" text-anchor="middle">2 s</text>
+<text class="dim" x="303.3" y="218" text-anchor="middle">5</text>
+<text class="dim" x="303.3" y="232" text-anchor="middle">2.5 s</text>
+<text class="dim" x="355.0" y="218" text-anchor="middle">6</text>
+<text class="dim" x="355.0" y="232" text-anchor="middle">3 s</text>
+<text class="dim" x="406.6" y="218" text-anchor="middle">7</text>
+<text class="dim" x="406.6" y="232" text-anchor="middle">3.5 s</text>
+<text class="dim" x="458.3" y="218" text-anchor="middle">8</text>
+<text class="dim" x="458.3" y="232" text-anchor="middle">4 s</text>
+<text class="dim" x="510.0" y="218" text-anchor="middle">9</text>
+<text class="dim" x="510.0" y="232" text-anchor="middle">4.5 s</text>
+<text class="dim" x="561.6" y="218" text-anchor="middle">10</text>
+<text class="dim" x="561.6" y="232" text-anchor="middle">5 s</text>
+<text class="dim" x="613.3" y="218" text-anchor="middle">11</text>
+<text class="dim" x="613.3" y="232" text-anchor="middle">5.5 s</text>
+<text class="dim" x="665.0" y="218" text-anchor="middle">12</text>
+<text class="dim" x="665.0" y="232" text-anchor="middle">6 s</text>
+</svg>

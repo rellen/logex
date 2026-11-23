@@ -1,0 +1,15 @@
+// plant.logex -- the line of line.ld on the panel
+var_global pb_start  bool at panel.i.0
+var_global pb_stop   bool at panel.i.1
+var_global eye       bool at panel.i.2
+var_global k1        bool at panel.q.0
+var_global fan_q     bool at panel.q.1
+var_global full_lamp bool at panel.q.2
+
+program l1 line
+  l1.start pb_start
+  l1.stop  pb_stop
+  l1.eye   eye
+  l1.motor k1
+  l1.fan   fan_q
+  l1.full  full_lamp

@@ -211,4 +211,4 @@ A seal-in and a latch show only across scans. That is why the script runs 5 scan
 
 - [Glossary](../reference/glossary.md): the words of this tutorial, with the words of IEC
   61131-3 and of the conventional set.
-- [README](../../README.md): the other examples of logex.
+- [README](../../README.md): the first page, and the way to each kind of page.

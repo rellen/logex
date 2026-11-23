@@ -356,7 +356,7 @@ defmodule Logex.EndToEndTest do
       assert Logex.Program.initial_env(program) == %{"go" => 0, "sp" => 1200, "lamp" => 1}
     end
 
-    test "the README's motor program, declared, runs five scans" do
+    test "the examples' motor program, declared, runs five scans" do
       src = """
       var_input start bool
       var_input stop bool

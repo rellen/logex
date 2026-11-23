@@ -36,7 +36,9 @@ Applied in order:
    block — **use the IEC name, lowercased.** `ton tof tp`, `ctu ctd`, `eq ne lt gt le ge`,
    `move`, `add sub mul div mod`, `abs sqrt expt`, `shl shr rol ror`.
 2. **If IEC supplies only a graphical element, use the clearest vendor mnemonic and say
-   which one.** This keeps `xic xio ote otl otu`, and gives `ons osr osf rto res`.
+   which one.** This keeps `xic xio ote otl otu`, and gives `ons osr osf rto`. The
+   conventional `res` is not added: a timer's or a counter's `r` input does its work
+   (decision 84).
 3. **Never invent a readable word for a thing that already has a standard name.**
    `on_delay`, `rising` and `equal` are new names for old things: every reader who knows
    ladder has to translate, and every manual they own uses the other word. Readability is
@@ -899,6 +901,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `ctud`, a type word.
 **Why:** Rule 1: IEC's CTUD, the counter that counts both ways (decision 67), its pins and its R before LD before a count. A ladder rung carries one power flow, and a `ctud` has two count inputs, so it is run by two instructions, the conventional ladder's idiom of a CTU and a CTD on one counter, each the count input of its side (decision 85); there is no `ctud` instruction, as the conventional ladder has none, and `ctud` names only the type. The cost is IEC's one call: each side runs where its rung stands, so two edges in one scan net zero away from the limits, as `NOT (CU AND CD)` gives, and at a limit only the side that would leave the dint is refused. Its other rules are `ctu`'s and `ctd`'s.
 **Checked:** 2026-10-14, as `ctu`'s: IEC 61131-3:2013 Table 45 (p.114); MatIEC `lib/counter.txt`; the conventional general instructions reference, pp.102–105; CODESYS online help, *CTUD*, read on 2026-10-14; the TIA Portal V20 help's CTUD (S7-300/400), through a search summary, on 2026-10-14. The Mitsubishi row is the Counters table's.
+*(Amended 2026-11-23, DOC-1's close: "on two rungs" is the usual form, not a rule; the `ctu` and the `ctd` of one `ctud` may also stand on two legs of one branch, `( xic a ctu s 5 | xic b ctd s 5 )`, which compiles and counts, each side run where its leg stands in the scan.)*
 
 ### `tof` — off-delay timer: the instruction, and the type word of an off-delay timer
 
@@ -1737,7 +1740,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 | Mitsubishi GX Works | **SFR**; SHR(_E) | Carried from the table above. |
 
 **Chosen:** `shr`
-**Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and README say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
+**Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and the reference of the bitwise instructions say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
