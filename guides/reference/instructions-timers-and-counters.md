@@ -214,7 +214,7 @@ an event task.
 | An online edit changes the type of the instance | logex refuses the edit. Examples are `ton` to `tof`, `ton` to `ton_ltime` and `ctu` to `ctu_int`. A change between `ctu` and `ctu_dint` changes nothing. |
 | An online edit adds a `tp`, a `ctu` or a `ctd`, or changes its rung | The instruction finds no rising edge in its first run after the edit. |
 
-[Retained values and the store](retained-values-and-store.md) gives the full rules of a
+[Retained values](retained-values-and-store.md) gives the full rules of a
 [restart](glossary.md#restart) and of the [qualifier](glossary.md#qualifier) `retain`.
 [Online edit](online-edit.md) gives the full rules of an edit.
 
@@ -2072,7 +2072,7 @@ These pages define the rules of a different subject:
 | The built-in [function block types](glossary.md#function-block-type), and [arrays](glossary.md#array) of instances | [Function blocks](function-blocks.md) |
 | The forms of a preset | [Literals](literals.md#presets) |
 | What a scan does, and the time of a scan | [Execution model](execution-model.md) |
-| A restart and the qualifier `retain` | [Retained values and the store](retained-values-and-store.md) |
+| A restart and the qualifier `retain` | [Retained values](retained-values-and-store.md) |
 | An online edit | [Online edit](online-edit.md) |
 | Each warning of logex | [Warnings](warnings.md) |
 | What logex does not have | [What logex does not have](not-supported.md) |

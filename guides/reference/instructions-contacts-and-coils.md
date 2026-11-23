@@ -345,7 +345,7 @@ This drawing shows the rung `xic reset_pb otu box_seen`, which is rung 4 of the 
 | A restart | The tag has its initial value. A tag with the qualifier `retain` keeps its value in a warm restart. |
 
 [Warnings](warnings.md) gives each case of 2 writes that logex warns about.
-[Retained values and the store](retained-values-and-store.md) gives the rules of
+[Retained values](retained-values-and-store.md) and [The store](store.md) give the rules of
 `retain` and of the [store](glossary.md#store).
 
 ## One-shots

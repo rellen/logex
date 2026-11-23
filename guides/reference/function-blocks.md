@@ -586,7 +586,7 @@ shows how to use them.
 | The [store](glossary.md#store) | A [runner](glossary.md#runner) with a store keeps the retained members of each instance on disk. |
 | An online edit | It can change the body of a function block, and add or remove members. It refuses a change of the type of a member or of an instance. It names each element of an array by its path: `lane_t[2]`. |
 
-[Retained values and the store](retained-values-and-store.md) and
+[Retained values](retained-values-and-store.md) and
 [Online edit](online-edit.md) give the full rules.
 
 ## Examples

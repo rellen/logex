@@ -53,7 +53,7 @@ defines the options of the [runner](glossary.md#runner), its
 | The rules of the files of a runner | [Files](#files) |
 | When a round runs, and the sequence of the tasks | [Execution model](execution-model.md) |
 | The [force](glossary.md#force) of an input point, and the [forces file](glossary.md#forces-file) | [Forcing](forcing.md) |
-| The [store](glossary.md#store) | [Retained values and the store](retained-values-and-store.md) |
+| The [store](glossary.md#store) | [The store](store.md) |
 | An [online edit](glossary.md#online-edit) through the runner | [Online edit](online-edit.md) |
 | What an [adapter](glossary.md#adapter) must do | [I/O adapters](io-adapters.md) |
 | The reasons for the watchdogs and the trip | [Trips and watchdogs](../explanation/trips-and-watchdogs.md) |
@@ -283,7 +283,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 | Order | What `start_link/1` does |
 |---|---|
 | 1 | It checks each option in the process of the caller. |
-| 2 | It reads the forces file, if `forces:` names one, and then the store, if `retain:` names one. [Forcing](forcing.md) and [Retained values and the store](retained-values-and-store.md) give the rules. |
+| 2 | It reads the forces file, if `forces:` names one, and then the store, if `retain:` names one. [Forcing](forcing.md) and [The store](store.md) give the rules. |
 | 3 | The runner registers its name and claims its files. [Files](#files) gives the rules. |
 | 4 | It writes the store, if `start: :cold` or if the store file does not exist. |
 | 5 | It opens each device in name order, and reads each device 1 time. |
@@ -296,7 +296,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 |---|---|
 | `{:ok, pid}` | Each device opened, and the first round ran. |
 | `{:error, {:io_init, device, reason}}` | The runner cannot open a device, or the first read of the device fails. The runner closes each device that it opened before, and stops. `reason` is the error of `init/3`, or the cause of the failure, as in [The causes of an I/O fault](#the-causes-of-an-io-fault). It is `:timeout` for a device that did not open in its time `open:`. |
-| `{:error, {:retain, reason}}` | The first write of the store failed, or took longer than `write_limit:`. A cold start also gives it if it cannot read the store, or cannot make the copy of a store that a warm start refuses. [Retained values and the store](retained-values-and-store.md) gives the copy. |
+| `{:error, {:retain, reason}}` | The first write of the store failed, or took longer than `write_limit:`. A cold start also gives it if it cannot read the store, or cannot make the copy of a store that a warm start refuses. [The store](store.md#the-numbered-copies) gives the copy. |
 | `{:error, {:already_started, pid}}` | A different process has the name of `name:`. The start writes nothing. |
 | An `ArgumentError` | A wrong option. Or the start refuses a forces file or a store. Examples are a line that is no force, and a store that is cut short. Or a store or a forces file that is a symbolic link. Or a file that a different runner of this virtual machine holds. [Forcing](forcing.md) and [Files](#files) give the rules. |
 
@@ -509,7 +509,7 @@ trigger.
   bring the slot.
 - A call from the process that moves the clock does not return, because no process
   moves the clock to its slot.
-  [Do a test of a plant on the manual clock](../howto/test-on-the-manual-clock.md) gives
+  [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md) gives
   the steps.
 
 ## Status
@@ -532,7 +532,7 @@ trigger.
 | `forces_unread` | `{path, reason}` or `nil`: the forces file that the last start or restart did not read |
 | `forces_unknown` | A map or `nil`: the forces of a write of the forces file that took longer than `write_limit:` |
 | `forcing` | A map or `nil`: the forces of the write of the forces file that is not complete |
-| `retain` | `nil` for a runner with no store. Else a map with the keys `path`, `written_at`, `failed`, `dropped`, `copy`, `unknown` and `warning`. [Retained values and the store](retained-values-and-store.md) gives each one. |
+| `retain` | `nil` for a runner with no store. Else a map with the keys `path`, `written_at`, `failed`, `dropped`, `copy`, `unknown` and `warning`. [The store](store.md#the-status-of-the-store) gives each one. |
 
 The `watchdog` of each task and `idle:` must be more than the values of `runs` and
 `latest_wake` on the target computer.
@@ -1084,7 +1084,7 @@ bad.forces: line 1: `nosuch` is no input point of `packing`
 
 A runner can hold 2 files: the forces file, `forces:`, and the store, `retain:`. It
 writes each file to a new `.tmp` file beside it, and then renames that file over it. The
-store also has numbered copies. [Retained values and the store](retained-values-and-store.md)
+store also has numbered copies. [The store](store.md#the-numbered-copies)
 gives the copies.
 
 > #### Caution {: .error}
@@ -1120,7 +1120,7 @@ the runner's retain: "./p7.retain" names the store of another runner of this VM,
   status.
 - [Restart after a trip](../howto/restart-after-a-trip.md): the steps after a trip.
 - [Set the watchdogs](../howto/set-watchdogs.md): how to choose `watchdog` and `idle:`.
-- [Do a test of a plant on the manual clock](../howto/test-on-the-manual-clock.md): how
+- [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
   to move the time of a runner in a test.
 - [Trips and watchdogs](../explanation/trips-and-watchdogs.md): why the runner trips, and
   what a trip cannot do.

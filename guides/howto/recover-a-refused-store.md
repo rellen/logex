@@ -331,7 +331,7 @@ the copy holds the cut store: true
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): each
+- [The store](../reference/store.md): each
   line of the store and each refusal.
 - [Keep retained values on disk](keep-values-on-disk.md): give a runner a store.
 - [Run a plant under a supervisor](run-under-a-supervisor.md): start a runner from a child

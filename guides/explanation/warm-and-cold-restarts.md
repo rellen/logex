@@ -47,7 +47,7 @@ keeps its values: the accumulated time, the count and the hidden members. For a 
 this includes `cu`, the memory of its last input. A retained `tof` that is on at the
 restart is the exception, in
 [The first scan finds no edge](#the-first-scan-finds-no-edge).
-[Retained values and the store](../reference/retained-values-and-store.md) gives the
+[Retained values](../reference/retained-values-and-store.md) gives the
 rules for a [member](../reference/glossary.md#member) of a
 [function block](../reference/glossary.md#function-block).
 
@@ -301,7 +301,7 @@ its own bit for the first scan.
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): the exact
+- [Retained values](../reference/retained-values-and-store.md) and [The store](../reference/store.md): the exact
   rules of `retain` and of the store.
 - [Keep values across a restart](../howto/keep-values-across-a-restart.md): the steps to
   mark a tag and restart warm.

@@ -974,6 +974,6 @@ the errors of the data.
   `var_external`.
 - [Map I/O points](../howto/map-io-points.md) shows how to put globals at the points of
   a device.
-- [Retained values and the store](retained-values-and-store.md) gives the rules of
+- [Retained values](retained-values-and-store.md) and [The store](store.md) give the rules of
   `retain` and of the [store](glossary.md#store).
 - [Glossary](glossary.md) gives the technical words of logex.

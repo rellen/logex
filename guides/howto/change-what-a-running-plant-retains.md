@@ -180,7 +180,7 @@ store after the test has no line for `t1.boxes`.
   runner.
 - [Keep values across a restart](keep-values-across-a-restart.md): how to declare
   `retain`.
-- [Retained values and the store](../reference/retained-values-and-store.md): the rules
+- [Retained values](../reference/retained-values-and-store.md) and [The store](../reference/store.md): the rules
   of a warm restart and of the store.
 - [Online edit](../reference/online-edit.md): the path of each entry.
 - [Glossary](../reference/glossary.md): the technical words.

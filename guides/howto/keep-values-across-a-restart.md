@@ -381,7 +381,7 @@ the work of that start.
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): each rule
+- [Retained values](../reference/retained-values-and-store.md) and [The store](../reference/store.md): each rule
   of `retain`, of the retained image and of the store. It gives the rules of `retain` in
   a [function block](../reference/glossary.md#function-block).
 - [Warm and cold restarts](../explanation/warm-and-cold-restarts.md): what each restart

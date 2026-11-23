@@ -784,7 +784,7 @@ stays `:tripped` until `restart/2`.
 
 If the runner keeps a [store](glossary.md#store), the trip also writes the store, with the
 retained values of the round that tripped.
-[Retained values and the store](retained-values-and-store.md) gives the rules of the
+[The store](store.md) gives the rules of the
 store.
 
 ### After the trip

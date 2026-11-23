@@ -328,7 +328,7 @@ nothing, and the plant runs.
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): each line
+- [The store](../reference/store.md): each line
   of the store, what a start keeps and what it drops.
 - [Restart after a trip](restart-after-a-trip.md): the cold restart and the online edit.
 - [Recover from a refused store](recover-a-refused-store.md): a store that the start does

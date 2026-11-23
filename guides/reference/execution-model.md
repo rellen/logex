@@ -40,7 +40,7 @@ the [tasks](glossary.md#task) and a [round](glossary.md#round) of the
 | The words of a task line | [Configuration file](configuration-file.md) |
 | The options of the runner, the watchdogs and the [trip](glossary.md#trip) | [Runner](runner.md) |
 | Each function of logex and each `ArgumentError` | [Host contract](host-contract.md) |
-| A [warm restart](glossary.md#warm-restart) and the [qualifier](glossary.md#qualifier) `retain` | [Retained values and the store](retained-values-and-store.md) |
+| A [warm restart](glossary.md#warm-restart) and the [qualifier](glossary.md#qualifier) `retain` | [Retained values](retained-values-and-store.md) |
 
 Each example on this page is a script, with each line that it prints. Each `elixir` block
 is the file under `examples/` that its `$ mix run` line names. The directory `examples`
@@ -556,7 +556,7 @@ a [rising edge](glossary.md#rising-edge) of the trigger.
 | `restart/2`, and the trigger has no `retain` | It sets the last sample to 0. A trigger that is 1 makes the task due in the next cycle. | Case 2 |
 | A warm restart, and the trigger has `retain` | The restart keeps the last sample. The task runs only on a new rising edge. | [Case 4](#task-cases-1-to-12) |
 | A cold restart, and the trigger has `retain` | It sets the last sample to 0. | Case 4 |
-| `start/2`, and the trigger has `retain` | The last sample comes from the [retained image](glossary.md#retained-image). [Retained values and the store](retained-values-and-store.md) gives the rule. | None |
+| `start/2`, and the trigger has `retain` | The last sample comes from the [retained image](glossary.md#retained-image). [Retained values](retained-values-and-store.md) gives the rule. | None |
 | `next_due_in/1` | It counts no rising edge of a trigger. It counts only the due times of a task with an interval. A resource that has no task with an interval gives `:infinity`. | Case 1 and [case 6](#task-cases-1-to-12) |
 
 ### When a task is due
@@ -1331,7 +1331,7 @@ estop 0                 now=20  rounds=5  boxes=1
 - [Tasks and the schedule](../explanation/tasks-and-scheduling.md): why logex runs the
   tasks in this sequence.
 - [Use an event task](../howto/use-an-event-task.md): the steps to add an event task.
-- [Do a test of a plant on the manual clock](../howto/test-on-the-manual-clock.md): how to
+- [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how to
   move the time of a runner.
 - [Runner](runner.md): the options of the runner, the watchdogs and the trip.
 - [Faults](faults.md): each fault and what logex does.

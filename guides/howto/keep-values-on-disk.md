@@ -362,7 +362,7 @@ The kill comes after the last write. Thus the new runner does not get the third 
 | `fresh start` | The new runner has 2 boxes. The crash lost the third box and the [latch](../reference/glossary.md#latch) of `t1.full`, which `case_full` shows. |
 | `start: :cold` | Each retained value is its initial value again. |
 
-[Retained values and the store](../reference/retained-values-and-store.md) gives each
+[The store](../reference/store.md) gives each
 line of the store.
 
 ## On your plant
@@ -434,7 +434,7 @@ A warm start from a store that exists does not write it. A
 ## Watch the writes
 
 `Logex.Runner.status(runner).retain` is a map. This table gives 5 of its keys.
-[Retained values and the store](../reference/retained-values-and-store.md) gives each key.
+[The store](../reference/store.md#the-status-of-the-store) gives each key.
 
 | Key | Value |
 |---|---|
@@ -503,7 +503,7 @@ The runner does not start. Each message is longer than the part that this table 
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): each rule
+- [The store](../reference/store.md): each rule
   of the store, its lines, its writes and its refusals.
 - [Warm and cold restarts](../explanation/warm-and-cold-restarts.md): what each start
   keeps, and why.

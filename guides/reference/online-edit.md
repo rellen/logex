@@ -282,7 +282,7 @@ The accept refuses a change that only a restart can make. It returns `{:error,
 diagnostics}`, 1 [diagnostic](glossary.md#diagnostic) for each change, with the stage
 `:edit`. Nothing changes, and the old program runs on. To make such a change, start the
 new program or configuration again. [Execution model](execution-model.md) gives the
-start and the restart, and [Retained values and the store](retained-values-and-store.md)
+start and the restart, and [Retained values](retained-values-and-store.md)
 tells how to keep values across them.
 
 ### A program
@@ -568,7 +568,7 @@ The paths follow these rules:
   of type. The message does not name the qualifier.
 - The assemble and the cancel report no change of retention.
 
-[Retained values and the store](retained-values-and-store.md) gives the rules of
+[Retained values](retained-values-and-store.md) gives the rules of
 retention.
 
 Examples: edges cases 11 and 14, plant case 5.
@@ -2342,6 +2342,6 @@ $ mix run online-edit-plant.exs
   [Edit a running plant](../howto/edit-a-running-plant.md): the procedures.
 - [The runner](runner.md): the rounds, the trip and the subscribers of a runner.
 - [The host contract](host-contract.md): what the host gives to logex and what it gets.
-- [Retained values and the store](retained-values-and-store.md): retention and the warm
+- [Retained values](retained-values-and-store.md): retention and the warm
   restart.
 - [Glossary](glossary.md): the technical words of logex.

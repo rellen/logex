@@ -37,7 +37,7 @@ forces. Then it gives what a start, a restart and a stop do with the forces.
 | The forces at a start, a restart, a stop and a crash | [Start, restart and stop](#start-restart-and-stop) |
 | A force of the [trigger](glossary.md#trigger) of an [event task](glossary.md#event-task) | [Forces and event tasks](#forces-and-event-tasks) |
 | The other options and rules of the runner | [Runner](runner.md) |
-| The steps to force an input | [Force an input](../howto/force-inputs.md) |
+| The steps to force an input | [Force an input point](../howto/force-inputs.md) |
 
 Each example on this page is a script, with each line that it prints. Each `elixir` block
 is the file under `examples/` that its `$ mix run` line names. The directory `examples`
@@ -1060,10 +1060,10 @@ unforce estop: ["trip ran", "round"]
 
 ## See also
 
-- [Force an input](../howto/force-inputs.md): the steps to force an input, see the force
+- [Force an input point](../howto/force-inputs.md): the steps to force an input, see the force
   and remove it.
 - [Runner](runner.md): the options of a runner, its status, its events and its files.
-- [Retained values and the store](retained-values-and-store.md): the other file of a
+- [The store](store.md): the other file of a
   runner.
 - [Execution model](execution-model.md): when a round runs, and when an event task is
   [due](glossary.md#due).

@@ -587,7 +587,7 @@ logex keeps the text of each literal. Each rule of this page uses only the value
 | A long literal in a message | The diagnostic shows the first 24 characters of the literal. |
 | The value | A limit is not a range of values. `0.0e10000` is an error, and its value is 0.0. The range of the value comes from the type of the place. |
 | A number in a name | A literal subscript and a literal bit number have the same limit of 10,000 characters. [Names](source-syntax.md#names) gives the rule. |
-| The [store](glossary.md#store) and the [forces file](glossary.md#forces-file) | logex reads the numbers of these files with the same 2 limits. [Retained values and the store](retained-values-and-store.md) and [Forcing](forcing.md) give the rules of these files. |
+| The [store](glossary.md#store) and the [forces file](glossary.md#forces-file) | logex reads the numbers of these files with the same 2 limits. [The store](store.md) and [Forcing](forcing.md) give the rules of these files. |
 
 Wrong texts 52 and 53 show the [diagnostics](#the-diagnostics) of the limits.
 

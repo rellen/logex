@@ -383,7 +383,7 @@ Each line of the output shows this:
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): what a start
+- [The store](../reference/store.md): what a start
   keeps and what it drops.
 - [Keep retained values on disk](keep-values-on-disk.md): give a runner a store.
 - [Recover from a refused store](recover-a-refused-store.md): when the start does not

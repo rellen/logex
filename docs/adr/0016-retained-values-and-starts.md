@@ -14,8 +14,8 @@ rules that a change must keep.
 
 [Warm and cold restarts](../../guides/explanation/warm-and-cold-restarts.md) gives the
 model for a user.
-[Retained values and the store](../../guides/reference/retained-values-and-store.md)
-gives each rule and each message, and [Runner](../../guides/reference/runner.md) each
+[Retained values](../../guides/reference/retained-values-and-store.md) and [The store](../../guides/reference/store.md)
+give each rule and each message, and [Runner](../../guides/reference/runner.md) each
 option of the runner.
 
 These words have 1 meaning on this page:

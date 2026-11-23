@@ -42,7 +42,7 @@ The blocks are parts of the script `restart-after-a-trip.exs`.
    field `forces` of `Logex.Runner.status/1`. Each force stays after a warm restart and after a cold
    restart. The restart also reads the [forces file](../reference/glossary.md#forces-file)
    again. Remove a force with `Logex.Runner.unforce/2`, or each force with
-   `Logex.Runner.unforce_all/1`. [Force an input](force-inputs.md) shows how.
+   `Logex.Runner.unforce_all/1`. [Force an input point](force-inputs.md) shows how.
 
 > #### Warning {: .warning}
 >
@@ -347,6 +347,6 @@ count 3, and `case_full` comes on. The cold restart sets the count to 0.
 - [Warm and cold restarts](../explanation/warm-and-cold-restarts.md): why each restart
   keeps what it keeps.
 - [Keep values across a restart](keep-values-across-a-restart.md): how to retain a tag.
-- [Force an input](force-inputs.md): how to see and remove a force.
+- [Force an input point](force-inputs.md): how to see and remove a force.
 - [Set watchdogs](set-watchdogs.md): the watchdogs of a task and of the runner.
 - [Glossary](../reference/glossary.md): the technical words.

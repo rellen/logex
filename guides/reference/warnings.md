@@ -509,7 +509,7 @@ diagnostic.
 | In the run | The runner starts. It puts the retained values of the store on the program by name and type. |
 | No warning | A cold start, or a store that names no program. The key `warning` then holds `nil`. |
 
-[Retained values and the store](retained-values-and-store.md) gives the rules of the
+[The store](store.md) gives the rules of the
 store.
 
 ## Examples

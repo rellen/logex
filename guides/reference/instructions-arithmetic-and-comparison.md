@@ -271,7 +271,7 @@ does with a major fault.
 These instructions keep no value from one scan to the next. A
 [restart](glossary.md#restart) or an [online edit](glossary.md#online-edit) has no effect
 on these instructions. Each destination keeps its value by the rules of its tag.
-[Retained values and the store](retained-values-and-store.md) gives the rules of a tag
+[Retained values](retained-values-and-store.md) gives the rules of a tag
 at a restart.
 
 ## `move`

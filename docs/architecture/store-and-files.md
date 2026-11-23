@@ -13,7 +13,7 @@ rule of the image or a refusal.
   [forces file](../../guides/reference/glossary.md#forces-file).
 - [The file work of the runner](runner-files.md): the processes that read and write these
   files, the write limit and the table of paths.
-- [Retained values and the store](../../guides/reference/retained-values-and-store.md):
+- [The store](../../guides/reference/store.md):
   the rules as a user sees them.
 
 ## What the part does
@@ -520,7 +520,7 @@ Each test file of this table is in `test/logex/`:
   and the forces file.
 - [The file work of the runner](runner-files.md): the writer, the write limit and the
   table of paths.
-- [Retained values and the store](../../guides/reference/retained-values-and-store.md):
+- [The store](../../guides/reference/store.md):
   the rules for a user.
 - [Recover a refused store](../../guides/howto/recover-a-refused-store.md) and
   [Edit the store by hand](../../guides/howto/edit-the-store-by-hand.md): the steps for a

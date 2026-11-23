@@ -674,5 +674,5 @@ It also uses decisions that other records sum up:
 [The scan, the cycle and time](../../guides/explanation/scan-cycle-and-time.md) gives
 the model for a user. [Execution model](../../guides/reference/execution-model.md) and
 [Runner](../../guides/reference/runner.md) give the rules.
-[Do a test of a plant on the manual clock](../../guides/howto/test-on-the-manual-clock.md)
+[Write ExUnit tests on the manual clock](../../guides/howto/test-on-the-manual-clock.md)
 gives the steps for an ExUnit test.

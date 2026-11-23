@@ -149,7 +149,7 @@ names the whole instance, for example `{"boxes", {:retyped, "ctu", "ctd"}}`.
 
 ## See also
 
-- [Retained values and the store](../reference/retained-values-and-store.md): each rule
+- [Retained values](../reference/retained-values-and-store.md): each rule
   of the retained image and of its checks.
 - [Keep values across a restart](keep-values-across-a-restart.md): mark tags `retain`
   and do a warm restart.

@@ -255,7 +255,7 @@ The decision record is
   cycle does.
 - [Execution model](../reference/execution-model.md): the exact rules of a scan, a cycle
   and the time.
-- [Do a test of a plant on the manual clock](../howto/test-on-the-manual-clock.md): how
+- [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
   a test moves the time of a runner.
 - [Timing and capacity](timing-and-capacity.md): how late a round can be.
 - [Glossary](../reference/glossary.md): the technical words of logex.

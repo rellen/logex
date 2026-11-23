@@ -340,7 +340,7 @@ The runner starts. After a [round](../reference/glossary.md#round),
 - [Read a diagnostic](read-diagnostics.md): how to print a diagnostic.
 - [Share a global between programs](share-a-global.md): a `var_external` tag reads a
   point with no connection.
-- [Force an input](force-inputs.md): how to hold an input point at a value.
-- [Do a test of a plant on the manual clock](test-on-the-manual-clock.md): the
+- [Force an input point](force-inputs.md): how to hold an input point at a value.
+- [Write ExUnit tests on the manual clock](test-on-the-manual-clock.md): the
   simulated device in a test.
 - [Glossary](../reference/glossary.md): the technical words.

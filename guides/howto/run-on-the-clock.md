@@ -291,7 +291,7 @@ shows how to use `runs`, `overlaps` and `latest_wake`.
 The output does not tell when each run of the task `fast` came. To see each run,
 subscribe to the `:ran` events of the runner. [Watch a runner](watch-a-runner.md) gives
 the steps. To get the same rounds at each run, use the manual clock.
-[Do a test of a plant on the manual clock](test-on-the-manual-clock.md) gives the steps.
+[Write ExUnit tests on the manual clock](test-on-the-manual-clock.md) gives the steps.
 
 ## If it does not work
 

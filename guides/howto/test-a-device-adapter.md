@@ -433,7 +433,7 @@ Correct the cause. Then go to [Restart after a trip](restart-after-a-trip.md). A
 - [Write a device adapter](write-a-device-adapter.md): the callbacks of an adapter.
 - [Restart after a trip](restart-after-a-trip.md): how to find the cause of a trip and
   start the plant again.
-- [Do a test of a plant on the manual clock](test-on-the-manual-clock.md): the manual
+- [Write ExUnit tests on the manual clock](test-on-the-manual-clock.md): the manual
   clock and the simulated device in a test.
 - [Run a plant on the clock](run-on-the-clock.md): a runner on the clock of the computer.
 - [I/O adapters](../reference/io-adapters.md): the rules of each callback.

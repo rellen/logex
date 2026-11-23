@@ -126,7 +126,7 @@ If a bit number or a subscript in a tag is out of range, the scan reports a
 
 - **The clock.** The runner reads the time from a clock. The manual clock moves only
   when a test moves it.
-  [Do a test of a plant on the manual clock](../howto/test-on-the-manual-clock.md) gives
+  [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md) gives
   the steps.
 - **Devices.** The runner reads and writes each
   [device](../reference/glossary.md#device) through an
@@ -139,7 +139,7 @@ If a bit number or a subscript in a tag is out of range, the scan reports a
   [Trips and watchdogs](trips-and-watchdogs.md) explains them.
 - **[Forces](../reference/glossary.md#force).** While the runner runs, an operator can
   force an input. logex does not force an output.
-  [Force an input](../howto/force-inputs.md) gives the steps.
+  [Force an input point](../howto/force-inputs.md) gives the steps.
 - **The [store](../reference/glossary.md#store).** The runner keeps the retained values
   in a file. [Retained values](#retained-values) gives more.
 

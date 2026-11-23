@@ -190,7 +190,7 @@ gives the steps.
 - [Use arrays of timers, counters and function blocks](../howto/use-arrays-of-instances.md):
   the steps to declare a large array.
 - [Set watchdogs](../howto/set-watchdogs.md): the steps to set each limit.
-- [Retained values and the store](../reference/retained-values-and-store.md): the rules
+- [The store](../reference/store.md): the rules
   of the store.
 - [Runner](../reference/runner.md): the options and the keys of `status/1`.
 - [Glossary](../reference/glossary.md): the technical words of logex.

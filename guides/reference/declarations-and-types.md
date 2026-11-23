@@ -14,7 +14,7 @@ These pages define the other rules of a [tag](glossary.md#tag):
 | The characters of a name, the case of each word and the [reserved words](glossary.md#reserved-word) | [Source syntax](source-syntax.md) |
 | The forms of a [literal](glossary.md#literal) | [Literals](literals.md) |
 | The [members](glossary.md#member) of a [timer](glossary.md#timer), of a [counter](glossary.md#counter) and of a [function block](glossary.md#function-block) | [Function blocks](function-blocks.md) |
-| The [restarts](glossary.md#restart) and the [store](glossary.md#store) | [Retained values and the store](retained-values-and-store.md) |
+| The [restarts](glossary.md#restart) and the [store](glossary.md#store) | [Retained values](retained-values-and-store.md) and [The store](store.md) |
 | A [global](glossary.md#global) and its `var_global` line | [Configuration file](configuration-file.md) |
 | The typed conversions, for example `dint_to_int` | [Conversions](conversions.md) |
 
@@ -254,8 +254,8 @@ It declares `var non_retain step dint`, `var retain kept dint` and `var plain di
 A cold restart sets each `var` tag and each `var_output` tag to its initial value. The
 qualifier `retain` does not prevent this.
 
-[Retained values and the store](retained-values-and-store.md) gives the functions that
-restart an instance. It also tells where logex keeps the retained values. Wrong texts 21
+[Retained values](retained-values-and-store.md) gives the functions that restart an
+instance. [The store](store.md) tells where logex keeps the retained values. Wrong texts 21
 to 27 show the [diagnostics](#the-diagnostics) of the rules of form.
 
 ## Elementary types
@@ -987,7 +987,7 @@ Widening
 - [Function blocks](function-blocks.md): the members of the timers and of the counters,
   and the file of a function block.
 - [Conversions](conversions.md): the instructions that change the type of a value.
-- [Retained values and the store](retained-values-and-store.md): what `retain` does at a
+- [Retained values](retained-values-and-store.md): what `retain` does at a
   restart.
 - [Configuration file](configuration-file.md): the `var_global` line of a global.
 - [Faults](faults.md): the fault of a subscript that is not in its array.

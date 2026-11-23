@@ -13,7 +13,7 @@ that a change must keep.
 a program keeps and when the [runner](../../guides/reference/glossary.md#runner) writes
 the store. [0018. File work with a limit](0018-file-work-with-a-limit.md) gives the write
 limit and the processes that read and write the files.
-[Retained values and the store](../../guides/reference/retained-values-and-store.md)
+[The store](../../guides/reference/store.md)
 gives each rule and each message for a user.
 [The store and its files](../architecture/store-and-files.md) gives the code.
 

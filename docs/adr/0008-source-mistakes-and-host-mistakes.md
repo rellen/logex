@@ -218,7 +218,7 @@ these bounds:
 The readers of the [store](../../guides/reference/glossary.md#store) and of the
 [forces file](../../guides/reference/glossary.md#forces-file) also refuse a number of more
 than 10,000 characters (decision 369).
-[Retained values and the store](../../guides/reference/retained-values-and-store.md) and
+[The store](../../guides/reference/store.md) and
 [Forcing](../../guides/reference/forcing.md) give their messages.
 
 `test/logex/compile_total_test.exs` does a seeded walk of changed source texts. No text

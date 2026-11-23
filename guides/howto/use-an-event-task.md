@@ -273,7 +273,7 @@ message.
 | The instance runs 1 cycle after a program writes 1 to the trigger | logex reads the trigger 1 time, before the programs of the cycle run. Nothing to do. |
 | The instance records a value that a different instance writes in the same cycle | Give the event task a higher priority than the task of the other instance. |
 | On the runner, no run for a short pulse | Use a device that gives each change immediately. Or hold the signal at 1 for more than the poll period. |
-| On the runner, a change at the device does not run the task | The trigger has a [force](../reference/glossary.md#force). A force or an unforce that changes the trigger runs the task immediately. Read [Force an input](force-inputs.md). |
+| On the runner, a change at the device does not run the task | The trigger has a [force](../reference/glossary.md#force). A force or an unforce that changes the trigger runs the task immediately. Read [Force an input point](force-inputs.md). |
 
 ## See also
 

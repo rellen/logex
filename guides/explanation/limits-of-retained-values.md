@@ -279,7 +279,7 @@ program knows if a start is warm or cold.
 
 - [Safety and limits](safety-and-limits.md): what logex is not.
 - [Warm and cold restarts](warm-and-cold-restarts.md): what each restart keeps.
-- [Retained values and the store](../reference/retained-values-and-store.md): the exact
+- [The store](../reference/store.md): the exact
   rules of the store.
 - [Keep retained values on disk](../howto/keep-values-on-disk.md): the steps to give a
   runner a store.
