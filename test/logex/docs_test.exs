@@ -7,13 +7,14 @@ defmodule Logex.DocsTest do
   ExDoc and what ExDoc needs, nothing else.
 
   The site: `docs/pages.exs`, the one list of pages, held to every Markdown file of the
-  repository, each page's kind to its directory and its group; `mix.exs`'s site read from
-  it, README first, the host contract's modules first and apart; `scripts/site.exs`, run
-  as `mix docs` and `scripts/docs.sh` run it, over small trees of the test's own, each
-  refusal of its `stage` and its `check`, and over the repository's pages; `scripts/docs.sh`
-  over a stand-in `mix`; and `.github/workflows/docs.yml`, its keys, its toolchain, its
-  permissions, and its question to GitHub run as written over a stand-in `gh`. The site
-  itself is built by the workflow, a build too slow for the suite.
+  repository, each page's kind to its directory and its group, and no page of it a stub;
+  `mix.exs`'s site read from it, README first, the host contract's modules first and
+  apart; `scripts/site.exs`, run as `mix docs` and `scripts/docs.sh` run it, over small
+  trees of the test's own, each refusal of its `stage` and its `check`, and over the
+  repository's pages; `scripts/docs.sh` over a stand-in `mix`; and
+  `.github/workflows/docs.yml`, its keys, its toolchain, its permissions, and its question
+  to GitHub run as written over a stand-in `gh`. The site itself is built by the workflow,
+  a build too slow for the suite.
   """
   use ExUnit.Case, async: true
 
@@ -266,6 +267,45 @@ defmodule Logex.DocsTest do
       assert listed -- @legacy == []
       assert length(@legacy) == 10
     end
+
+    test "no page of the list is a stub: none holds a line that begins with the stub's mark" do
+      stubbed = stubs(@root, pages())
+
+      assert stubbed == [],
+             "#{length(stubbed)} of the pages of docs/pages.exs hold the stub's mark, a line " <>
+               "that begins \"This page is a stub.\": write each page, or take its line out " <>
+               "of the list and its file away: " <> Enum.join(stubbed, ", ")
+    end
+
+    test "the stub check names each page whose line begins with the mark, and no other",
+         %{tmp_dir: dir} do
+      files = %{
+        "stub.md" => "# A stub\n\nThis page is a stub. It will hold the rules of a.\n",
+        "late.md" => "# Late\n\nA paragraph.\n\n## See also\n\nThis page is a stub.\n",
+        "crlf.md" => "# Crlf\r\n\r\nThis page is a stub. Written on Windows.\r\n",
+        "quoted.md" => "# Quoted\n\nA stub begins `This page is a stub.` and no page does.\n",
+        "indented.md" => "# Indented\n\n    This page is a stub.\n",
+        "lower.md" => "# Lower\n\nthis page is a stub.\n",
+        "written.md" => "# Written\n\nThis page is a page, and no stub.\n"
+      }
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      listed = for name <- Enum.sort(Map.keys(files)), do: {name, :howto, "How-to guides"}
+
+      assert stubs(dir, listed) == ["crlf.md", "late.md", "stub.md"]
+      assert stubs(dir, [{"written.md", :howto, "How-to guides"}]) == []
+    end
+  end
+
+  # The mark of a page that is not written yet (DOC-1's second step put a stub in place of
+  # each page before it was written): a line that begins "This page is a stub.". A page that
+  # holds it is a stub, at any line; the words inside a line, or indented as code, are none.
+  @stub ~r/^This page is a stub\./m
+
+  defp stubs(root, pages) do
+    for {path, _kind, _group} <- pages,
+        File.read!(Path.join(root, path)) =~ @stub,
+        do: path
   end
 
   describe "mix.exs's site" do
