@@ -866,7 +866,8 @@ defmodule Logex.Runner do
     untimed programs', that run having scanned every instance it holds, and before the
     round's write; no later step of the round runs, so `get/2` reads each later task's
     instances as the round before left them. The fault's own event, `{:fault, ...}`, is
-    published with the round's, then the trip. A minor fault, a zero divisor, trips nothing;
+    published with the round's, then the trip. A minor fault, a zero divisor or a negative
+    root (decision 164), trips nothing;
   - `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`: since decision 394, the
     clock gave the runner, or a device, no time it can hold, once the runner runs, a round
     that read it so stopped there, since decision 441, nothing written after the reading

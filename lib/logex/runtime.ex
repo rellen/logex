@@ -78,8 +78,8 @@ defmodule Logex.Runtime do
   (M4-2, decision 111), and `:none` where it declares none, `{:overlap, task, missed}`, just before its task's
   scans, and since M3-3 `{:fault, task, instance, fault}`, a `%Logex.Fault{}`, each
   fault the scan met, just after its scan's `{:ran, ...}`, in the order they happened
-  (decision 99): a minor one, a zero divisor, which the plant runs on through, and since
-  M5-9 a major one, a bit whose number a tag holds out of its word's bits (decisions 153
+  (decision 99): a minor one, a zero divisor or, since M5-10, a negative root (decision
+  164), which the plant runs on through, and since M5-9 a major one, a bit whose number a tag holds out of its word's bits (decisions 153
   and 160), and since M5-12 an element whose subscript a tag holds outside its dimension
   (decision 153), whose instruction did nothing, the scan and the cycle running on: a cycle runs
   every due step whatever its events, so a host driving the resource itself sees the
