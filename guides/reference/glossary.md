@@ -370,6 +370,14 @@ A report of a possible error in a source text. A program with warnings compiles.
 The modules that a host calls. Each of these modules refuses a wrong argument with an
 `ArgumentError`.
 
+### reduction
+
+A unit of work that the Erlang VM counts for each process. A function call costs about 1
+reduction. `Process.info(pid, :reductions)` gives the count of a process. The tests of
+logex measure the cost of a compile, a scan, a cycle and a round in reductions. A busy
+computer changes the time of a scan a lot. It changes the count of reductions only
+through the work of garbage collection.
+
 ## Configurations
 
 ### configuration
