@@ -131,12 +131,15 @@ that the entry of the item in `PLAN.md` names, then the day that the item merged
 | RV-30 | `scripts/dialyzer.sh` is the fifth step of `scripts/gate.sh`, with `-Wunmatched_returns`. `Logex.Configuration.Global.new!/3` refuses a wrong initial value when it is called | 549 to 555. Merged 11-16 (565f057) |
 | RV-31 | `Logex.Configuration.Global.new!/3` refuses each error of 1 global when it is called: its name, its type, its location and its value. A refusal of the host cuts a long number that it quotes. The comments of CI on its caches | 576, 577, 580 and 583. Merged 11-23 (cd9601a) |
 
-The answers to the questions of these items are in 4 groups:
+The answers to the questions of these items are in 5 groups:
 
 - 549 to 555: the answers to RV-24, which RV-30 built.
 - 556 to 572: the answers to DOC-1 step 1.
 - 573 and 574: the answers to RV-29.
 - 575 to 583: the answers to RV-30. RV-31 built 576, 577, 580 and 583.
+- 584 to 588: the answers to RV-31. RV-32 builds 586 and 587.
+  [Project history](project-history.md#the-work-that-waits) gives RV-32 with the other
+  work that waits.
 
 ## Why the review ran this way
 

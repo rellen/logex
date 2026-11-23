@@ -205,6 +205,7 @@ entry of the item in `PLAN.md` names.
 
 | Item | What it does | Decisions |
 |---|---|---|
+| RV-32 | Each refusal of the host contract that quotes a value of the host cuts a long value as a compile cuts one. A test of the cache of the PLT named for what it checks | 586 and 587 |
 | DOC-1, steps 2, 3 | The pages of this site, a short README, then a review of the whole | 546 to 548, 556 to 572 |
 | RV-23 | Each "provisional" mark traced to its decision, or put to the maintainer | 519 |
 | RV-25 | The runner and the contract test file split by concern, with no change of behaviour | 515 |
