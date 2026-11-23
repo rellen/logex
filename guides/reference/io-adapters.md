@@ -26,20 +26,28 @@ device to its adapter, each callback of the behaviour `Logex.IO`, and the simula
 
 > #### Caution {: .error}
 >
-> Do not expect a [program](glossary.md#program) to see a short pulse of an input. Latch
-> the pulse in the device, or make it the [trigger](glossary.md#trigger) of an
-> [event task](glossary.md#event-task). The [runner](glossary.md#runner) keeps only the
-> last value of each input point. A program sees a pulse only if a
-> [round](glossary.md#round) runs while the pulse holds. A change from a device, from a
-> read or from a [report](#report2), makes no round. The change of a trigger is the only
-> exception.
+> Do not expect a [program](glossary.md#program) to see a short pulse at an input point.
+> Make the device keep the pulse until the next read, or make the pulse the
+> [trigger](glossary.md#trigger) of an [event task](glossary.md#event-task).
+>
+> The [runner](glossary.md#runner) gets the value of an input point only from a read or
+> from a [report](#report2) of the device. The process of the device reads it 1 time in
+> each [poll period](glossary.md#poll-period). Thus the runner does not see a pulse that
+> starts and ends between 2 reads, unless the device reports the pulse.
+>
+> The runner keeps only the last value of each input point. A read or a report makes no
+> [round](glossary.md#round). Thus a program does not see a reported pulse either, unless
+> a round runs while the pulse holds. The change of a trigger is the only exception: it
+> makes a round of its event task.
 
 > #### Note {: .info}
 >
 > logex has 1 adapter only: `Logex.IO.Sim`, a simulated device for tests and examples.
 > logex has no adapter for a fieldbus or for an I/O card. You write each such adapter in
 > your [host](glossary.md#host), with the behaviour `Logex.IO`.
-> [Write a device adapter](../howto/write-a-device-adapter.md) shows how.
+> [Write a device adapter](../howto/write-a-device-adapter.md) shows how. The file
+> [`examples/line_device.exs`](../../examples/line_device.exs) is an example adapter for
+> a card that sends lines of text on a TCP socket.
 
 | To find | Go to |
 |---|---|
@@ -88,9 +96,9 @@ the process of the host. The process of a device calls each other callback.
 | The order | The runner opens, writes and closes the devices in the sorted order of their names. |
 | A configuration with no located global | It has no device. Give `io: %{}`. |
 
-[Devices](runner.md#devices) on the page Runner gives when the runner reads, writes,
-opens and closes a device. [Watchdogs](runner.md#watchdogs) gives the time limit of each
-call.
+[Devices](runner.md#devices) on the page Runner gives when the runner opens, reads and
+writes a device. [Stop, shutdown and crash](runner.md#stop-shutdown-and-crash) gives when
+it closes a device. [Watchdogs](runner.md#watchdogs) gives the time limit of each call.
 
 ## The plant of the examples
 
@@ -176,7 +184,7 @@ An adapter gets each point of its device as a `%Logex.IO.Point{}`. A point is pl
 The address of a point is the integers of its location after `i` or `q`, in a list. The
 integers are in the order of the location, from left to right: `rack.i.2.4` has the
 address `[2, 4]`. logex gives no meaning to each integer. The adapter gives each integer
-its meaning, for example a slot and a channel.
+its meaning, for example the number of a card and the number of a channel.
 
 | Location | Address |
 |---|---|
@@ -318,12 +326,19 @@ sorted order of the device names. The runner opens the devices in that order.
 
 ### The checks
 
-`bind!/2` finds all the errors, and raises 1 `ArgumentError` with 1 line for each error.
-The lines come in this sequence: first each key that is not a string, then the devices in
-the sorted order of their names.
+`bind!/2` does the checks in 2 parts:
+
+1. It checks the configuration, then it checks that `io` is a map. Each of these 2
+   errors raises an `ArgumentError` alone, before the other checks.
+2. It finds all the other errors, and raises 1 `ArgumentError` with 1 line for each
+   error.
+
+The lines come in this sequence: first each key that is not a string, then the devices
+in the sorted order of their names.
 
 | Error | The message gives |
 |---|---|
+| A configuration that `Logex.Runtime.start/1` refuses | The message of `start/1` |
 | `io` is not a map | The form of the map |
 | A key that is not a string | The key. For an atom that spells a device, the string to write. |
 | A device with a point and no binding | Each point at the device, with its location. The points of an array are 1 range. |
@@ -434,7 +449,7 @@ to the next. `values` is a map from address to number, as in [Values](#values).
 | Result | `{:ok, state}`, or `{:error, reason}` for a device that cannot open |
 | Messages | `init/3` runs in the process of the device. An adapter that reports its changes connects to its device there. A port, a socket or a process of the adapter then sends its messages to the process of the device. |
 | After it | The runner reads the device 1 time. If that first read fails, the process writes 0 to each output point, calls `close/1`, and stops. |
-| A failure | `start_link/1` gives `{:error, {:io_init, device, reason}}`, and closes each device that it opened before. `reason` is the reason of `init/3`, or the cause of the failure of the first read. |
+| A failure | `start_link/1` gives `{:error, {:io_init, device, reason}}`, and closes each device that it opened before. If `init/3` gives `{:error, reason}`, `reason` is that reason. Otherwise `reason` is a cause from [Failures of a callback](#failures-of-a-callback), of `init/3` or of the first read. A device that does not open in its time gives `:timeout`. |
 
 ### `read/1`
 
@@ -454,8 +469,9 @@ to the next. `values` is a map from address to number, as in [Values](#values).
 | Arguments | The values of each output point of the device, by address, and `state` |
 | Result | `{:ok, state}`. An error gives `state` back also, so that the next call can connect again. |
 | The values | All the output points at each write, not only the points that changed. An adapter can skip a point that did not change. |
-| When | After each round that changed an output of the device. At each poll, the process writes the last outputs again. |
-| The write of 0 | A trip writes 0 to each output point. If that write fails, the process writes 0 again at each poll, until a write of 0 succeeds. Then the device gets no write until a restart. A stop writes 0 to each device that does not have 0 already. |
+| When | After each round that changed an output of the device. At each poll, the process writes the last outputs again. After a trip, the process does not write the last outputs again. After a restart, it writes nothing again until the first round of the restart writes. |
+| The write of 0 at a trip | A trip writes 0 to each output point 1 time. If that write fails, the process writes 0 again at each poll, until a write of 0 succeeds. Then the device gets no write until a restart. A restart that fails writes 0 again, 1 time. |
+| The write of 0 at a stop | The process writes 0 to each output point 1 time, then calls `close/1`. A device that a trip already wrote 0 to gets no second write of 0. If the write of 0 at the trip failed, the stop tries it 1 more time. |
 | A device with no output point | It gets no write. |
 
 ### `report/2`
@@ -475,7 +491,7 @@ to the next. `values` is a map from address to number, as in [Values](#values).
 |---|---|
 | Argument | `state` |
 | Result | `:ok` |
-| When | 1 time, after the last write of 0. This occurs at a stop, a crash or a kill of the runner, and after a first read that fails. It also occurs when a process that the adapter linked stops with a reason that is not `:normal`. A trip does not close the device. |
+| When | 1 time, after the last write of 0. This occurs at a stop, a shutdown, a crash or a kill of the runner. It occurs when the clock of the runner stops, and after a first read that fails. It also occurs when a process that the adapter linked stops with a reason that is not `:normal`. A trip does not close the device. |
 | A device that hangs | If the runner or a separate process kills the process of the device, the process calls no `close/1`. |
 | A failure | The process ignores a raise, a throw or an exit in `close/1`. The stop continues. |
 | Without it | The process stops with no close. |
@@ -484,7 +500,7 @@ to the next. `values` is a map from address to number, as in [Values](#values).
 
 | Event | What the process does |
 |---|---|
-| The runner stops or crashes, or a process kills it | The process traps exits. It writes 0 to each output point 1 time, if it did not before. Then it calls `close/1`, and stops. |
+| The runner stops or crashes, or a process kills it | The process traps exits. It writes 0 to each output point 1 time, unless a trip wrote 0 to them already. If the write of 0 at the trip failed, it tries 1 more time. Then it calls `close/1`, and stops. |
 | The same, while the process hangs in a callback | The process gets `idle + poll` ms. Then the runner kills it, or at a crash or a kill, a separate process kills it. It gives no write of 0 and calls no `close/1`. Its outputs do what its hardware does when it hears nothing. [Stop, shutdown and crash](runner.md#stop-shutdown-and-crash) gives the rules. |
 | A process that the adapter linked stops with `:normal` | Nothing |
 | A process that the adapter linked stops with a different reason | The process writes 0 to each output point 1 time, calls `close/1`, and stops. The runner trips with `{:io, device, {:down, reason}}`. The next restart opens the device again. |
@@ -611,12 +627,13 @@ In the second run, the first read fails. The process writes 0 and calls `close/1
 ## Failures of a callback
 
 A callback that fails gives `{:error, reason, state}`, or `{:error, reason}` for
-`init/3`. It must not raise. A device that does not answer is a state of the plant, not a
-defect of the adapter. Give `state` back, so that the next call can connect again.
+`init/3`. It must not raise. A device that does not answer is a normal event in a plant,
+not a defect of the adapter. Give `state` back, so that the next call can connect again.
 
 Each failure of a callback is an I/O fault. The runner trips the plant with
-`{:io, device, cause}`. At a start, `start_link/1` gives `{:error, {:io_init, device,
-cause}}` in its place.
+`{:io, device, cause}`. At a start, `start_link/1` gives
+`{:error, {:io_init, device, cause}}` in place of a trip. At a restart, `Logex.Runner.restart/2` gives the same, and the
+plant stays tripped with the reason of its first trip.
 
 | What the callback does | `cause` |
 |---|---|
@@ -627,7 +644,7 @@ cause}}` in its place.
 | It exits | `{:exited, term}` |
 | A read or a report gives a value that does not fit its point | `{:bad_value, address, value}` |
 | A read or a report gives an address that is not an input point of the device | `{:unknown_address, address}` |
-| It does not return in its time | `:timeout`. If the device still does not answer, the runner kills its process. |
+| It does not return in its time | `:timeout`. If the device still does not answer, the runner kills its process, with no `close/1`. The next restart opens the device again. |
 | A process that the adapter linked stops with a reason that is not `:normal` | `{:down, reason}` |
 
 - In a cause, `address` is the location as the configuration writes it, for example
