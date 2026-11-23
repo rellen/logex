@@ -102,6 +102,7 @@
   {"guides/reference/io-adapters.md", :reference, "Reference"},
   {"guides/reference/forcing.md", :reference, "Reference"},
   {"guides/reference/retained-values-and-store.md", :reference, "Reference"},
+  {"guides/reference/store.md", :reference, "Reference"},
   {"guides/reference/host-contract.md", :reference, "Reference"},
   {"guides/reference/not-supported.md", :reference, "Reference"},
   {"guides/reference/glossary.md", :reference, "Reference"},

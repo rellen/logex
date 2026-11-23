@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="466" viewBox="0 0 364 466" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of shift.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: xic eye ctu boxes 1000. Rung 2: xic eye ons e add total weight total. Rung 3: xic eye move weight last. Rung 4: xic motor rto lube 60000.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="465" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="454"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="454"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="114" y1="52" x2="224" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="91" y="35" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="52" x2="84" y2="52"/>
+<line class="ink" x1="84" y1="41" x2="84" y2="63"/>
+<line class="ink" x1="98" y1="41" x2="98" y2="63"/>
+<line class="ink" x1="98" y1="52" x2="114" y2="52"/>
+<rect class="box" x="224" y="39" width="100" height="68" rx="3"/>
+<line class="ink" x1="224" y1="65" x2="324" y2="65"/>
+<text class="op" x="274" y="56" text-anchor="middle">ctu</text>
+<text class="tag" x="314" y="79" text-anchor="end">boxes</text>
+<text class="dim" x="234" y="97">preset</text>
+<text class="tag" x="314" y="97" text-anchor="end">1000</text>
+<text class="dim" x="36" y="161" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="157" x2="68" y2="157"/>
+<line class="ink" x1="182" y1="157" x2="244" y2="157"/>
+<line class="ink" x1="324" y1="157" x2="346" y2="157"/>
+<text class="tag" x="91" y="140" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="157" x2="84" y2="157"/>
+<line class="ink" x1="84" y1="146" x2="84" y2="168"/>
+<line class="ink" x1="98" y1="146" x2="98" y2="168"/>
+<line class="ink" x1="98" y1="157" x2="114" y2="157"/>
+<line class="ink" x1="114" y1="157" x2="130" y2="157"/>
+<text class="tag" x="156" y="140" text-anchor="middle">e</text>
+<line class="ink" x1="130" y1="157" x2="137" y2="157"/>
+<rect class="box" x="137" y="147" width="38" height="20" rx="3"/>
+<text class="op" x="156" y="161" text-anchor="middle">ons</text>
+<line class="ink" x1="175" y1="157" x2="182" y2="157"/>
+<rect class="box" x="244" y="144" width="80" height="86" rx="3"/>
+<line class="ink" x1="244" y1="170" x2="324" y2="170"/>
+<text class="op" x="284" y="161" text-anchor="middle">add</text>
+<text class="tag" x="314" y="184" text-anchor="end">total</text>
+<text class="tag" x="314" y="202" text-anchor="end">weight</text>
+<text class="dim" x="254" y="220">to</text>
+<text class="tag" x="314" y="220" text-anchor="end">total</text>
+<text class="dim" x="36" y="284" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="280" x2="68" y2="280"/>
+<line class="ink" x1="114" y1="280" x2="252" y2="280"/>
+<line class="ink" x1="324" y1="280" x2="346" y2="280"/>
+<text class="tag" x="91" y="263" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="280" x2="84" y2="280"/>
+<line class="ink" x1="84" y1="269" x2="84" y2="291"/>
+<line class="ink" x1="98" y1="269" x2="98" y2="291"/>
+<line class="ink" x1="98" y1="280" x2="114" y2="280"/>
+<rect class="box" x="252" y="267" width="72" height="68" rx="3"/>
+<line class="ink" x1="252" y1="293" x2="324" y2="293"/>
+<text class="op" x="288" y="284" text-anchor="middle">move</text>
+<text class="tag" x="314" y="307" text-anchor="end">weight</text>
+<text class="dim" x="262" y="325">to</text>
+<text class="tag" x="314" y="325" text-anchor="end">last</text>
+<text class="dim" x="36" y="389" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="385" x2="68" y2="385"/>
+<line class="ink" x1="116" y1="385" x2="216" y2="385"/>
+<line class="ink" x1="324" y1="385" x2="346" y2="385"/>
+<text class="tag" x="92" y="368" text-anchor="middle">motor</text>
+<line class="ink" x1="68" y1="385" x2="85" y2="385"/>
+<line class="ink" x1="85" y1="374" x2="85" y2="396"/>
+<line class="ink" x1="99" y1="374" x2="99" y2="396"/>
+<line class="ink" x1="99" y1="385" x2="116" y2="385"/>
+<rect class="box" x="216" y="372" width="108" height="68" rx="3"/>
+<line class="ink" x1="216" y1="398" x2="324" y2="398"/>
+<text class="op" x="270" y="389" text-anchor="middle">rto</text>
+<text class="tag" x="314" y="412" text-anchor="end">lube</text>
+<text class="dim" x="226" y="430">preset</text>
+<text class="tag" x="314" y="430" text-anchor="end">60000</text>
+</svg>
