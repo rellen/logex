@@ -171,10 +171,29 @@ changed after its last item was written, under "The host's API".
   digits, a second for 320,000. A number of 10,000 characters or fewer is quoted whole,
   as before; one inside a value that is no number, a list's, is cut the same way. A
   connection of an array var_input to a long constant is told the element to connect,
-  `` the first `m.limits[0]` ``, where its example line held the constant. `new!/1`'s own
-  lines, of a field list that is no keyword list and of an element brought with a line,
-  quote a number whole, as the host contract's other refusals do. Look for: code that
-  reads a number back out of such a message.
+  `` the first `m.limits[0]` ``, where its example line held the constant. Since decision
+  586 so does every other refusal of the host contract, `new!/1`'s own lines among them
+  (below). Look for: code that reads a number back out of such a message.
+- **Every refusal of the host contract quotes a long number cut** (decision 586), as
+  decision 583's three do: `Logex.compile/2`'s and its loaders', `Logex.Runtime`'s of a
+  state, a scan, inputs, a program edited by hand, a resource or a retained image,
+  `Logex.Edit`'s and `Logex.Configuration.Edit`'s, `Logex.IO.bind!/2`'s and
+  `points/1`'s, `Logex.Runner`'s of its options, its clock's answers, a force and a
+  request, `Logex.IO.Sim`'s, the runner's clocks', and `Logex.Configuration`'s own,
+  `new!/1`'s of what is no keyword list and of an element brought with a line,
+  `compile/3`'s and `compile_file/1`'s of an argument that is no text, `initial/1`'s and
+  `watchdog/1`'s. Each quotes the value the host gave as `inspect/1` shows it, with its
+  limits, a number past 10,000 characters by its first 24 and how many it has, where it
+  quoted the number whole: `Logex.Configuration.new!(10 ** 100_000)` raises
+  "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:,
+  globals:, instances: and connections:, got: 100000000000000000000000… (100001
+  characters)", 168 bytes where it was a hundred thousand digits, and a global brought
+  with `line: 10 ** 1_000_000` is told in milliseconds where its line took 9 s and a
+  megabyte. The integers a refusal wrote out itself are cut too: a timer's `last` later
+  than the instance's `now`, a scan's time that went backwards, an input or a held value
+  outside its type, a clock's time out of range, an edit's generation and the line of a
+  program or configuration edited by hand. A value of 10,000 characters or fewer is
+  quoted as before. Look for: code that reads a number back out of such a message.
 
 ### What it carries, by the work that built it
 

@@ -337,6 +337,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   `examples/` drawn, a drawing's elements its program's, a timing diagram's values a
   run's, each picture a page shows held to what its script gives today, one file one
   picture, and `scripts/draw.exs` run as a writer runs it.
+- `test/logex/quoted_test.exs` — every refusal of the host contract that quotes a host's
+  value, reached with a long number and pinned whole, the cut in it; a sample's cost
+  against a small value's; and `inspect/1` in `lib/` the cut's alone.
 - `test/logex/scratch_test.exs` — every name a test file makes in the machine's temporary
   directory holds the VM's OS pid, read from each test file's syntax tree, and none names
   that directory another way, so that two suites on one machine share no scratch

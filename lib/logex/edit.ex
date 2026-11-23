@@ -559,7 +559,7 @@ defmodule Logex.Edit do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(other)}"
+        "expected a %Logex.Program{} from Logex.compile/2, got: #{Logex.Lexer.inspected(other)}"
       )
 
   defp computable!([]), do: :ok
@@ -584,7 +584,7 @@ defmodule Logex.Edit do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Edit{} from Logex.Edit.accept/3, got: #{inspect(other)}"
+        "expected a %Logex.Edit{} from Logex.Edit.accept/3, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # The runtime's checks, and so its messages: put_inputs/3 with no inputs checks the

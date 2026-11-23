@@ -94,7 +94,7 @@ defmodule Logex.Parser do
     do:
       raise(
         ArgumentError,
-        "parse/1 takes the list of tokens Logex.Lexer.tokenize/1 gives, got: #{inspect(tokens)}"
+        "parse/1 takes the list of tokens Logex.Lexer.tokenize/1 gives, got: #{Logex.Lexer.inspected(tokens)}"
       )
 
   @doc """
@@ -432,7 +432,8 @@ defmodule Logex.Parser do
   # raises itself, where Dialyzer read improper!/1, and refuse!/2's default argument,
   # which only called refuse!/3 to raise, as functions with no local return.
   defp refusal(rule, node, got),
-    do: "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{inspect(node)}"
+    do:
+      "not a tree Logex.Parser.parse/1 can produce: #{rule}, #{got}: #{Logex.Lexer.inspected(node)}"
 
   defp unexpected(token, expected) when is_tuple(token) and tuple_size(token) >= 2,
     do: {:error, {elem(token, 1), __MODULE__, {:unexpected, describe(token), expected}}}
@@ -442,7 +443,7 @@ defmodule Logex.Parser do
       raise(
         ArgumentError,
         "parse/1 takes tokens, each a tuple of its kind and its location, got: " <>
-          inspect(token)
+          Logex.Lexer.inspected(token)
       )
 
   defp describe({:rnd, _}), do: "a newline"
@@ -451,5 +452,5 @@ defmodule Logex.Parser do
 
   # Logex.Lexer never makes any other token here, but parse/1 is public and yecc answered
   # a token it did not know with an error, not a crash.
-  defp describe(token), do: inspect(token)
+  defp describe(token), do: Logex.Lexer.inspected(token)
 end

@@ -410,8 +410,9 @@ maintainer answered that step's questions and RV-29's, decisions 556–574, each
 built, and RV-30's, decisions 575–583, and RV-31 has landed: built with it are
 `Global.new!/3` refusing every mistake of a global where it is declared, an initial value
 on a located global among them, and a long number cut in a host's refusal. The maintainer
-answered RV-31's questions, decisions 584–588: waiting with RV-32 are every refusal of the
-host contract cutting a long value it quotes, and a test's name made true. Waiting: the
+answered RV-31's questions, decisions 584–588, and RV-32 has built the two that asked for
+building: every refusal of the host contract cutting a long value it quotes, and a test's
+name made true. Waiting: the
 runner split by concern. And DOC-1's second and third steps: this
 file made short, its details moved into the site's tutorials, how-to guides, reference
 and explanation, and into contributor pages with a curated set of decision records.
@@ -3269,7 +3270,8 @@ broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
   Two globals of one name, or two on one point, are `check/1`'s to refuse, which needs
   the configuration. A number past 10,000 characters is quoted by its first 24 and how
   many it has, as a compile quotes a long literal, here, in `Logex.Tag.new!/5` and in
-  `check/1` (decision 583).
+  `check/1` (decision 583), and since decision 586 in every refusal of the host contract
+  that quotes a value the host gave, any other value shown as `inspect/1` shows it.
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision

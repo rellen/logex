@@ -54,7 +54,11 @@ defmodule Logex.Runner.Clock do
   def receiver!(pid) when is_pid(pid), do: pid
 
   def receiver!(other),
-    do: raise(ArgumentError, "a timer wakes a process, given by its pid, got: #{inspect(other)}")
+    do:
+      raise(
+        ArgumentError,
+        "a timer wakes a process, given by its pid, got: #{Logex.Lexer.inspected(other)}"
+      )
 
   @doc false
   @spec time!(integer) :: integer
@@ -64,7 +68,7 @@ defmodule Logex.Runner.Clock do
     do:
       raise(
         ArgumentError,
-        "a timer's time is a whole number of milliseconds on its clock, got: #{inspect(other)}"
+        "a timer's time is a whole number of milliseconds on its clock, got: #{Logex.Lexer.inspected(other)}"
       )
 
   @doc false
@@ -75,6 +79,6 @@ defmodule Logex.Runner.Clock do
     do:
       raise(
         ArgumentError,
-        "a timer is cancelled by the reference wake_at/4 gave it, got: #{inspect(other)}"
+        "a timer is cancelled by the reference wake_at/4 gave it, got: #{Logex.Lexer.inspected(other)}"
       )
 end

@@ -106,9 +106,10 @@ defmodule Logex.Lexer do
   # digits, 20 ms at 400,000 and 90 ms at a million, where the whole text took 0.09 s,
   # 1.3 s and 9 s (RV-31's review, F3; the growth test reads reductions). A number of at most
   # `longest_number/0` characters is quoted whole, as a compile quotes a literal it reads
-  # (provisional: `PLAN.md`'s RV-31, question 1). The refusals the decision names, and
-  # what they show, read this; another of the host contract's quotes as it did
-  # (provisional: question 3).
+  # (decision 584), and any other value as `inspect/1` shows it, with its limits, each long
+  # number in it cut (`inspected/2`, decision 585). Since decision 586 (RV-32) every
+  # refusal of the host contract that quotes a value the host gave quotes it through
+  # these, and `inspected/2` is the one call of `inspect/1` in lib/ (`quoted_test.exs`).
   @shown_start 24
   @past_positive Integer.pow(10, @longest_number)
   @past_negative -Integer.pow(10, @longest_number - 1)
@@ -196,7 +197,8 @@ defmodule Logex.Lexer do
   # RV-2 (the review after Milestone 6, a1-frontend-9): a host's mistake, a pinned
   # `ArgumentError`.
   def tokenize(source),
-    do: raise(ArgumentError, "tokenize/1 takes a source text, a binary, got: #{inspect(source)}")
+    do:
+      raise(ArgumentError, "tokenize/1 takes a source text, a binary, got: #{inspected(source)}")
 
   def format_error({:illegal, text}), do: "illegal character #{shown(text)}"
 
@@ -319,7 +321,7 @@ defmodule Logex.Lexer do
   # RV-2 (the review after Milestone 6, a1-frontend-10): a run quoted as a string even
   # where it holds a control byte, `"a.[n\0]"`, where inspect/1 showed it as a list of
   # bytes.
-  defp shown(text), do: inspect(text, binaries: :as_strings)
+  defp shown(text), do: inspected(text, binaries: :as_strings)
 
   # M5-10: B2's lexeme after a real, `1.5L`, is told so, and after an integer as it was.
   defp after_what(text),

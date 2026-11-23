@@ -905,7 +905,8 @@ defmodule Logex.Compiler do
   # return").
   defp unlisted(types),
     do:
-      "types must be a list of function block types from Logex.compile/2, got: " <> inspect(types)
+      "types must be a list of function block types from Logex.compile/2, got: " <>
+        Logex.Lexer.inspected(types)
 
   defp given!({:ok, checked}, %FbType{name: name} = type, library)
        when not is_map_key(library, name),
@@ -919,7 +920,7 @@ defmodule Logex.Compiler do
     do:
       raise(
         ArgumentError,
-        "types must be function block types from Logex.compile/2, got: #{inspect(type)}"
+        "types must be function block types from Logex.compile/2, got: #{Logex.Lexer.inspected(type)}"
       )
 
   # Decision 371: the loader's own types, the library and the one version of each name as
@@ -4999,7 +5000,7 @@ defmodule Logex.Compiler do
     do:
       raise(
         ArgumentError,
-        "Logex.compile/2 takes source text as a binary, got: #{inspect(source)}"
+        "Logex.compile/2 takes source text as a binary, got: #{Logex.Lexer.inspected(source)}"
       )
 
   def compile(source, name: name), do: compile(source, name: name, types: [])
@@ -5009,7 +5010,7 @@ defmodule Logex.Compiler do
     do: named(name_problem(name), name, source, types)
 
   def compile(_source, name: name, types: _types),
-    do: raise(ArgumentError, "a program's name is a string, got: #{inspect(name)}")
+    do: raise(ArgumentError, "a program's name is a string, got: #{Logex.Lexer.inspected(name)}")
 
   def compile(_source, options),
     do:
@@ -5017,7 +5018,7 @@ defmodule Logex.Compiler do
         ArgumentError,
         "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
           ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
-          "got: #{inspect(options)}"
+          "got: #{Logex.Lexer.inspected(options)}"
       )
 
   defp named(nil, name, source, types), do: compiled(source, name, types)
@@ -5033,7 +5034,10 @@ defmodule Logex.Compiler do
 
   def compile_file(path),
     do:
-      raise(ArgumentError, "Logex.compile_file/1 takes a path as a binary, got: #{inspect(path)}")
+      raise(
+        ArgumentError,
+        "Logex.compile_file/1 takes a path as a binary, got: #{Logex.Lexer.inspected(path)}"
+      )
 
   @doc false
   def compile_files(paths) do
@@ -5048,7 +5052,7 @@ defmodule Logex.Compiler do
     do:
       raise(
         ArgumentError,
-        "Logex.compile_files/1 takes a list of paths as binaries, got: #{inspect(paths)}"
+        "Logex.compile_files/1 takes a list of paths as binaries, got: #{Logex.Lexer.inspected(paths)}"
       )
 
   # Each path in turn, by recursion and no closure (decision 432), its result kept.
@@ -5352,7 +5356,7 @@ defmodule Logex.Compiler do
 
   defp shaped(false, name),
     do:
-      "#{inspect(name)} cannot name a program: a name is a letter or `_`, " <>
+      "#{Logex.Lexer.inspected(name)} cannot name a program: a name is a letter or `_`, " <>
         "then letters, digits or `_`"
 
   defp filed(%Program{warnings: warnings} = program, path),

@@ -121,6 +121,6 @@ defmodule Logex.Printer do
     do:
       raise(
         ArgumentError,
-        "cannot print #{inspect(node)}: not a tree Logex.Parser.parse/1 can produce"
+        "cannot print #{Logex.Lexer.inspected(node)}: not a tree Logex.Parser.parse/1 can produce"
       )
 end

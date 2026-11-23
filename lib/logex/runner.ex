@@ -1652,7 +1652,11 @@ defmodule Logex.Runner do
   defp mode!(mode) when mode in [:cold, :warm], do: mode
 
   defp mode!(other),
-    do: raise(ArgumentError, "a runner restarts :cold or :warm, got: #{inspect(other)}")
+    do:
+      raise(
+        ArgumentError,
+        "a runner restarts :cold or :warm, got: #{Logex.Lexer.inspected(other)}"
+      )
 
   # A proper list of kinds, each one of the nine: an improper list is told as any other
   # that is not one, before a subtraction that cannot take it.
@@ -1668,7 +1672,7 @@ defmodule Logex.Runner do
   defp kinds_told(kinds),
     do:
       "a runner's events are subscribed by a list of their kinds, among :overlap, :fault, " <>
-        ":trip, :restart, :edit, :retain, :forces, :ran and :round, got: #{inspect(kinds)}"
+        ":trip, :restart, :edit, :retain, :forces, :ran and :round, got: #{Logex.Lexer.inspected(kinds)}"
 
   # A host's call, a mistake in it raised here, in the caller; and a runner that goes down
   # before it answers, stopped as its call waited for whatever reason the stop gave, or
@@ -1684,7 +1688,7 @@ defmodule Logex.Runner do
 
   defp gone(runner), do: {:raise, ArgumentError.exception(not_running(runner))}
 
-  defp not_running(runner), do: "the runner #{inspect(runner)} is not running"
+  defp not_running(runner), do: "the runner #{Logex.Lexer.inspected(runner)} is not running"
 
   defp relayed({:raise, exception}), do: raise(exception)
   defp relayed(reply), do: reply
@@ -2262,7 +2266,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "Logex.Runner has no request #{inspect(other)}: a runner is called through " <>
+        "Logex.Runner has no request #{Logex.Lexer.inspected(other)}: a runner is called through " <>
           "get/2, get!/2, status/1, subscribe/2, unsubscribe/1, force/3, unforce/2, " <>
           "unforce_all/1, accept/2, test/1, untest/1, assemble/1, cancel/1, restart/2 and " <>
           "stop/2"
@@ -2440,7 +2444,7 @@ defmodule Logex.Runner do
         ArgumentError,
         "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced to a list of " <>
           "#{Logex.Array.shape(dims, "list")} in the elements' order, got: " <>
-          inspect(value, charlists: :as_lists)
+          Logex.Lexer.inspected(value, charlists: :as_lists)
       )
 
   defp shaped!(true, {type, dims, names}, name, value) do
@@ -2502,7 +2506,7 @@ defmodule Logex.Runner do
     do:
       {:error,
        "a force names an input point by its name, a string, as in \"eye_1\", got: " <>
-         inspect(other)}
+         Logex.Lexer.inspected(other)}
 
   defp input_of({:ok, type}, _name, _state), do: {:ok, type}
 
@@ -2616,7 +2620,7 @@ defmodule Logex.Runner do
   defp fits!(true, _name, _type, _value), do: :ok
   defp fits!(false, name, type, value), do: raise(ArgumentError, misfit(name, type, value))
 
-  defp misfit(name, type, value), do: misfit_written(name, type, inspect(value))
+  defp misfit(name, type, value), do: misfit_written(name, type, Logex.Lexer.inspected(value))
 
   defp misfit_written(name, type, spelling),
     do:
@@ -3059,7 +3063,7 @@ defmodule Logex.Runner do
       misfit_written(
         Logex.Refusal.shown(name),
         type,
-        written_and_read(spelling, inspect(value))
+        written_and_read(spelling, Logex.Lexer.inspected(value))
       )
 
   defp written_and_read(same, same), do: Logex.Refusal.shown(same)
@@ -5156,7 +5160,7 @@ defmodule Logex.Runner do
       "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
         "clock:, poll:, overhead:, idle:, write_limit:, open:, forces:, retain:, " <>
         "retain_period:, start: and name:, got: " <>
-        inspect(opts)
+        Logex.Lexer.inspected(opts)
 
   defp known!([]), do: :ok
 
@@ -5166,7 +5170,7 @@ defmodule Logex.Runner do
         ArgumentError,
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, " <>
           "write_limit:, open:, forces:, retain:, retain_period:, start: and name:, got: " <>
-          inspect(key)
+          Logex.Lexer.inspected(key)
       )
 
   # A key given twice, the first repeated named: which of two values was meant is the
@@ -5177,7 +5181,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "Logex.Runner takes each option once, got #{inspect(key)} more than once"
+        "Logex.Runner takes each option once, got #{Logex.Lexer.inspected(key)} more than once"
       )
 
   defp needed!({:ok, value}, _key), do: value
@@ -5210,7 +5214,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's clock: is {module, clock}, a module that implements " <>
-          "Logex.Runner.Clock and the clock its callbacks take, got: #{inspect(other)}"
+          "Logex.Runner.Clock and the clock its callbacks take, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # c3-io-contract-9 (RV-4): a clock's time is a whole number of milliseconds, its first
@@ -5222,7 +5226,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{inspect(module)}` gave #{ms} from now_ms/1: a clock's time is " <>
+        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.shown_number(ms)} from now_ms/1: a clock's time is " <>
           "a whole number of milliseconds from -9223372036854775808 to 9223372036854775807"
       )
 
@@ -5230,7 +5234,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{inspect(module)}` gave #{inspect(other)} from now_ms/1: a " <>
+        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.inspected(other)} from now_ms/1: a " <>
           "clock's time is a whole number of milliseconds"
       )
 
@@ -5247,13 +5251,13 @@ defmodule Logex.Runner do
   defp implements!([], _module), do: :ok
 
   defp implements!(:no_module, module),
-    do: raise(ArgumentError, "the runner's clock `#{inspect(module)}` is no module")
+    do: raise(ArgumentError, "the runner's clock `#{Logex.Lexer.inspected(module)}` is no module")
 
   defp implements!(callbacks, module),
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{inspect(module)}` does not implement Logex.Runner.Clock: it " <>
+        "the runner's clock `#{Logex.Lexer.inspected(module)}` does not implement Logex.Runner.Clock: it " <>
           "has no " <> Enum.join(callbacks, ", ")
       )
 
@@ -5277,7 +5281,7 @@ defmodule Logex.Runner do
   defp no_steps(other),
     do:
       "the runner's steps: is a module with cycle_steps/3, cycle_step/2 and " <>
-        "cycle_outputs/1, standing in for Logex.Runtime's, got: #{inspect(other)}"
+        "cycle_outputs/1, standing in for Logex.Runtime's, got: #{Logex.Lexer.inspected(other)}"
 
   defp ms!(ms, _key) when ms in @interval, do: ms
 
@@ -5286,7 +5290,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's #{key}: is a whole number of milliseconds, 1 to 2147483647, got: " <>
-          inspect(other)
+          Logex.Lexer.inspected(other)
       )
 
   # Decision 398 (RV-11): a device's opening, its adapter's init/3 and the first read, at a
@@ -5329,7 +5333,7 @@ defmodule Logex.Runner do
     do:
       "the runner's open: is how long a device's opening may take, a whole number of " <>
         "milliseconds from 1 to 2147483647, or a map of device names to one, got: " <>
-        inspect(other)
+        Logex.Lexer.inspected(other)
 
   # The forces file (decision 127): a path, or none, a runner that takes no force.
   defp file!(nil), do: nil
@@ -5340,7 +5344,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's forces: is the path of the file its forces are kept in, a string, " <>
-          "got: #{inspect(other)}"
+          "got: #{Logex.Lexer.inspected(other)}"
       )
 
   # M6-5 (decisions 271, 275 and 285): the store, a path, or none, a runner whose
@@ -5352,7 +5356,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's retain: and forces: name one file, #{inspect(path)}: the store and the " <>
+        "the runner's retain: and forces: name one file, #{Logex.Lexer.inspected(path)}: the store and the " <>
           "forces file are two files"
       )
 
@@ -5368,7 +5372,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's retain: is the path of the file its retained values are kept in, a " <>
-          "string, got: #{inspect(other)}"
+          "string, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # Decision 356: the files a runner holds, each `{path, role, option, given}`, its store
@@ -5467,7 +5471,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's name: #{inspect(name)} names #{inspect(module)}, which is no " <>
+        "the runner's name: #{Logex.Lexer.inspected(name)} names #{Logex.Lexer.inspected(module)}, which is no " <>
           "registry: a via name's module exports register_name/2, unregister_name/1, " <>
           "whereis_name/1 and send/2"
       )
@@ -5476,59 +5480,61 @@ defmodule Logex.Runner do
   # names it here, as the host spelled it, and the holder's file it meets.
   defp held_told({_at, ours, option, given}, holder, theirs),
     do:
-      "the runner's #{option}: #{inspect(given)} #{meets(ours, given)}" <>
+      "the runner's #{option}: #{Logex.Lexer.inspected(given)} #{meets(ours, given)}" <>
         "#{theirs(theirs, holder)}: two runners on one file write each over the other's"
 
-  defp meets({:copy, copy}, _given), do: "is copied to #{inspect(copy)}, "
+  defp meets({:copy, copy}, _given), do: "is copied to #{Logex.Lexer.inspected(copy)}, "
 
   defp meets({:tmp, :dropped}, given),
-    do: "is copied through #{inspect(given <> ".dropped.tmp")}, "
+    do: "is copied through #{Logex.Lexer.inspected(given <> ".dropped.tmp")}, "
 
-  defp meets({:tmp, _role}, given), do: "is written through #{inspect(given <> ".tmp")}, "
+  defp meets({:tmp, _role}, given),
+    do: "is written through #{Logex.Lexer.inspected(given <> ".tmp")}, "
+
   defp meets(_role, _given), do: "names "
 
   defp theirs(role, holder), do: theirs(Paths.ended_runner(holder), role, holder)
 
   defp theirs(nil, {:tmp, role}, holder),
     do:
-      "the `.tmp` another runner of this VM, #{inspect(holder)}, writes its " <>
+      "the `.tmp` another runner of this VM, #{Logex.Lexer.inspected(holder)}, writes its " <>
         "#{file_of(role)} through, which it holds until it stops"
 
   defp theirs(nil, role, holder),
     do:
-      "the #{file_of(role)} of another runner of this VM, #{inspect(holder)}, which holds " <>
+      "the #{file_of(role)} of another runner of this VM, #{Logex.Lexer.inspected(holder)}, which holds " <>
         "it until it stops"
 
   # Decision 475 (RV-18): a file a runner that has ended still holds, a write of it cut at
   # its write limit not yet known to have ended, held for it by a process of logex's own.
   defp theirs(runner, {:tmp, role}, holder),
     do:
-      "the `.tmp` a runner of this VM that has stopped, #{inspect(runner)}, writes its " <>
+      "the `.tmp` a runner of this VM that has stopped, #{Logex.Lexer.inspected(runner)}, writes its " <>
         "#{file_of(role)} through, #{ended_hold(holder)}"
 
   defp theirs(runner, role, holder),
     do:
-      "the #{file_of(role)} of a runner of this VM that has stopped, #{inspect(runner)}, " <>
+      "the #{file_of(role)} of a runner of this VM that has stopped, #{Logex.Lexer.inspected(runner)}, " <>
         ended_hold(holder)
 
   defp ended_hold(holder),
     do:
-      "held by #{inspect(holder)} until a write of it that runner cut at its write limit " <>
+      "held by #{Logex.Lexer.inspected(holder)} until a write of it that runner cut at its write limit " <>
         "has ended, which may yet land"
 
   # RV-18's review, finding 1: a file left by a process killed with a write of it out,
   # which the VM's file server has not answered a look behind within the write limit.
   defp left_told({_at, ours, option, given}, gone, role, ms),
     do:
-      "the runner's #{option}: #{inspect(given)} #{meets(ours, given)}" <>
+      "the runner's #{option}: #{Logex.Lexer.inspected(given)} #{meets(ours, given)}" <>
         "#{left_by(role, gone)}, a process of this VM that ended without giving it up: a " <>
         "write of it may still wait in the VM's file server, which has not answered a look " <>
         "behind it within " <> limit_told(ms) <> ", and may yet land"
 
   defp left_by({:tmp, role}, gone),
-    do: "the `.tmp` #{inspect(gone)} wrote its #{file_of(role)} through"
+    do: "the `.tmp` #{Logex.Lexer.inspected(gone)} wrote its #{file_of(role)} through"
 
-  defp left_by(role, gone), do: "the #{file_of(role)} of #{inspect(gone)}"
+  defp left_by(role, gone), do: "the #{file_of(role)} of #{Logex.Lexer.inspected(gone)}"
 
   # RV-5 (b3-store-image-5): a store or forces file that is a symbolic link is the host's
   # mistake at start, told before either file is read: every write of either is a new file
@@ -5567,7 +5573,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's #{option}: #{inspect(given)} is a symbolic link: the #{file_of(option)} " <>
+        "the runner's #{option}: #{Logex.Lexer.inspected(given)} is a symbolic link: the #{file_of(option)} " <>
           "is written whole beside it and renamed over it, which would put a file in the " <>
           "link's place and leave the file it names as it was: name that file itself"
       )
@@ -5657,15 +5663,15 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's retain: #{inspect(path)} and forces: #{inspect(forces)} name one " <>
-          "file, #{inspect(expanded)}: the store and the forces file are two files"
+        "the runner's retain: #{Logex.Lexer.inspected(path)} and forces: #{Logex.Lexer.inspected(forces)} name one " <>
+          "file, #{Logex.Lexer.inspected(expanded)}: the store and the forces file are two files"
       )
 
   defp apart!(:store_through, path, forces),
     do:
       raise(
         ArgumentError,
-        "the runner's retain: #{inspect(path)} is the file its forces: #{inspect(forces)} " <>
+        "the runner's retain: #{Logex.Lexer.inspected(path)} is the file its forces: #{Logex.Lexer.inspected(forces)} " <>
           "is written through, each written whole to the `.tmp` beside it and renamed over " <>
           "it: the store and the forces file are two files, neither the other's `.tmp`"
       )
@@ -5674,7 +5680,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's forces: #{inspect(forces)} is a copy its retain: #{inspect(path)} " <>
+        "the runner's forces: #{Logex.Lexer.inspected(forces)} is a copy its retain: #{Logex.Lexer.inspected(path)} " <>
           "is copied to, `.dropped.<n>`, by a start that drops from it or a cold start " <>
           "over it where a fresh start would refuse it, or the `.tmp` the copies are " <>
           "written through: the store's copies and the forces file are apart"
@@ -5684,8 +5690,8 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's forces: #{inspect(forces)} is written through " <>
-          "#{inspect(forces <> ".tmp")}, the `.tmp` its retain: #{inspect(path)} is copied " <>
+        "the runner's forces: #{Logex.Lexer.inspected(forces)} is written through " <>
+          "#{Logex.Lexer.inspected(forces <> ".tmp")}, the `.tmp` its retain: #{Logex.Lexer.inspected(path)} is copied " <>
           "through by a start that drops from it or a cold start over it where a fresh " <>
           "start would refuse it: the store's copies and the forces file are apart"
       )
@@ -5694,7 +5700,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's forces: #{inspect(forces)} is the file its retain: #{inspect(path)} " <>
+        "the runner's forces: #{Logex.Lexer.inspected(forces)} is the file its retain: #{Logex.Lexer.inspected(path)} " <>
           "is written through, each written whole to the `.tmp` beside it and renamed over " <>
           "it: the store and the forces file are two files, neither the other's `.tmp`"
       )
@@ -5709,7 +5715,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{inspect(module)}` has no wall_ms/1, which a runner given " <>
+        "the runner's clock `#{Logex.Lexer.inspected(module)}` has no wall_ms/1, which a runner given " <>
           "retain: writes its store's time by"
       )
 
@@ -5722,7 +5728,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner keeps no store, so start: #{inspect(mode)} has none to start from: start " <>
+        "the runner keeps no store, so start: #{Logex.Lexer.inspected(mode)} has none to start from: start " <>
           "it with retain: a path"
       )
 
@@ -5731,7 +5737,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's start: is :warm, a fresh start from its store, or :cold, from the " <>
-          "configuration's initial values, got: #{inspect(other)}"
+          "configuration's initial values, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # M6-6 (decision 275): how often a runner given a store writes it, 1000 ms unless set or
@@ -5755,7 +5761,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's retain_period: is how often it writes its store, a whole number of " <>
-          "ms from 100 to 3600000, got: #{inspect(other)}"
+          "ms from 100 to 3600000, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # The take-out a period makes: through the hidden seam's `retained/1` where its module
@@ -5931,7 +5937,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{inspect(module)}` gave #{inspect(answer)} from wall_ms/1: " <>
+        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.inspected(answer)} from wall_ms/1: " <>
           "a store's header is written at the wall clock's time, a whole number of " <>
           "milliseconds since the Unix epoch from year 0 to year 9999"
       )
@@ -5943,7 +5949,7 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "the runner's overhead: is the share of the time kept for its own work, a whole " <>
-          "number of percent from 10 to 90, got: #{inspect(other)}"
+          "number of percent from 10 to 90, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # A runner is a process this module started, by its pid or the name it was started
@@ -5964,7 +5970,7 @@ defmodule Logex.Runner do
   defp named!(pid, _name) when is_pid(pid), do: runner!(pid)
 
   defp named!(nil, name),
-    do: raise(ArgumentError, "no runner is running under the name #{inspect(name)}")
+    do: raise(ArgumentError, "no runner is running under the name #{Logex.Lexer.inspected(name)}")
 
   defp named!(_other, name), do: raise(ArgumentError, expected(name))
 
@@ -5977,5 +5983,5 @@ defmodule Logex.Runner do
   defp ours!(_other, runner), do: raise(ArgumentError, expected(runner) <> ", another process")
 
   defp expected(other),
-    do: "expected a runner from Logex.Runner.start_link/1, got: #{inspect(other)}"
+    do: "expected a runner from Logex.Runner.start_link/1, got: #{Logex.Lexer.inspected(other)}"
 end

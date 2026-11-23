@@ -405,7 +405,7 @@ defmodule Logex.Runner.Device do
 
   defp misshaped(callback, other, module),
     do:
-      "#{inspect(module)}.#{callback}/#{arity(callback)} gave #{inspect(other)}, which is " <>
+      "#{Logex.Lexer.inspected(module)}.#{callback}/#{arity(callback)} gave #{Logex.Lexer.inspected(other)}, which is " <>
         "none of Logex.IO's results"
 
   defp arity(:init), do: 3

@@ -199,7 +199,7 @@ defmodule Logex.Configuration.Text do
     do:
       raise(
         ArgumentError,
-        "Logex.Configuration.Text.read/1 takes source text as a binary, got: #{inspect(source)}"
+        "Logex.Configuration.Text.read/1 takes source text as a binary, got: #{Logex.Lexer.inspected(source)}"
       )
 
   defp lexed({:ok, tokens, _end_line}), do: lines(split(tokens, [], []), [], [])
@@ -1172,7 +1172,7 @@ defmodule Logex.Configuration.Text do
       raise(
         ArgumentError,
         "Logex.Configuration.Text.print/1 takes a %Logex.Configuration{} or a list of " <>
-          "entries, got: #{inspect(other)}"
+          "entries, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # One part of a configuration, a proper list of what its lines can say, in rising lines
@@ -1185,7 +1185,7 @@ defmodule Logex.Configuration.Text do
     do:
       raise(
         ArgumentError,
-        "a configuration's #{part} must be a list of its elements, got: #{inspect(entries)}"
+        "a configuration's #{part} must be a list of its elements, got: #{Logex.Lexer.inspected(entries)}"
       )
 
   defp proper?([]), do: true
@@ -1304,7 +1304,7 @@ defmodule Logex.Configuration.Text do
   defp proper!([_entry | rest], entries), do: proper!(rest, entries)
 
   defp proper!(_tail, entries),
-    do: raise(ArgumentError, "entries must be a list, got: #{inspect(entries)}")
+    do: raise(ArgumentError, "entries must be a list, got: #{Logex.Lexer.inspected(entries)}")
 
   @keys Map.new(
           [Logex.Configuration.Task, Global, Instance, Connection],
@@ -1396,7 +1396,8 @@ defmodule Logex.Configuration.Text do
     do:
       unsaid!(
         "a global's type is " <>
-          Declarations.either(&inspect/1) <> ", or an array of one, as in `{:array, :int, [8]}`",
+          Declarations.either(&Logex.Lexer.inspected/1) <>
+          ", or an array of one, as in `{:array, :int, [8]}`",
         entry
       )
 
@@ -1522,5 +1523,5 @@ defmodule Logex.Configuration.Text do
   # whose one clause refuses raises itself (kind!/1), where Dialyzer read one that only
   # called another to raise as a function with no local return.
   defp unsaid(rule, entry),
-    do: "not an entry a configuration file can say: #{rule}, got: #{inspect(entry)}"
+    do: "not an entry a configuration file can say: #{rule}, got: #{Logex.Lexer.inspected(entry)}"
 end

@@ -273,7 +273,7 @@ defmodule Logex.Declarations do
       raise(
         ArgumentError,
         "a_or_an/2 takes a word and the word as shown, each a binary, got: " <>
-          "#{inspect(word)} and #{inspect(shown)}"
+          "#{Logex.Lexer.inspected(word)} and #{Logex.Lexer.inspected(shown)}"
       )
 
   @doc """
@@ -768,7 +768,7 @@ defmodule Logex.Declarations do
 
   @doc """
   The elementary types each shown by `shown`, joined by commas and an `or` before the last
-  (M5-1): `` :bool, :sint, … or :ulint `` with `&inspect/1`.
+  (M5-1): `` :bool, :sint, … or :ulint `` with `&Logex.Lexer.inspected/1`.
   """
   def either(shown), do: either_of(Enum.map(@type_atoms, shown))
 
@@ -839,7 +839,11 @@ defmodule Logex.Declarations do
   end
 
   defp declared!(declared),
-    do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
+    do:
+      raise(
+        ArgumentError,
+        "declared must be a list of %Logex.Tag{}, got: #{Logex.Lexer.inspected(declared)}"
+      )
 
   @doc """
   A tag declared from Elixir, checked by `check/1`: the tag itself, or `ArgumentError`
@@ -850,10 +854,14 @@ defmodule Logex.Declarations do
   def validate!(%Tag{line: nil} = tag), do: validated(check(tag), tag)
 
   def validate!(%Tag{line: line}),
-    do: raise(ArgumentError, "a tag declared from Elixir has no line, got: #{inspect(line)}")
+    do:
+      raise(
+        ArgumentError,
+        "a tag declared from Elixir has no line, got: #{Logex.Lexer.inspected(line)}"
+      )
 
   def validate!(other),
-    do: raise(ArgumentError, "expected a %Logex.Tag{}, got: #{inspect(other)}")
+    do: raise(ArgumentError, "expected a %Logex.Tag{}, got: #{Logex.Lexer.inspected(other)}")
 
   defp validated([], tag), do: tag
   defp validated([message | _], _tag), do: raise(ArgumentError, message)
@@ -1637,7 +1645,7 @@ defmodule Logex.Declarations do
     do: [
       "#{label(name)} is an array whose elements are of an elementary type, as in " <>
         "{:array, :int, [8]}: logex has " <>
-        listed(Enum.map(@type_atoms, &inspect/1)) <> ", found #{shown(type)}"
+        listed(Enum.map(@type_atoms, &Logex.Lexer.inspected/1)) <> ", found #{shown(type)}"
     ]
 
   # A proper list of integers, one or more: Enum.all?/2 raises on an improper one.
@@ -1720,7 +1728,9 @@ defmodule Logex.Declarations do
   defp instances_of(1), do: "1 instance"
   defp instances_of(count), do: "#{Lexer.shown_number(count)} instances"
 
-  defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
+  defp as_value(word) when is_map_key(@types, word),
+    do: Logex.Lexer.inspected(Map.fetch!(@types, word))
+
   defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"
 
   defp spelled_as(type) when is_atom(type), do: spelled(Atom.to_string(type))
