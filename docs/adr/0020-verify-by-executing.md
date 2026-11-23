@@ -21,7 +21,7 @@ This page uses each of these words with 1 meaning only:
 | Reach | The cases that a walk meets in a run. A walk asserts that it meets each case |
 | Atom of the reach | 1 named case in the reach of a walk |
 | Family of seeds | Seeds that differ in 1 number only, as `{n, 77, 7}` for `n` from 1 to 60 |
-| Real-clock test | A test of the [runner](../../guides/reference/glossary.md#runner) on the clock of the machine, not on the manual clock |
+| Real-clock test | A test of the [runner](../../guides/reference/glossary.md#runner) on the clock of the computer, not on the manual clock |
 | Load run | A run of tests while busy loops hold each core of the machine |
 
 The rules are these:
@@ -325,7 +325,7 @@ Add a test to it when you change what logex does.
 ### A real-clock test runs under load
 
 A rule of time has a test on `Logex.Runner.Clock.Manual`, a clock that the test moves.
-Tests on the clock of the machine are few. Each new real-clock or runner test runs 50
+Tests on the clock of the computer are few. Each new real-clock or runner test runs 50
 times under load before it goes into `main`, with `scripts/load.sh -n 50` on its file.
 Each of the 50 runs must pass.
 

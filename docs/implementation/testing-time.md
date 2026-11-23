@@ -21,7 +21,7 @@ runner 1 of 2 clocks:
 | Clock | Time | A run | Use |
 |---|---|---|---|
 | `Logex.Runner.Clock.Manual` | The test moves it with `advance/2` | Occurs again exactly | Each timing rule of the runner |
-| `Logex.Runner.Clock.Monotonic` | The clock of the machine | Different on each run | A few short tests that the runner runs, stops and trips |
+| `Logex.Runner.Clock.Monotonic` | The clock of the computer | Different on each run | A few short tests that the runner runs, stops and trips |
 
 A [simulated device](../../guides/reference/glossary.md#simulated-device),
 `Logex.IO.Sim`, takes the manual clock too. With the 2, a run of the runner gives the
@@ -122,7 +122,7 @@ mutant that fails only a real-clock test counts after a second run alone.
   round can be late by what the machine does. A real-clock test with a tight bound fails
   on a CI runner that shares its cores.
 - A real-clock test shows that the runner runs, stops and trips with the clock of the
-  machine. The manual clock does not use that clock.
+  computer. The manual clock does not use that clock.
 
 ## How to change it
 

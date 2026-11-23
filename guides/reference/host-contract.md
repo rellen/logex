@@ -124,7 +124,7 @@ otherwise.
 - `Logex.Runner.Clock`: the behaviour of a clock of the runner. A wrong answer of a
   clock is not an `ArgumentError`: it trips the runner.
   [A bad time from the clock](runner.md#a-bad-time-from-the-clock) gives the rules.
-- `Logex.Runner.Clock.Monotonic`: the clock of the machine. The runner uses it if the
+- `Logex.Runner.Clock.Monotonic`: the clock of the computer. The runner uses it if the
   host gives no `clock:`. The host gives it no argument.
 - `Logex.Runner.Clock.Manual`: a clock that the host moves on by a call. Each of its
   functions checks its arguments, except `child_spec/1`. `start_link/1` checks the

@@ -374,7 +374,7 @@ output, and thus `case_full` goes from 1 to 0. The function also closes the devi
 - [Change a running program](change-a-running-program.md): the next tutorial.
 - [Write a configuration file](../howto/write-a-configuration-file.md) and
   [Run a plant on the clock](../howto/run-on-the-clock.md): how to do each for your
-  plant, with the clock of the machine.
+  plant, with the clock of the computer.
 - [Use an event task](../howto/use-an-event-task.md): a task that is due when a signal
   rises.
 - [Configuration file](../reference/configuration-file.md), [Runner](../reference/runner.md)

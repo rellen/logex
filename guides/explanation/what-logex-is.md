@@ -159,7 +159,7 @@ the file names.
 |---|---|---|
 | 1: an instance, with `Logex.Runtime` | The program type, the state, the inputs and the time, for each scan. | It runs the rungs of 1 program 1 time. |
 | 2: a resource, with `Logex.Runtime` | A configuration at the start. Then the values of the input [points](../reference/glossary.md#point) and the time, for each [cycle](../reference/glossary.md#cycle). | It runs each task that is due, with the instances of that task. |
-| 3: a [runner](../reference/glossary.md#runner), with `Logex.Runner` | A configuration and an adapter for each device. If the host gives no [clock](../reference/glossary.md#clock), the runner reads the clock of the machine. | It runs in [rounds](../reference/glossary.md#round). In each round, it reads the devices, runs 1 cycle and writes the outputs to the devices. |
+| 3: a [runner](../reference/glossary.md#runner), with `Logex.Runner` | A configuration and an adapter for each device. If the host gives no [clock](../reference/glossary.md#clock), the runner reads the clock of the computer. | It runs in [rounds](../reference/glossary.md#round). In each round, it reads the devices, runs 1 cycle and writes the outputs to the devices. |
 
 The [Host contract](../reference/host-contract.md) gives each function of these modules.
 

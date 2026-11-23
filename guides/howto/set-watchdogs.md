@@ -150,7 +150,7 @@ t=10 ms: c1 in fast, b1 in main
 ```
 
 6. Make the file `on_the_real_clock.exs` in the same directory, with this text. The
-   script starts the runner on the clock of the machine. It runs the plant for about 1 s
+   script starts the runner on the clock of the computer. It runs the plant for about 1 s
    on a [simulated device](../reference/glossary.md#simulated-device). Then it prints the
    figures of `Logex.Runner.status/1`.
 

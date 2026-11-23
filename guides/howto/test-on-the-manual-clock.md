@@ -25,7 +25,7 @@ ExUnit test that moves the clock by 5 s does not wait 5 s. The runner does the s
 > takes no time. The key `runs` of `Logex.Runner.status/1` gives
 > `%{"fast" => {0, 50}, "main" => {0, 200}}`, and a slow program trips no
 > [watchdog](../reference/glossary.md#watchdog). [Set watchdogs](set-watchdogs.md) shows
-> how to measure on the clock of the machine.
+> how to measure on the clock of the computer.
 
 ## Before you start
 
@@ -99,7 +99,7 @@ end
    |---|---|
    | `reports: true` | The simulated device tells the runner about each change of an input immediately. |
    | `clock: clock` of the simulated device | A failure `{:delay, ms}` moves the manual clock. Without it, the delay is a sleep in real time. |
-   | `clock: {Manual, clock}` of the runner | The runner reads the manual clock. Without it, the runner reads the clock of the machine. |
+   | `clock: {Manual, clock}` of the runner | The runner reads the manual clock. Without it, the runner reads the clock of the computer. |
 
 2. Put this ExUnit test in the describe block, before its `end`. It presses the start
    button and moves the clock by 10 ms.
@@ -453,7 +453,7 @@ test with `@tag :tmp_dir` and put the store in the directory that ExUnit gives i
 - [I/O adapters](../reference/io-adapters.md): the simulated device, each failure of
   `Logex.IO.Sim.fail/3` and the trip that it causes.
 - [Run a plant on the clock](run-on-the-clock.md): the same plant on the clock of the
-  machine.
+  computer.
 - [Set watchdogs](set-watchdogs.md): a long run, which the manual clock cannot replace.
 - [Restart after a trip](restart-after-a-trip.md): what to do after a trip.
 - [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): why the host

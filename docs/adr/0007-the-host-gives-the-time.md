@@ -38,7 +38,7 @@ since the last scan of its [instruction](../../guides/reference/glossary.md#inst
 "ACC = ACC + (current_time - last_time_scanned)".
 
 logex is a library. An Elixir [host](../../guides/reference/glossary.md#host) calls it,
-and an ExUnit test calls it. If the core reads the clock of the machine, 3 problems
+and an ExUnit test calls it. If the core reads the clock of the computer, 3 problems
 follow:
 
 - 2 runs of the same inputs give different [outputs](../../guides/reference/glossary.md#output). The time between 2 calls changes
@@ -639,7 +639,7 @@ What this means for a change:
 
 | Alternative | Why logex does not do it |
 |---|---|
-| The core reads the clock of the machine | A run does not repeat, and an ExUnit test waits in real time (Context) |
+| The core reads the clock of the computer | A run does not repeat, and an ExUnit test waits in real time (Context) |
 | 1 `dt` for each instance, the time since its last scan | A timer that a jump skips or a false `cal` stops loses the time it did not run (decision 8, result 3) |
 | A timer stops while a jump skips it, and carries on from where it was | The conventional set catches up a jumped timer. A block that does not run catches up too (decision 82) |
 | A timer that an edit gives back catches up the time of the edit | A timer counts time only while a program that runs the timer holds the instance. The timer comes back with exactly the time that it had (decisions 56 and 339) |

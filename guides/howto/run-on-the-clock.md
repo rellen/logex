@@ -113,7 +113,7 @@ alias Logex.IO.Sim
 > also, and each device writes 0 to its output points.
 
 4. Add these lines, which start the runner with `configuration:` and `io:`. Do not give
-   `clock:`. Then the runner reads the clock of the machine,
+   `clock:`. Then the runner reads the clock of the computer,
    `Logex.Runner.Clock.Monotonic`. `Logex.Runner.start_link/1` opens each device and
    reads it 1 time. Then it runs the first round and returns `{:ok, pid}`.
 
@@ -257,7 +257,7 @@ closed: true
 
 ## The result
 
-The plant ran on the clock of the machine, and `Logex.Runner.stop/1` stopped it. The
+The plant ran on the clock of the computer, and `Logex.Runner.stop/1` stopped it. The
 keyword list is the same at each run. The line `this run's figures` is different at each
 run and on each machine.
 
@@ -315,7 +315,7 @@ has these words:
 | ``the device `drive` is bound, but no point is at it`` | The map of `io:` has a device that the configuration does not name. Remove it, or correct its name. |
 | `which does not implement Logex.IO` | The value of the device is not an adapter. Give a module that implements `Logex.IO`. |
 | ``the device `panel`'s adapter options:`` | The adapter refused its options. The rest of the message is from the adapter, for example `Logex.IO.Sim is bound with its sim`. Give the options that the adapter takes. |
-| `the runner's clock: is {module, clock}` | `clock:` has a wrong value. To use the clock of the machine, remove `clock:`. |
+| `the runner's clock: is {module, clock}` | `clock:` has a wrong value. To use the clock of the computer, remove `clock:`. |
 | `the runner's poll: is`, `the runner's open:` and so on | An option has a wrong value. The message gives the values that the option takes. |
 
 With `retain:`, a start that fails can write the [store](../reference/glossary.md#store).

@@ -11,6 +11,14 @@ no conventional word, these 2 documents have none.
 
 ## Programs and rungs
 
+### ladder logic
+
+A language that draws a program as rungs between 2 rails, as the wiring diagram of
+relays. A rung passes power from the left rail through contacts to coils and other
+instructions. logex reads ladder logic as text.
+
+IEC 61131-3: the Ladder Diagram language, LD.
+
 ### dialect
 
 The text form that logex reads for a ladder program. It is the syntax of logex. It is not
@@ -39,7 +47,8 @@ rung that the scan runs and does its operation. logex makes no code from a progr
 ### instance
 
 One copy of a program type or of a function block type that has a state. Each instance
-has a separate value for each tag.
+has a separate value for each tag, except a `var_external` tag. Such a tag is a global,
+and each instance that declares it shares its value.
 
 IEC 61131-3: an instance.
 
@@ -145,6 +154,11 @@ IEC 61131-3: a network label. Conventional set: a label.
 
 A move of the scan from a `jmp` instruction to a later rung that has the label. The scan
 does not run the rungs between them.
+
+### target rung
+
+The rung that a `jmp` jumps to: the later rung of the same routine that starts with
+`lbl` and the label of the `jmp`.
 
 ### seal-in
 
@@ -285,7 +299,8 @@ calls a reserved word a keyword.
 A routine with a state, written in a separate file. A program declares instances of it
 and runs each instance with `cal`.
 
-IEC 61131-3: a function block. Conventional set: a user-defined instruction.
+IEC 61131-3: a function block, the program organisation unit that has inputs, outputs and
+a separate state. The timers and the counters are function blocks of the standard. Conventional set: a user-defined instruction.
 
 ### function block type
 
@@ -329,7 +344,8 @@ instruction on the rung gives it.
 ### rising edge
 
 A change of the power flow to an instruction from false to true, between 2 runs of the
-instruction. For a bool: a change from 0 to 1.
+instruction. For a bool, for example the trigger of an event task: a change from 0 to 1
+between 2 reads of it.
 
 ### falling edge
 
@@ -351,8 +367,8 @@ IEC 61131-3: an evaluation of the networks. Conventional set: a scan.
 
 ### first scan
 
-The first scan of an instance after it starts or restarts. A one-shot gives no pulse on
-the first scan.
+The first scan of the instance of a program after it starts or restarts. A one-shot
+gives no pulse on the first scan.
 
 ### state
 
@@ -364,10 +380,16 @@ next scan.
 A tag of the section `var_input`. The host or a configuration gives its value. An
 instruction cannot write to it.
 
+IEC 61131-3: an input variable, also an input of a function block, for example the
+input `CU` of a CTU.
+
 ### output
 
 A tag of the section `var_output`. A scan returns its value to the host or to a
 configuration.
+
+IEC 61131-3: an output variable, also an output of a function block, for example the
+output `Q` of a TON.
 
 ### restart
 
@@ -508,9 +530,10 @@ cycle came late. logex counts each overlap. `Logex.Runtime.overlaps/1` gives the
 ### global
 
 A value of a configuration that programs share by name. A program reads or writes it
-through a `var_external` declaration.
+only through a `var_external` declaration.
 
-IEC 61131-3: a global variable. Conventional set: a controller-scope tag.
+IEC 61131-3: a global variable. Conventional set: a controller-scope tag, which a
+program can use with no declaration.
 
 ### connection
 
@@ -568,8 +591,8 @@ The process that runs a resource on a clock and through devices: `Logex.Runner`.
 
 ### round
 
-One step of the runner: it takes the inputs from the devices, runs a cycle and writes
-the outputs to the devices.
+1 pass of the runner over the plant. The runner takes the inputs from the devices and
+runs a cycle. Then it writes the outputs to each device where an output changed.
 
 ### poll period
 
@@ -602,10 +625,17 @@ A process that called `Logex.Runner.subscribe/1` or `Logex.Runner.subscribe/2`. 
 runner sends it the events of the kinds that it gave, or of the default kinds of
 `subscribe/1`.
 
+### fallback
+
+What a device does when it hears nothing from the runner, for example when the runner
+stops or its process hangs. The hardware of the device sets it, not logex.
+
 ### clock
 
-The source of the time for the runner. An ExUnit test moves the manual clock with
-`advance/2`. A slow simulated device moves it with `pass/2` during a round.
+The source of the time for the runner. The clock of the computer,
+`Logex.Runner.Clock.Monotonic`, is the default. An ExUnit test gives the runner the
+manual clock, `Logex.Runner.Clock.Manual`, and moves it with `advance/2`. A slow
+simulated device moves it with `pass/2` during a round.
 
 ### ExUnit test
 
@@ -627,11 +657,13 @@ host. The option `idle:` of `Logex.Runner` sets it, 500 ms by default.
 ### trip
 
 A stop of the plant by the runner, for example after a watchdog or a major fault. The
-runner writes 0 to each output 1 time. It runs no round until a restart.
+runner writes 0 to each output point of each device. It writes the 0 again at each poll
+until the device takes it. The tags keep the values of the last round. The runner runs
+no round until a restart.
 
 ### force
 
-To hold an input at a value that an operator gives, in place of the value from the
+To hold an input point at a value that an operator gives, in place of the value from the
 device. The noun is "a force".
 
 ### forces file
@@ -688,6 +720,16 @@ The step of an online edit that makes the new program the only program.
 ### cancel
 
 The step of an online edit that removes the new program and keeps the old program.
+
+### report
+
+The list of entries that a step of an online edit returns. Each entry is a tuple whose
+first atom is its kind, for example `{:preset, "t1", {100, 200}}`.
+
+### entry
+
+1 item of a report or of a forecast. Its kind says what the step did or will do to 1
+tag, member or instance.
 
 ### forecast
 

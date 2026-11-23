@@ -297,4 +297,4 @@ counter does not use the time. This timing diagram shows the same 12 scans.
 - [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): why the host
   gives the time.
 - [Run a plant on the clock](../howto/run-on-the-clock.md): the
-  [runner](../reference/glossary.md#runner), which reads the clock of the machine.
+  [runner](../reference/glossary.md#runner), which reads the clock of the computer.
