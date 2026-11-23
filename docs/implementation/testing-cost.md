@@ -123,8 +123,9 @@ diff shows the saving (decision 458).
 
 A bound against a twin cannot see a cost that both twins pay. If each [instruction](../../guides/reference/glossary.md#instruction) costs
 1 call more, each such bound stays green. `ceiling_test.exs` holds each stage under
-2 times a figure recorded with the test (decision 459). It measures the motor and the
-plant of `README.md`, each stage whole and for 1 rung (decision 481):
+2 times a figure recorded with the test (decision 459). It measures the motor of the
+examples, `examples/motor.ld`, and their plant, `examples/plant.logex`, each stage whole
+and for 1 rung (decision 481):
 
 | Stage | Figure | Figure for 1 rung | A run on 2026-11-23 |
 |---|---|---|---|

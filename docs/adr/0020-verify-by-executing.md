@@ -177,11 +177,13 @@ session. Decision 359 made these checks part of the repository:
 - `scripts/load.sh`, the load runs
 
 Each example of each page runs in each run of the suite (decision 362). This includes
-the example of README on the real clock. That example prints 1 line of times, which
-change from run to run. The suite compares only the first words of that line
-(decision 364).
+the example on the real clock, `on_the_real_clock.exs` of
+[Run a plant on the clock](../../guides/howto/run-on-the-clock.md). That example prints
+1 line of times, which change from run to run. The suite compares only the first words
+of that line (decision 364).
 
-A page also shows each file that its example reads. README shows the
+A page also shows each file that its example reads.
+[Retained values](../../guides/reference/retained-values-and-store.md) shows the
 configuration `wired.logex` in a separate block. Thus the
 [warning](../../guides/reference/glossary.md#warning) that cites line 7 of that file
 cites a line that the reader can see (decision 363).

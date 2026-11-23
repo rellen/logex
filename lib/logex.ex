@@ -65,7 +65,7 @@ defmodule Logex do
   wait: 20,000 timers compiled in 3.2 s beside eight busy loops on four cores, 2.7 s
   without the charge, and 1.7 s either way on an idle machine (RV-20's review).
 
-  Outside its own process a compile costs what it did: README's motor 8,712 reductions,
+  Outside its own process a compile costs what it did: the examples' motor 8,712 reductions,
   63 more than when the caller compiled itself, the handing over.
   """
 

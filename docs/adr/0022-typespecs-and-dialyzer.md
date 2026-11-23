@@ -68,7 +68,7 @@ These problems came before the decision:
    takes only values that logex makes. For example, `Logex.Program.initial_env(:x)` and
    `Logex.Walk.writes(nil)` raised `FunctionClauseError`. The rule of logex is different.
    A wrong argument of the host gets an `ArgumentError`, and a test compares its message.
-2. **The examples call more modules** (decision 523). The examples of README call
+2. **The examples call more modules** (decision 523). The examples of the pages call
    `Logex.Diagnostic.format/1`, `Logex.IO.Sim`, the clocks of the runner, the parts of a
    configuration and `Logex.FbType.ctu/0`. Decision 514 did not say if these modules are
    in the contract.
@@ -156,7 +156,7 @@ module outside the contract does not hold that sentence, or if a module inside i
 It also holds the list of the 15 modules outside. Thus a new documented module fails the
 test until a contributor puts it in a group.
 
-The examples of README call `Logex.Diagnostic`, `Logex.FbType` and `Logex.Scan`, but
+The examples of the pages call `Logex.Diagnostic`, `Logex.FbType` and `Logex.Scan`, but
 they stay outside the contract (decision 523). Thus `Logex.Diagnostic.format/1` with a value that is not a
 [diagnostic](../../guides/reference/glossary.md#diagnostic) raises
 `FunctionClauseError`. A host gives these modules only what logex made.

@@ -1740,7 +1740,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 | Mitsubishi GX Works | **SFR**; SHR(_E) | Carried from the table above. |
 
 **Chosen:** `shr`
-**Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and README say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
+**Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and the reference of the bitwise instructions say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*

@@ -135,8 +135,9 @@ follow its principle for words: 1 word for 1 thing, and 1 meaning for 1 word.
 
 The pages define the behaviour of the engine. A wrong sentence is a defect.
 
-- Compare each claim with the code in `lib/` and with a test. The README has old
-  sentences. If the README and the code are different, the code is correct.
+- Compare each claim with the code in `lib/` and with a test. The legacy documents, the
+  kind `:legacy` of `docs/pages.exs`, have old sentences. If one of them and the code are
+  different, the code is correct.
 - Run the claim if you can. A small script settles a claim faster than a long read.
 - Quote a message exactly, in a code block.
 - Do not invent a feature, an option, a default or a limit.

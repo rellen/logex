@@ -297,9 +297,9 @@ Its comment gives this reason (decision 463).
 
 A bound does not see a cost that both twins pay. If each instruction costs 1 call more,
 each bound stays green, even for a large slowdown. Decision 459 adds 1 ceiling for each
-stage, in `ceiling_test.exs`. Each ceiling holds a stage of the motor and of the
-[plant](../../guides/reference/glossary.md#plant) of `README.md` under 2 times a figure
-recorded with the test.
+stage, in `ceiling_test.exs`. Each ceiling holds a stage under 2 times a figure recorded
+with the test. The stages run on the motor of the examples, `examples/motor.ld`, and on
+their [plant](../../guides/reference/glossary.md#plant), `examples/plant.logex`.
 
 Most of the cost of a whole stage is the fixed work of each call and each tag. The rungs
 are a small part. Thus each stage also has a ceiling for 1 rung (decision 481).

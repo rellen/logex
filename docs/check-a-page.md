@@ -173,8 +173,8 @@ them.
 For each page, give the reviewer this list:
 
 - the file
-- each part of the README that the page replaces
-- each claim of the README that is wrong or old
+- each part of another page or document that the page replaces
+- each claim of another page or document that is wrong or old
 - each claim that you did not check against the code
 - each new word of the glossary
 - each picture that the page needs and that the scripts cannot make
