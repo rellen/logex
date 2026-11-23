@@ -52,7 +52,8 @@ second and third steps and DOC-2.)*
 *(Since RV-30, 2026-11-16: README's paragraph says RV-30 has landed, what it built named
 as it was while it waited.)* *(Since the answers to RV-30's questions, 2026-11-16: it names
 decisions 575–583 and what waits with RV-31.)* *(Since RV-31, 2026-11-23: it says RV-31
-has landed, what it built named as it was while it waited.)*
+has landed, what it built named as it was while it waited.)* *(Since the answers to RV-31's questions,
+2026-11-23: it names decisions 584–588 and what waits with RV-32.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -23951,6 +23952,26 @@ is unchanged: DOC-1's close and its third step, RV-23, RV-25 alone, and DOC-2 la
        logex's own rule (decision 576). In Logix an I/O tag is its module's, named by
        the module's configuration, so a misspelled address names no tag and an alias to
        it is refused when the routine is verified (unverified against a controller).
+
+**RV-31's questions answered, 2026-11-23** (decisions 584–588). RV-31 landed on `main` at
+`cd9601a`. The maintainer took every refusal of the host contract quoting a value through
+the one cut (586) and `scripts_test.exs`'s test of the PLT's cache named for what it
+checks (587): RV-32 builds the two. Taken as built: a number quoted whole up to 10,000
+characters, as a compile quotes a literal (584); a long value that is no number shown as
+`inspect/1` shows it (585); and a misspelled location read as the point it names, one
+refusal telling both mistakes (588). The marks they settle are RV-23's, with every
+other. RV-32 runs beside DOC-1's close; the order after them is unchanged: DOC-1's third
+step, RV-23, RV-25 alone, and DOC-2 last.
+
+- **RV-32 — the answers to RV-31's questions** (decisions 586 and 587). Every refusal of
+  the host contract that quotes a value the host gave quotes it through the one cut that
+  decisions 583 to 585 settle: `new!/1`'s own refusal of what is no keyword list and its
+  line of an element brought with a line, `compile/3`'s and `compile_file/1`'s of an
+  argument that is no text, `initial/1` and `watchdog/1`, and any other refusal a search
+  of `lib/` finds quoting a host's value whole, each pin of a value quoted whole changed
+  so and only so, and a growth test that a refusal of a huge value costs no more than
+  one of a small one by more than the cut's own bound (586). `scripts_test.exs`'s test of
+  the PLT's cache named for what it checks, its body unchanged (587).
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

@@ -16190,6 +16190,56 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      list is shown as `inspect/1` shows it. Provisional: `PLAN.md`'s "RV-31 as built",
      questions 1 to 3.)*
 
+584. **How long a number a host's refusal quotes whole (RV-31),** RV-31's question 1: a
+     test harness declares a totaliser, `Global.new!("total_boxes", :dint, initial: 10 **
+     9_000)`, and is told of a 9,001-digit number, a line of 9 KB.
+
+     **Taken: as built, up to 10,000 characters (a)** (the maintainer, 2026-11-23): a
+     host's refusal quotes a number whole up to 10,000 characters and cuts a longer one,
+     as a compile quotes a literal, one limit for both. Not taken: cut at 60 characters,
+     as a store's refusal cuts a text it quotes.
+
+585. **A long value that is no number in a host's refusal (RV-31),** RV-31's question 2: a
+     lamp panel's global is given a 5,000-character text, `Global.new!("lamp", :bool,
+     initial: String.duplicate("a", 5_000))`.
+
+     **Taken: as built, as `inspect/1` shows it (a)** (the maintainer, 2026-11-23): a text
+     to 4,096 bytes and a list to `inspect/1`'s limit, each long number in it cut; a name
+     or a location that is text quoted whole, as `check/1` has quoted one. Not taken: a
+     text or a list cut at 60 bytes; shown whole. Elixir's own messages show a value
+     through `inspect/1` and its limits.
+
+586. **Which refusals of the host contract cut a long number (RV-31),** RV-31's question
+     3: `Logex.Configuration.new!(10 ** 100_000)` quotes a hundred thousand digits, and a
+     global brought with `line: 10 ** 1_000_000` gives `new!/1` a line of a megabyte that
+     takes 9 s to build.
+
+     **Taken: every refusal of the host contract (b)** (the maintainer, 2026-11-23): each
+     refusal that quotes a value the host gave quotes it through the one cut of decisions
+     583 to 585, so that no refusal takes seconds to build or runs to megabytes. Not taken:
+     as built, the three refusals decision 583 names alone. Elixir cuts through
+     `inspect/1` wherever it shows a value; Logix has no host API to compare. RV-32 builds
+     it.
+
+587. **A test's name made true (RV-31),** RV-31's question 4: `scripts_test.exs`'s test of
+     the PLT's cache is named for what the workflow's comment said before decision 580.
+
+     **Taken: the name made true (b)** (the maintainer, 2026-11-23): the test's name says
+     what it checks, what it checks unchanged. Not taken: as built, the name left because
+     no decision named it. RV-32 builds it.
+
+588. **A located global whose location is misspelled (RV-31),** RV-31's question 5: a box
+     counter's photo-eye, `Global.new!("eye_1", :bool, initial: 1, at: "panel.I.0")`, its
+     `I` capital.
+
+     **Taken: as built since RV-31's review, the location the point it names (b)** (the
+     maintainer, 2026-11-23): one refusal tells both mistakes, that the point takes no
+     initial value and that it is written `panel.i.0`, in `new!/3`, in `check/1` and from
+     a configuration file's line. A location that names no point, `panel.x.0`, is judged
+     as before. Not taken: two refusals in turn; a location that is none read as located
+     for the value. IEC writes a location as one token, `%IX0.0`, with no second spelling;
+     in Logix an I/O tag is its module's, and a misspelled address names no tag.
+
 ---
 
 ## 8. Sources, and what is unverified
