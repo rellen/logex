@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="569" height="264" viewBox="0 0 569 264" role="img" aria-labelledby="title description">
+<title id="title">The cal of belt 3 has no power from scan 4 to scan 6</title>
+<desc id="description">8 scans, 100 ms a scan. Each signal after each scan, from scan 1: auto: 1, 1, 1, 0, 0, 0, 1, 1. stop: 0, 0, 0, 1, 1, 1, 1, 1. belt_1: 1, 1, 1, 0, 0, 0, 0, 0. belt_3: 1, 1, 1, 1, 1, 1, 0, 0.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="568" height="263" rx="6"/>
+<text class="head" x="14" y="24">The cal of belt 3 has no power from scan 4 to scan 6</text>
+<text class="dim" x="14" y="238">scan</text>
+<text class="dim" x="14" y="252">time</text>
+<line class="grid" x1="96.6" y1="36" x2="96.6" y2="222"/>
+<line class="grid" x1="152.6" y1="36" x2="152.6" y2="222"/>
+<line class="grid" x1="208.6" y1="36" x2="208.6" y2="222"/>
+<line class="grid" x1="264.6" y1="36" x2="264.6" y2="222"/>
+<line class="grid" x1="320.6" y1="36" x2="320.6" y2="222"/>
+<line class="grid" x1="376.6" y1="36" x2="376.6" y2="222"/>
+<line class="grid" x1="432.6" y1="36" x2="432.6" y2="222"/>
+<line class="grid" x1="488.6" y1="36" x2="488.6" y2="222"/>
+<line class="grid" x1="544.6" y1="36" x2="544.6" y2="222"/>
+<text class="tag" x="14" y="61">auto</text>
+<line class="grid" x1="96.6" y1="70" x2="544.6" y2="70"/>
+<polyline class="wave" points="96.6,70 96.6,44 152.6,44 152.6,44 208.6,44 208.6,44 264.6,44 264.6,70 320.6,70 320.6,70 376.6,70 376.6,70 432.6,70 432.6,44 488.6,44 488.6,44 544.6,44"/>
+<text class="tag" x="14" y="109">stop</text>
+<line class="grid" x1="96.6" y1="118" x2="544.6" y2="118"/>
+<polyline class="wave" points="96.6,118 96.6,118 152.6,118 152.6,118 208.6,118 208.6,118 264.6,118 264.6,92 320.6,92 320.6,92 376.6,92 376.6,92 432.6,92 432.6,92 488.6,92 488.6,92 544.6,92"/>
+<text class="tag" x="14" y="157">belt_1</text>
+<line class="grid" x1="96.6" y1="166" x2="544.6" y2="166"/>
+<polyline class="wave" points="96.6,166 96.6,140 152.6,140 152.6,140 208.6,140 208.6,140 264.6,140 264.6,166 320.6,166 320.6,166 376.6,166 376.6,166 432.6,166 432.6,166 488.6,166 488.6,166 544.6,166"/>
+<text class="tag" x="14" y="205">belt_3</text>
+<line class="grid" x1="96.6" y1="214" x2="544.6" y2="214"/>
+<polyline class="wave" points="96.6,214 96.6,188 152.6,188 152.6,188 208.6,188 208.6,188 264.6,188 264.6,188 320.6,188 320.6,188 376.6,188 376.6,188 432.6,188 432.6,214 488.6,214 488.6,214 544.6,214"/>
+<text class="dim" x="96.6" y="238" text-anchor="middle">1</text>
+<text class="dim" x="96.6" y="252" text-anchor="middle">100 ms</text>
+<text class="dim" x="152.6" y="238" text-anchor="middle">2</text>
+<text class="dim" x="152.6" y="252" text-anchor="middle">200 ms</text>
+<text class="dim" x="208.6" y="238" text-anchor="middle">3</text>
+<text class="dim" x="208.6" y="252" text-anchor="middle">300 ms</text>
+<text class="dim" x="264.6" y="238" text-anchor="middle">4</text>
+<text class="dim" x="264.6" y="252" text-anchor="middle">400 ms</text>
+<text class="dim" x="320.6" y="238" text-anchor="middle">5</text>
+<text class="dim" x="320.6" y="252" text-anchor="middle">500 ms</text>
+<text class="dim" x="376.6" y="238" text-anchor="middle">6</text>
+<text class="dim" x="376.6" y="252" text-anchor="middle">600 ms</text>
+<text class="dim" x="432.6" y="238" text-anchor="middle">7</text>
+<text class="dim" x="432.6" y="252" text-anchor="middle">700 ms</text>
+<text class="dim" x="488.6" y="238" text-anchor="middle">8</text>
+<text class="dim" x="488.6" y="252" text-anchor="middle">800 ms</text>
+</svg>

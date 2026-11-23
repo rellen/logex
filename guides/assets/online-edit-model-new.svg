@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="261" viewBox="0 0 364 261" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of motor_v2.ld</title>
+<desc id="description">3 rungs between two power rails. Rung 2: xic motor ton t1 2000. Rung 3: xic t1.dn ote at_speed. Rung 4: xic motor ons s1 ote started.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="260" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="249"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="249"/>
+<text class="dim" x="36" y="56" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="116" y1="52" x2="224" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="92" y="35" text-anchor="middle">motor</text>
+<line class="ink" x1="68" y1="52" x2="85" y2="52"/>
+<line class="ink" x1="85" y1="41" x2="85" y2="63"/>
+<line class="ink" x1="99" y1="41" x2="99" y2="63"/>
+<line class="ink" x1="99" y1="52" x2="116" y2="52"/>
+<rect class="box" x="224" y="39" width="100" height="68" rx="3"/>
+<line class="ink" x1="224" y1="65" x2="324" y2="65"/>
+<text class="op" x="274" y="56" text-anchor="middle">ton</text>
+<text class="tag" x="314" y="79" text-anchor="end">t1</text>
+<text class="dim" x="234" y="97">preset</text>
+<text class="tag" x="314" y="97" text-anchor="end">2000</text>
+<text class="dim" x="36" y="161" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="157" x2="68" y2="157"/>
+<line class="ink" x1="116" y1="157" x2="254" y2="157"/>
+<line class="ink" x1="324" y1="157" x2="346" y2="157"/>
+<text class="tag" x="92" y="140" text-anchor="middle">t1.dn</text>
+<line class="ink" x1="68" y1="157" x2="85" y2="157"/>
+<line class="ink" x1="85" y1="146" x2="85" y2="168"/>
+<line class="ink" x1="99" y1="146" x2="99" y2="168"/>
+<line class="ink" x1="99" y1="157" x2="116" y2="157"/>
+<text class="tag" x="322" y="140" text-anchor="end">at_speed</text>
+<line class="ink" x1="254" y1="157" x2="290" y2="157"/>
+<path class="ink" d="M 295 146 Q 285 157 295 168"/>
+<path class="ink" d="M 307 146 Q 317 157 307 168"/>
+<line class="ink" x1="312" y1="157" x2="324" y2="157"/>
+<text class="dim" x="36" y="225" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="221" x2="68" y2="221"/>
+<line class="ink" x1="184" y1="221" x2="260" y2="221"/>
+<line class="ink" x1="324" y1="221" x2="346" y2="221"/>
+<text class="tag" x="92" y="204" text-anchor="middle">motor</text>
+<line class="ink" x1="68" y1="221" x2="85" y2="221"/>
+<line class="ink" x1="85" y1="210" x2="85" y2="232"/>
+<line class="ink" x1="99" y1="210" x2="99" y2="232"/>
+<line class="ink" x1="99" y1="221" x2="116" y2="221"/>
+<line class="ink" x1="116" y1="221" x2="132" y2="221"/>
+<text class="tag" x="158" y="204" text-anchor="middle">s1</text>
+<line class="ink" x1="132" y1="221" x2="139" y2="221"/>
+<rect class="box" x="139" y="211" width="38" height="20" rx="3"/>
+<text class="op" x="158" y="225" text-anchor="middle">ons</text>
+<line class="ink" x1="177" y1="221" x2="184" y2="221"/>
+<text class="tag" x="322" y="204" text-anchor="end">started</text>
+<line class="ink" x1="260" y1="221" x2="290" y2="221"/>
+<path class="ink" d="M 295 210 Q 285 221 295 232"/>
+<path class="ink" d="M 307 210 Q 317 221 307 232"/>
+<line class="ink" x1="312" y1="221" x2="324" y2="221"/>
+</svg>

@@ -31,6 +31,11 @@ A compiled program. A program type holds no values. You make 1 or more instances
 To make a program type from the text of a program. If the text has an error, logex
 returns diagnostics and no program type.
 
+### interpret
+
+To run a program type from its data. For each scan, logex reads each instruction of each
+rung that the scan runs and does its operation. logex makes no code from a program.
+
 ### instance
 
 One copy of a program type or of a function block type that has a state. Each instance
@@ -251,11 +256,11 @@ IEC 61131-3: a typed conversion function, for example DINT_TO_SINT.
 
 ### wrap
 
-To keep the low bits of an integer result that its type cannot hold. The value then goes
-to the other end of the range of the type. Example: in an `sint`, 127 + 1 wraps to -128.
-An arithmetic instruction, or a conversion between 2 number types, that wraps a result
-passes no power. A conversion to or from a bit string keeps the low bits and passes
-power.
+To keep the low bits of an integer result that its type cannot hold, in 2's complement
+for a signed type. A result 1 past the limit goes to the other end of the range. Example:
+in an `sint`, 127 + 1 wraps to -128. An arithmetic instruction, or a conversion between 2
+number types, that wraps a result passes no power. A conversion to or from a bit string
+keeps the low bits and passes power.
 
 ### reserved word
 
@@ -358,8 +363,8 @@ A new start of an instance or of a resource.
 
 ### cold restart
 
-A restart that sets each tag that is not an input to its initial value. An input keeps
-its value.
+A restart that sets each tag that is not an input to its initial value. Each input keeps
+the value that the host gives.
 
 ### warm restart
 

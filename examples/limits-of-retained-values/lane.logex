@@ -1,0 +1,11 @@
+// lane.logex -- a box counter that keeps its count
+task slow interval 50 priority 1
+
+var_global eye       bool at panel.i.8
+var_global pb_reset  bool at panel.i.2
+var_global case_full bool at panel.q.4
+
+program b1 boxes with slow
+  b1.eye       eye
+  b1.reset_pb  pb_reset
+  b1.full_lamp case_full
