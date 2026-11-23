@@ -8,8 +8,10 @@ record a decision in [`docs/organisation.md`](../organisation.md) §7.
 > #### Caution {: .error}
 >
 > Do not make or push a tag of logex. logex has no release, and the maintainer plans no
-> release. The maintainer gives the number of the first version and decides if its tag
-> goes to origin.
+> release (decision 541). `mix.exs` says 0.1.0, and `## Unreleased` stays the newest
+> entry of `CHANGELOG.md`. Nobody makes or pushes a tag. When a release is planned, the
+> maintainer gives the number of the first version and decides if its tag goes to origin.
+> The maintainer also settles what its entry lists.
 
 ## What the changelog and the release step do
 

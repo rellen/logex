@@ -174,21 +174,8 @@ and gives each time of a write.
 ## What logex does not have
 
 logex does not have each part of [IEC 61131-3](../reference/glossary.md#iec-61131-3) or
-of a controller. This table lists the parts that logex does not have.
-
-| Area | logex does not have |
-|---|---|
-| Configuration | More than 1 resource |
-| Types | TIME, LTIME, a date and a time of day. Strings and characters. Structures, user-defined types, enumerations, subranges and references |
-| Literals | `T#`, a typed literal such as `int#5`, and octal |
-| Timers | A time of less than 1 ms: each timer counts full ms of the clock, a long timer also |
-| Arrays | More than 3 dimensions. The bounds of IEC, `ARRAY[1..8]`. An expression as a subscript. A copy or a fill of a full array |
-| Bit strings | Access to 1 byte or 1 word, `w.%B1` |
-| Arithmetic | `round`, `ceil` and `floor`. A conversion to or from a bool, BCD or the bit pattern of a real. NaN and infinity |
-| Instructions | `res`, a jump back and a master control zone |
-| Online edit | A change of the type of a tag or of the size of an array |
-| Forces | A force of an output |
-| Restarts | Persistent values, a first-scan bit, a prescan and a hot restart |
+of a controller. For example, it has no time types, no strings, no structures, no jump
+back, no master control zone and no force of an output.
 
 A counter and a retentive timer reset through their member `r`, and logex will not get a
 master control zone. A [preset](../reference/glossary.md#preset) is a plain integer, in

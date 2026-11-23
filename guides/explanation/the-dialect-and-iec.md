@@ -194,6 +194,20 @@ conventional set. Its rules are the rules of logex.
 - [How logex differs from Logix](differences-from-logix.md) compares the behaviour of
   logex with the behaviour of a Logix controller.
 
+### The conventional set and logex
+
+logex does not have each word of the conventional set. This table gives each word that
+logex does not have, and what logex has in its place.
+
+| The conventional set | logex |
+|---|---|
+| The instruction RES resets a [counter](../reference/glossary.md#counter) or a retentive timer | A coil writes the member `r` of a `ctu`, a `ctud` or an `rto`: `xic reset_pb ote boxes.r`. A `ctd` has the member `ld` and no `r`. logex has no `res` |
+| A counter has the members `.PRE`, `.ACC` and `.DN` | A counter has the members of IEC 61131-3: `pv`, `cv` and `q` |
+| The function block CTUD rolls over at the limit of its type | A counter stops at the limit of its type, and sets its member `ov` or `un` |
+| A [jump](../reference/glossary.md#jump) can go back | A jump goes forward only |
+| A master control zone, MCR | None. Put a contact at the start of each rung of the zone |
+| A subroutine and the instruction JSR | None. A [function block](../reference/glossary.md#function-block) and the instruction `cal` |
+
 ## Why logex does it this way
 
 - **IEC 61131-3 has no text form of a rung.** Thus logex cannot conform to one. The

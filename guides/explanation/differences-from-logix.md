@@ -93,17 +93,8 @@ lists. A [timer](../reference/glossary.md#timer) of logex also has the
 [How logex differs from IEC 61131-3](differences-from-iec.md#the-members-of-a-timer-and-of-a-counter)
 gives each member.
 
-The conventional set is a vocabulary, and a Logix controller is 1 controller that has
-it. logex does not have each word of the conventional set.
-
-| The conventional set | logex |
-|---|---|
-| The instruction RES resets a [counter](../reference/glossary.md#counter) or a retentive timer | A coil writes the member `r` of a `ctu`, a `ctud` or an `rto`: `xic reset_pb ote boxes.r`. A `ctd` has the member `ld` and no `r`. logex has no `res` |
-| A counter has the members `.PRE`, `.ACC` and `.DN` | A counter has the members of IEC 61131-3: `pv`, `cv` and `q` |
-| The function block CTUD rolls over at the limit of its type | A counter stops at the limit of its type, and sets its member `ov` or `un` |
-| A [jump](../reference/glossary.md#jump) can go back | A jump goes forward only |
-| A master control zone, MCR | None. Put a contact at the start of each rung of the zone |
-| A subroutine and the instruction JSR | None. A [function block](../reference/glossary.md#function-block) and the instruction `cal` |
+The words of the conventional set that logex does not have, such as RES, MCR and JSR,
+are in [The dialect and IEC 61131-3](the-dialect-and-iec.md#the-conventional-set-and-logex).
 
 ## An example: a subscript out of range
 

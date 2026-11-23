@@ -378,7 +378,7 @@ The costs:
   this reason. 1 of them named a hidden function of the Erlang/OTP module erts_debug.
 - No script follows a link to a different site. Of the older documents, the stage reads
   the links of `README.md` only.
-- About 100 pages are more files to keep true than 1 `README.md`. A change of the
+- About 150 pages are more files to keep true than 1 `README.md`. A change of the
   language makes old the pages that show it, and the suite finds only their examples.
 
 ## Alternatives considered
