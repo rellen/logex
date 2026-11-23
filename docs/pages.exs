@@ -135,6 +135,7 @@
   {"docs/architecture/runner-devices.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/runner-files.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/online-edit.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/online-edit-of-a-resource.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/store-and-files.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/testing-strategy.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/adding-an-instruction.md", :contributor, "Architecture and implementation"},
