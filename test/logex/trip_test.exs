@@ -15,8 +15,7 @@ defmodule Logex.TripTest do
   VM a fraction of its cores that wait passed the 60 ms, the runner tripping `{:io,
   "panel", :timeout}` at its start or at a later write, four tests red once each in
   loaded gates. ExUnit runs this module once every async module is done, the VM's run
-  queue its own, where no start tripped under the same load (provisional: `PLAN.md`'s
-  RV-30, question 4).
+  queue its own, where no start tripped under the same load (decision 578).
   """
   use ExUnit.Case, async: false
 
@@ -1555,8 +1554,7 @@ defmodule Logex.TripTest do
     # kept off a core past the 60 ms, the runner trips there, `{:io, "panel", :timeout}`,
     # before the test's first step, and the test failed at whatever it next looked at.
     # The set-up looks at the start, so that such a run names its cause; it changes what
-    # a held machine does to the plant in nothing (provisional: `PLAN.md`'s RV-30,
-    # question 4).
+    # a held machine does to the plant in nothing (decision 578).
     defp started!(runner) do
       status = Runner.status(runner)
 

@@ -1571,10 +1571,14 @@ defmodule Logex.ConfigurationTest do
     # decisions 576 and 577 (RV-31) the walk takes the location too, and holds new!/3 to
     # check/1 at every draw: it keeps exactly the global check/1 takes, the struct the one
     # built by hand, and raises exactly check/1's lines of any other, those it raises or
-    # those it diagnoses. Every name, type, value and location below at no location, and
-    # each location with six values, some 41,000 draws. The walk's reach: each name, type
-    # and location that is a global's both kept and refused by new!/3, each that is none
-    # only refused, and over the walk a global kept, one raised and one diagnosed.
+    # those it diagnoses. Every name, type and value below at no location, and each
+    # location with three values, some 39,000 draws, check/1 of each in a configuration
+    # that runs a lamp's one rung, which takes a global as the base one does and costs a
+    # third as much to check, so that the walk fits a loaded machine's minute; and, as
+    # before, check/1 in the base configuration lets nothing else out. The walk's reach:
+    # each name, type and location that is a global's both kept and refused by new!/3,
+    # each that is none only refused, and over the walk a global kept, one raised and one
+    # diagnosed.
     test "over names, types, values and locations, new!/3 keeps what check/1 takes and " <>
            "raises its lines of the rest, nothing else let out",
          %{seal: seal} do
@@ -1597,13 +1601,21 @@ defmodule Logex.ConfigurationTest do
           [[], [0, 1], [0, 2], [1.5, 2], [1, -0.0], [300, 0], [0, 1, 0]] ++
           [[1, :x], [[0, 1]], [0 | 1], [[1]], [true], [nil, nil]]
 
-      # Devices the base configuration has none of, so that no point of it is taken.
+      # Devices neither configuration has, so that no point of either is taken.
       locations =
         ["belt.i.0", "belt.q.3", "belt.x.0", "belt.I.0", "belt.i.00", "task.i.0"] ++
           ["belt i 0", "", 5, :belt]
 
       fields = base(seal)
       config = Configuration.new!(fields)
+      {:ok, lamp} = Logex.compile("var x bool\nxic x ote x\n", name: "lamp")
+
+      lamps =
+        Configuration.new!(
+          name: "plant",
+          programs: [lamp],
+          instances: [%Instance{name: "m", type: "lamp"}]
+        )
 
       draws =
         for(
@@ -1614,7 +1626,7 @@ defmodule Logex.ConfigurationTest do
         ) ++
           for name <- names,
               type <- types,
-              initial <- [nil, 1, 2, true, [0, 1], 1.5],
+              initial <- [nil, 1, true],
               at <- locations,
               do: {name, type, initial, at}
 
@@ -1625,14 +1637,33 @@ defmodule Logex.ConfigurationTest do
 
           checked =
             drawn(fn ->
-              Enum.map(
-                Configuration.check(%{config | globals: fields[:globals] ++ [hand]}),
-                & &1.message
-              )
+              Enum.map(Configuration.check(%{lamps | globals: [hand]}), & &1.message)
             end)
 
           {name, type, at, walked(new, checked, hand)}
         end
+
+      for name <- ["g", {1, 2}], type <- types, initial <- [nil | values] do
+        hand = %Global{name: name, type: type, initial: initial}
+        with_it = %{config | globals: fields[:globals] ++ [hand]}
+
+        assert {kind, _} = drawn(fn -> Configuration.check(with_it) end)
+        assert kind in [:kept, :raised], "check/1 of #{inspect(hand)} let #{kind} escape"
+      end
+
+      # Each name's, type's and location's kinds, gathered in one pass.
+      reached =
+        Enum.reduce(reach, %{}, fn {name, type, at, kind}, acc ->
+          for key <- [{0, name}, {1, type}, {2, at}],
+              reduce: acc,
+              do: (acc ->
+                     Map.update(
+                       acc,
+                       key,
+                       MapSet.new([kept_or_refused(kind)]),
+                       &MapSet.put(&1, kept_or_refused(kind))
+                     ))
+        end)
 
       kept = %{
         0 => ["g"],
@@ -1647,9 +1678,8 @@ defmodule Logex.ConfigurationTest do
             [{"name", 0, names}, {"type", 1, types}] ++
               [{"location", 2, [nil | locations]}],
           value <- walked do
-        kinds = for draw <- reach, elem(draw, index) === value, do: kept_or_refused(elem(draw, 3))
-
-        assert Enum.sort(Enum.uniq(kinds)) == reached(value in Map.fetch!(kept, index)),
+        assert Enum.sort(MapSet.to_list(Map.fetch!(reached, {index, value}))) ==
+                 reached(value in Map.fetch!(kept, index)),
                "#{label} #{inspect(value)}"
       end
 
