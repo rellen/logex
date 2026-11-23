@@ -522,6 +522,11 @@ than the limit.
 
 Conventional set: a watchdog.
 
+### idle watchdog
+
+The limit of time for the work of the runner between 2 rounds, such as a call of the
+host. The option `idle:` of `Logex.Runner` sets it, 500 ms by default.
+
 ### trip
 
 A stop of the plant by the runner, for example after a watchdog or a major fault. The
@@ -607,6 +612,12 @@ this vocabulary, as [`docs/naming.md`](../../docs/naming.md) does not.
 
 A family of industrial controllers. A page can compare the behaviour of logex with the
 behaviour of a Logix controller.
+
+### safety function
+
+A function of a machine that protects persons, for example an emergency stop, a guard
+interlock or a light curtain. A failure of the function can cause an injury. logex must
+not do a safety function.
 
 ## Instruction mnemonics
 
