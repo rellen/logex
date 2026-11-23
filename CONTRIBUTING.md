@@ -306,7 +306,8 @@ holds every script there to the clauses rule, as it holds the harness.
 ### Writing a page of the documentation
 
 The documentation is a site ExDoc builds (decisions 546 to 548): README first, the pages
-under `guides/`, and the modules' own documentation. `docs/style-guide.md` is the rule
+under `guides/`, the contributor pages and the decision records under `docs/`, and the
+modules' own documentation. `docs/style-guide.md` is the rule
 for a page, who reads it and the words it may use, with three pages beside it:
 `docs/house-manner.md`, the forms of these older documents a page does not have,
 `docs/examples-and-pictures.md`, the marks of a block and of a picture, and
