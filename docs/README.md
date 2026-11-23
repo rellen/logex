@@ -110,6 +110,7 @@ by its number.
 | [Tests of time](implementation/testing-time.md) | The manual clock, the tests on the real clock and the load runs |
 | [The checks of a change](implementation/testing-checks.md) | The mutation tables, the examples of the pages, the tests that read the source and the gate |
 | [Add an instruction](implementation/adding-an-instruction.md) | The survey of the name, then the steps in the code and in the suite |
+| [The naming survey](implementation/naming-survey.md) | The rules of a name, the stanza of `docs/naming.md` for each word and the test that reads the stanzas |
 
 ### Decision records
 

@@ -143,6 +143,7 @@
   {"docs/implementation/testing-time.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/testing-checks.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/adding-an-instruction.md", :contributor, "Architecture and implementation"},
+  {"docs/implementation/naming-survey.md", :contributor, "Architecture and implementation"},
   {"docs/adr/README.md", :adr, "Decision records"},
   {"docs/adr/0001-a-program-is-data.md", :adr, "Decision records"},
   {"docs/adr/0002-own-dialect-and-names.md", :adr, "Decision records"},
