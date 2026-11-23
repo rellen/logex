@@ -43,8 +43,8 @@ defmodule Logex do
   its words beside the caller's own, and the loader's raises its own to twice what it
   holds as it reads each file: a program keeps its source text (decision 54), so a long
   text held over the compile, with its refusals' messages, outgrew the VM's allowance and
-  turned most of the compile's collections into full ones, each copying the whole heap:
-  7,095 of them for a box counter's 280 KB program, refused in 50 s, where the allowance
+  turned thousands of the compile's collections into full ones, each copying the whole
+  heap: 7,095 of them for a box counter's 280 KB program, refused in 50 s, where the allowance
   leaves 28 and 32 s, before the did-you-mean was bounded (`compile/2`). It takes the
   caller's priority and heap settings, `min_heap_size`, `max_heap_size` and
   `fullsweep_after` (decision 524), so a caller's limit of its heap holds its compile, and
