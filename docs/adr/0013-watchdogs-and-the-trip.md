@@ -49,7 +49,7 @@ decision 113, the trip:
 
 2026-10-17, the date of decisions 109, 110, 113, 115 and 116, from the design of the
 runner. The first decision of the record, 14, is of 2026-09-28, and the last, 508, is of
-2026-11-12. [Decisions in section 7](#decisions-in-section-7) lists them all.
+2026-11-12. [The decisions that this record sums up](#the-decisions-that-this-record-sums-up) lists them all.
 
 ## Context
 
@@ -647,7 +647,7 @@ What this means for a change:
 | 470 | A bad time between rounds trips immediately, or each write waits until the runner knows the exit of each device | The maintainer kept the rule of the code. The second costs a look at each write |
 | 474 and 497 | No event for a round that a bad time or a failing write cuts | A log then does not show what the plant got |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 21 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

@@ -836,7 +836,7 @@ the runner, its stage assemble takes an edit under test, but this one is accepte
 Each script prints the lines of the old program after a `-`, and the lines of the new
 program after a `+`. Then it prints 1 line for each step: a scan or a cycle with its
 inputs and outputs, and each report. A refused accept prints `refused`, then each
-diagnostic on a separate line. To run a script, type its command in the directory
+diagnostic on a separate line. To run a script, enter its command in the directory
 `examples` of the repository. That directory is a Mix project, and logex is its
 dependency.
 

@@ -533,7 +533,7 @@ The costs:
 | A state that keeps a copy of a global, written again at each cycle (decision 49) | A drop is 1 line, and a refactor can lose it. The [switch](../../guides/reference/glossary.md#switch) of an online edit of a [configuration](../../guides/reference/glossary.md#configuration), decision 45, needs the 3 drops |
 | Skip or quarantine a test that fails | A skipped test hides the defect that it shows |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions). It also sums up the 3 sections

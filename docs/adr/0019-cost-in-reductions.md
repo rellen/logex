@@ -569,7 +569,7 @@ The costs:
 | The whole stage only, on the motor written 16 times over, option (c) of decision 481 | Then the work of each call and each tag is a small part of the figure. A slowdown there gets near to no ceiling |
 | A ceiling for 1 rung only, option (b) of decision 481 | The work of each call and each tag, a large part of a stage, then has no ceiling |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 357, 458, 459, 460, 463 and 481 of
 [`docs/organisation.md`](../organisation.md#7-decisions), and the cost measures of

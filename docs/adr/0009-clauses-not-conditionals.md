@@ -362,7 +362,7 @@ The costs:
   clauses for the rest, and no `cond`, `if` or `unless`". `scripts/page.exs` has no
   `case`, because the harness of the examples reads each page through it.
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decision 264 of
 [`docs/organisation.md`](../organisation.md#7-decisions). Decision 517 (b) puts the

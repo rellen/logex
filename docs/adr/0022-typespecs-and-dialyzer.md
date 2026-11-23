@@ -506,7 +506,7 @@ The costs:
 | No `typespec_test.exs` (decision 554) | 33 specs then have no check |
 | Keep the wrong initial value of a global until `new!/1` (decision 555) | The struct is outside `Global.t()`, and the refusal comes far from its cause |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

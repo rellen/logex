@@ -49,7 +49,7 @@ These words have 1 meaning on this page:
 ## Status
 
 Accepted. No later record replaces this record. Some decisions of this record replace
-earlier ones: [Decisions in section 7](#decisions-in-section-7) says which.
+earlier ones: [The decisions that this record sums up](#the-decisions-that-this-record-sums-up) says which.
 
 ## Date
 
@@ -614,7 +614,7 @@ The bad results and the costs:
 | 349, 385 | A held-on `tof` keeps `.en` 1 | The first false rung starts a run-on, and the fan starts by itself |
 | 382 | A warm `Logex.Runtime.restart/2` counts a timer from its last scan | A fan in a slow task stops up to 1 interval sooner than after a fresh start |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 55 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

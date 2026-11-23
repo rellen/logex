@@ -44,7 +44,7 @@ the [tasks](glossary.md#task) and a [round](glossary.md#round) of the
 
 Each example on this page is a script, with each line that it prints. Each `elixir` block
 is the file under `examples/` that its `$ mix run` line names. The directory `examples`
-of the repository is a Mix project, and logex is its dependency. To run a script, type
+of the repository is a Mix project, and logex is its dependency. To run a script, enter
 its command in that directory. [Your first program](../tutorials/first-program.md) shows
 how to make a Mix project that has logex as a dependency.
 

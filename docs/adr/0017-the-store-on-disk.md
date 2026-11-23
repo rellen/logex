@@ -43,7 +43,7 @@ These words have 1 meaning on this page:
 ## Status
 
 Accepted. Later decisions replace parts of the first decisions:
-[Decisions in section 7](#decisions-in-section-7) says which.
+[The decisions that this record sums up](#the-decisions-that-this-record-sums-up) says which.
 
 ## Date
 
@@ -685,7 +685,7 @@ The bad results and the costs:
 | 530 | The naming lines under `logex retain 2` | An older logex names the place of the lines, not the version |
 | 544 | The refusal of the naming lines beside a wrong count | A refusal of a cut store lists what the cut removed, and gives the way out 2 times |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 53 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

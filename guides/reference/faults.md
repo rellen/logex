@@ -25,7 +25,7 @@ compiler finds a diagnostic in the source text, and that program does not run.
 the plant.
 
 Each example on this page is a script, with each line that it prints. Each `elixir` block
-is the file under `examples/` that its `$ mix run` line names. To run a script, type its
+is the file under `examples/` that its `$ mix run` line names. To run a script, enter its
 command in the directory `examples` of the repository. That directory is a Mix project,
 and logex is its dependency. Each script reads its files from the directory `faults`
 under the directory in which you run it. [Your first program](../tutorials/first-program.md)

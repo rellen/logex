@@ -320,7 +320,7 @@ The costs:
 | Name each decision in the changelog at the release, all at 1 time (decision 542) | A release can then omit a decision. At each commit, the suite finds the omission |
 | A first release, 0.2.0, with its tag pushed (decision 541) | The maintainer plans no release |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions), and 3 items of the findings

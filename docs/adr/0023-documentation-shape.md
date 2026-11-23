@@ -412,7 +412,7 @@ The costs:
 | A cap of `CLAUDE.md` in lines, or a smaller cap (decision 361) | The cap is the size at which the agent tool warns, not a measure of logex |
 | A plan item's name in `CLAUDE.md` as a pointer (decision 366) | No check can tell a pointer from history |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions).

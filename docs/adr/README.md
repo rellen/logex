@@ -31,7 +31,7 @@ results. A record has the 7 sections of the [template of a record](../templates/
 | Decision | What logex does, in the present tense |
 | Consequences | The good results, the bad results and the costs |
 | Alternatives considered | Each option that logex did not take, and why |
-| Decisions in section 7 | The number of each decision that the record sums up |
+| The decisions that this record sums up | The number of each decision that the record sums up |
 
 No record replaces a different record, and no record has the status Withdrawn.
 
@@ -257,7 +257,7 @@ Give the group `"Decision records"`.
 
 A later decision can change a part of a record. Then change the record:
 
-1. Add the number of the new decision to the section "Decisions in section 7".
+1. Add the number of the new decision to the section "The decisions that this record sums up".
 2. Add the date of the new decision to the section "Date".
 3. In the section "Status", say which earlier decision the new decision changes.
 4. Correct the sections "Decision" and "Consequences" so that they say what the code does.

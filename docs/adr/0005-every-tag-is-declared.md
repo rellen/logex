@@ -458,7 +458,7 @@ row, the stanza in `docs/naming.md` and the lists that `naming_test.exs` compare
   can name a device and not a global in 1 file: logex takes `at task.i.0` but refuses
   `var_global task bool` (decision 300).
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 2, 10, 24, 247, 294, 295, 296, 298 and 300 of
 [`docs/organisation.md`](../organisation.md#7-decisions), and

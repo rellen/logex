@@ -489,7 +489,7 @@ The costs:
 | Each message lists the members | 16,000 unknown members of a block of 1,000 gave 174.5 MB of messages (decision 526) |
 | A caller that traps exits gets `{:error, ...}`, or a compile with the settings of the VM and no charge | The count of reductions and the heap limit of the caller then do not hold its compile (decision 524) |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

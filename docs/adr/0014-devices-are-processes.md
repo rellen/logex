@@ -23,7 +23,7 @@ and reason of a [trip](../../guides/reference/glossary.md#trip).
 ## Status
 
 Accepted. No later record replaces this record. Some decisions of this record replace
-earlier ones: [Decisions in section 7](#decisions-in-section-7) says which.
+earlier ones: [The decisions that this record sums up](#the-decisions-that-this-record-sums-up) says which.
 
 ## Date
 
@@ -688,7 +688,7 @@ What this means for a change:
 | 504 | Count the gap from the last look | A step within its watchdog is no late computer |
 | 512 | Keep the time a device was last heard before the trip | The line trips again immediately after a restart |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 34 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

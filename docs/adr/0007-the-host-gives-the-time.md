@@ -654,7 +654,7 @@ What this means for a change:
 | The runner writes the time of the machine into each store, also on the manual clock | A store from an ExUnit test then holds the real time. The manual clock gives its own time, so that the header repeats (decision 276) |
 | Each clock must have `wall_ms/1` | The maintainer confirmed the build, in which `wall_ms/1` is optional. The record gives no other reason (decision 322) |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 8, 13, 56, 82, 118, 122, 131, 282, 322 and 444 of
 [`docs/organisation.md`](../organisation.md#7-decisions), and

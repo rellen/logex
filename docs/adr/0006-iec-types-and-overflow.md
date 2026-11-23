@@ -744,7 +744,7 @@ Where the rules are in the code:
 | Messages (177) | 2 wordings: bits for a signed type, a range for an unsigned type | 1 wording for all widths, which the row of the table gives. A range gives the limit of a signed type and of an unsigned type alike |
 | Conversion source (176) | Only the first type in its name | A typed function of IEC takes a source that widens |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

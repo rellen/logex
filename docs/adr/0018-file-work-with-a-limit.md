@@ -49,7 +49,7 @@ These words have 1 meaning on this page:
 ## Status
 
 Accepted. Some decisions of this record replace earlier ones:
-[Decisions in section 7](#decisions-in-section-7) says which.
+[The decisions that this record sums up](#the-decisions-that-this-record-sums-up) says which.
 
 ## Date
 
@@ -649,7 +649,7 @@ The bad results and the costs:
 | 502 | Clear `forces_unknown` at the read of a restart | The cut write can still bring the force back at the next restart |
 | 508 | Make the second restart also | A second press clears a trip that came after the press |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 33 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions), from 352 to 518. The table

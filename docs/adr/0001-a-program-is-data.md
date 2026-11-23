@@ -270,7 +270,7 @@ count can see a call.
 [Programs as data](../../guides/explanation/programs-as-data.md) gives the same model for
 a user of logex.
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 15, 16 and 17 of
 [`docs/organisation.md`](../organisation.md#7-decisions).

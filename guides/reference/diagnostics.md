@@ -423,7 +423,7 @@ A link to a file that does not exist gets `cannot be read: no such file or direc
 ## Examples
 
 Each example on this page is a script, with each line that it prints. Each `elixir` block
-is the file under `examples/` that its `$ mix run` line names. To run a script, type its
+is the file under `examples/` that its `$ mix run` line names. To run a script, enter its
 command in the directory `examples` of the repository. That directory is a Mix project,
 and logex is its dependency.
 

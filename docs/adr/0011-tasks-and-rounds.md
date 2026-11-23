@@ -720,7 +720,7 @@ What this means for a change:
 | The share applies only against the untimed instances | With no untimed instance, an HMI that calls in a loop makes a task of 10 ms late. The task stays late while the HMI calls (decision 396) |
 | A slot that finds no call ends | An HMI that calls 1 time at a time gets an answer half as often (decision 442) |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 19 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

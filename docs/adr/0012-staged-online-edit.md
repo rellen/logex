@@ -615,7 +615,7 @@ that logex did not take:
 | Forecast only a `.acc` at or after the new `.pre` (decision 381) | A lamp that the catch-up alone lights at the first scan is then not in the forecast |
 | Make the accept faster (decision 513) | The plant does not wait. The engineer waits a few seconds at most, for an array of tens of thousands of elements |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 76 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

@@ -415,7 +415,7 @@ that logex does not have.
 
 Each example is a program or a list of rungs, with a script that runs it. It is not
 necessary to read a script, because the page shows each line that it prints. To run a
-script, type its command in the directory `examples` of the repository. Each script that
+script, enter its command in the directory `examples` of the repository. Each script that
 runs a scan uses `Logex.Runtime.scan/2`, which adds 0 ms to the time of the program at
 each scan. A conversion does not read the time.
 

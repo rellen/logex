@@ -447,7 +447,7 @@ The costs:
 | logex refuses a global that 1 instance writes both ways | IEC 61131-3 lets it, so logex gives a warning |
 | The e-stop stops each instance in the same cycle | No decision asks for it. The first Warning in Consequences gives the practice |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up these decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions). Its §4.1 to §4.5 give the

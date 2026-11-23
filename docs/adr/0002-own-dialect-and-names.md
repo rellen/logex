@@ -297,7 +297,7 @@ that each decision did not take, and why.
 [The dialect and IEC 61131-3](../../guides/explanation/the-dialect-and-iec.md) gives the
 same model for a user.
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 67, 68, 80, 83, 144, 148, 155, 162, 163, 351, 367, 532 and
 561 of [`docs/organisation.md`](../organisation.md#7-decisions). `PLAN.md` keeps the

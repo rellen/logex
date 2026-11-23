@@ -654,7 +654,7 @@ The costs:
 | The trip names the watchdog when a step faults and is late | The engineer corrects the fault, not the time (decision 211) |
 | `read` of an index fault is a list, `[8]` | `inspect/1` shows `[8]` as `~c"\b"` (decision 233) |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 10 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):

@@ -275,7 +275,7 @@ leg has only 1 leg before it.
 - **A Mix package that runs Dialyzer.** Decision 515 took the `dialyzer` of Erlang/OTP,
   with no dependency added.
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up decisions 515 and 546 of
 [`docs/organisation.md`](../organisation.md#7-decisions). The choice itself is older than

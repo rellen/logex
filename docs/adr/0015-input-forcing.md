@@ -638,7 +638,7 @@ The bad results and the costs:
 | A `status/1` that lists only the forces in effect (466) | A force in a write in progress reads as no force until the end of its write |
 | A round for the force and a round for the unforce in 1 joined write (501) | A force is a tool for maintenance, not a signal |
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 This record sums up 12 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):
