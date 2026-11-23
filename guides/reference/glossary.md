@@ -504,9 +504,30 @@ The process that runs a resource on a clock and through devices: `Logex.Runner`.
 One step of the runner: it takes the inputs from the devices, runs a cycle and writes
 the outputs to the devices.
 
+### poll period
+
+The time between 2 reads of a device by the runner: the option `poll:` of
+`Logex.Runner`, 10 ms by default.
+
+### share
+
+The part of the time that the runner keeps for its own work, such as the calls of the
+host. The option `overhead:` of `Logex.Runner` sets it, from 10 % to 90 %, and 20 % by
+default.
+
+### slot
+
+A time between 2 rounds in which the runner serves the calls that wait. A slot comes after
+a number of milliseconds of rounds that the share sets.
+
 ### clock
 
 The source of the time for the runner. The manual clock moves only when a test moves it.
+
+### ExUnit test
+
+A `test` block of an ExUnit test module, which `mix test` runs. It is not the
+[test](#test) of an online edit.
 
 ### watchdog
 
