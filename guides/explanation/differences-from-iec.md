@@ -111,7 +111,7 @@ unit comes from the type of the timer: milliseconds for a `ton`, nanoseconds for
 
 - **A name of IEC 61131-3 comes first.** A controls engineer knows TON and CTU from the
   standard. The decision record is
-  [Its own dialect and names](../../docs/adr/0002-own-dialect-and-names.md).
+  [0002. A dialect for logex, and a survey for each word](../../docs/adr/0002-own-dialect-and-names.md).
 - **A rung writes the members `r` and `ld` of a counter.** IEC 61131-3 has no
   instruction that resets a counter, and logex has none. The decision record is
   [The software model of IEC 61131-3](../../docs/adr/0004-iec-software-model.md).

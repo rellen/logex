@@ -212,7 +212,7 @@ logex does not have, and what logex has in its place.
 
 - **IEC 61131-3 has no text form of a rung.** Thus logex cannot conform to one. The
   decision record is
-  [Its own dialect and names](../../docs/adr/0002-own-dialect-and-names.md).
+  [0002. A dialect for logex, and a survey for each word](../../docs/adr/0002-own-dialect-and-names.md).
 - **logex has the words of the conventional set, not its formats.** It does not have
   its addresses, such as `I:003/4` or `T4:5/DN`, or its file formats.
 

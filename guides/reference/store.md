@@ -807,7 +807,7 @@ tally.retain.dropped.3
 | The copy put back | With the runner stopped, the script copies `tally.retain.dropped.1` to `tally.retain`. The start reads the count 2 and drops nothing. |
 | The cold start | The store has no end line, and a warm start refuses it. The cold start copies it to `tally.retain.dropped.3` and starts at 0. |
 
-[Recover a refused store](../howto/recover-a-refused-store.md) gives the steps to put a
+[Recover from a refused store](../howto/recover-a-refused-store.md) gives the steps to put a
 copy back.
 
 ## The writes
@@ -1043,8 +1043,8 @@ hand](../howto/edit-the-store-by-hand.md) gives the steps of a hand edit.
 
 - [Retained values](retained-values-and-store.md): the qualifiers, the restarts and the
   retained image.
-- [Keep values on disk](../howto/keep-values-on-disk.md): give a runner a store.
-- [Recover a refused store](../howto/recover-a-refused-store.md): start after a refusal.
+- [Keep retained values on disk](../howto/keep-values-on-disk.md): give a runner a store.
+- [Recover from a refused store](../howto/recover-a-refused-store.md): start after a refusal.
 - [Edit the store by hand](../howto/edit-the-store-by-hand.md): change a value safely.
 - [Warm and cold restarts](../explanation/warm-and-cold-restarts.md): why logex keeps what
   it keeps.

@@ -1586,7 +1586,7 @@ These pages show how to use the instructions, and why they work as they do:
 - [Jump over rungs](../howto/jump-over-rungs.md): how to skip the rungs of a mode.
 - [Write a function block](../howto/write-a-function-block.md): how to write a
   function block and run it with `cal`.
-- [Use arrays of instances](../howto/use-arrays-of-instances.md): how to run 1 instance
+- [Use arrays of timers, counters and function blocks](../howto/use-arrays-of-instances.md): how to run 1 instance
   for each lane.
 - [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): why a skipped
   timer adds the full time at its next run.

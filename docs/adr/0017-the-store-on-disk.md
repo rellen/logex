@@ -731,10 +731,12 @@ It also uses decisions that other records sum up, or that no record sums up:
 - Decisions 353, 356, 391, 392, 400 and 415, the write limit, the claim on each file and
   the `.tmp` of each write: [0018. File work with a limit](0018-file-work-with-a-limit.md).
 - Decision 532, the case of a keyword and a bit in brackets in the digest of a program:
-  [0002. Own dialect and names](0002-own-dialect-and-names.md).
+  [0002. A dialect for logex, and a survey for each word](0002-own-dialect-and-names.md).
 - Decision 517 (c), the naming lines and the warning. No record sums it up.
 
-[Keep values on disk](../../guides/howto/keep-values-on-disk.md),
-[Recover a refused store](../../guides/howto/recover-a-refused-store.md),
-[Edit the store by hand](../../guides/howto/edit-the-store-by-hand.md) and
-[Take back a deploy](../../guides/howto/take-back-a-deploy.md) give the steps for a user.
+These how-to guides give the steps for a user:
+
+- [Keep retained values on disk](../../guides/howto/keep-values-on-disk.md)
+- [Recover from a refused store](../../guides/howto/recover-a-refused-store.md)
+- [Edit the store by hand](../../guides/howto/edit-the-store-by-hand.md)
+- [Take back a deploy](../../guides/howto/take-back-a-deploy.md)

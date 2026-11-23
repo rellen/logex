@@ -1000,7 +1000,7 @@ Forms that logex does not have
 - [Read a diagnostic](../howto/read-diagnostics.md): how to find and correct an error.
 - [Use reals](../howto/use-reals.md) and
   [Use bit strings](../howto/use-bit-strings.md): how to use real tags and bit strings.
-- [Choose integer widths and convert](../howto/choose-integer-widths-and-convert.md):
+- [Choose an integer type and convert values](../howto/choose-integer-widths-and-convert.md):
   how to use the integer types.
 - [Types and overflow](../explanation/types-and-overflow.md): why a literal has the
   type of its place.

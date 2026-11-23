@@ -190,7 +190,7 @@ point. [What logex has](what-logex-has.md#what-logex-does-not-have) lists each p
 - **A ladder language as text is a dialect.** IEC 61131-3 defines a
   [contact](../reference/glossary.md#contact) and a
   [coil](../reference/glossary.md#coil) as drawings, not as text. The decision record is
-  [Its own dialect and names](../../docs/adr/0002-own-dialect-and-names.md).
+  [0002. A dialect for logex, and a survey for each word](../../docs/adr/0002-own-dialect-and-names.md).
 
 ## See also
 

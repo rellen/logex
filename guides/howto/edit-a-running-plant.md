@@ -151,7 +151,7 @@ The name of a configuration is the name of its file, and an edit keeps this name
 ```
 
 If the result is `{:error, diagnostics}`, correct the files.
-[Read diagnostics](read-diagnostics.md) shows how.
+[Read a diagnostic](read-diagnostics.md) shows how.
 
 3. **Accept the new plant.**
 

@@ -136,7 +136,7 @@ dialect row, and mark anything you could not check `unverified`.
 - [Add an instruction](adding-an-instruction.md): the steps in the code after the survey.
 - [The dialect and IEC 61131-3](../../guides/explanation/the-dialect-and-iec.md): the
   source of each word and the reasons for the rules of a name.
-- The decision record [Its own dialect and names](../adr/0002-own-dialect-and-names.md).
+- The decision record [0002. A dialect for logex, and a survey for each word](../adr/0002-own-dialect-and-names.md).
 - [`docs/naming.md`](../naming.md): the survey, and
   [`docs/instruction-sets.md`](../instruction-sets.md): what IEC 61131-3 gives.
 - [Glossary](../../guides/reference/glossary.md): the technical words of logex.

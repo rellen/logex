@@ -318,7 +318,7 @@ missing false-rung clause.
 - [The test strategy](testing-strategy.md) and [The checks of a change](testing-checks.md):
   the kinds of test and the mutation tables.
 - The decision records
-  [Its own dialect and names](../adr/0002-own-dialect-and-names.md),
+  [0002. A dialect for logex, and a survey for each word](../adr/0002-own-dialect-and-names.md),
   [The types of IEC 61131-3 and overflow](../adr/0006-iec-types-and-overflow.md),
   [Clauses, not conditionals](../adr/0009-clauses-not-conditionals.md) and
   [Verify by a run](../adr/0020-verify-by-executing.md).

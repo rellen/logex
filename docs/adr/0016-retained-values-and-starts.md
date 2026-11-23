@@ -661,5 +661,5 @@ It also uses decisions that other records sum up:
   [0015. Input forcing](0015-input-forcing.md).
 
 [Keep values across a restart](../../guides/howto/keep-values-across-a-restart.md) and
-[Keep values on disk](../../guides/howto/keep-values-on-disk.md) give the steps.
+[Keep retained values on disk](../../guides/howto/keep-values-on-disk.md) give the steps.
 [The store and its files](../architecture/store-and-files.md) gives the code.

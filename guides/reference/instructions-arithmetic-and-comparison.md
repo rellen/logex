@@ -1807,7 +1807,7 @@ These pages show how to use the instructions, and why they work as they do:
 
 - [Do arithmetic](../howto/do-arithmetic.md): how to calculate a total, a rate and a
   comparison, and how to keep a record that a result wrapped.
-- [Choose integer widths and convert](../howto/choose-integer-widths-and-convert.md):
+- [Choose an integer type and convert values](../howto/choose-integer-widths-and-convert.md):
   how to get a value from 1 type into a different type.
 - [Use reals](../howto/use-reals.md): how to calculate with `real` and `lreal`.
 - [Port a program](../howto/port-a-program.md): what to change in a program from a

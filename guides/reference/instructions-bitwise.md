@@ -2104,7 +2104,7 @@ These pages show how to use the instructions, and why they work as they do:
 
 - [Use bit strings](../howto/use-bit-strings.md): how to read, mask, shift and select
   the bits of a status word.
-- [Choose integer widths and convert](../howto/choose-integer-widths-and-convert.md):
+- [Choose an integer type and convert values](../howto/choose-integer-widths-and-convert.md):
   how to get a value from a bit string into an integer.
 - [Port a program](../howto/port-a-program.md): what to change in a program from a
   different controller.

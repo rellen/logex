@@ -172,7 +172,7 @@ store after the test has no line for `t1.boxes`.
 |---|---|---|
 | The forecast is the empty list `[]`. | The qualifier is the same in the 2 plants, or the change is from `non_retain` to no qualifier. | Compare the 2 files. |
 | A value is at its initial value after a warm restart. | The plant that ran at the restart did not retain the value. | Do the edit before the restart. |
-| A `:retain_added` entry, and the value is not in the store. | The runner did not write the store after the test. | Wait for the next write of the store. [Keep values on disk](keep-values-on-disk.md) gives the moments of a write. |
+| A `:retain_added` entry, and the value is not in the store. | The runner did not write the store after the test. | Wait for the next write of the store. [Keep retained values on disk](keep-values-on-disk.md) gives the moments of a write. |
 
 ## See also
 

@@ -329,7 +329,7 @@ Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
 
 | What you see | Cause | What to do |
 |---|---|---|
-| A `MatchError` at step 1 | The new program does not compile. | Correct the source text. [Read diagnostics](read-diagnostics.md) shows how. |
+| A `MatchError` at step 1 | The new program does not compile. | Correct the source text. [Read a diagnostic](read-diagnostics.md) shows how. |
 | `type changes only with a restart` at step 2 | The 2 programs give 2 types to 1 tag, or to 1 member of a [function block](../reference/glossary.md#function-block). | Keep the type. For a value of a new type, declare a tag with a new name. |
 
 Examples of 2 types are `count` as a `dint` and as an `lint`, and `boxes` as a `ctu` and

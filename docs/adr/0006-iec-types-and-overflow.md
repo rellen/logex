@@ -763,7 +763,7 @@ for a user. [Declarations and types](../../guides/reference/declarations-and-typ
 [Instructions: arithmetic and comparison](../../guides/reference/instructions-arithmetic-and-comparison.md)
 give the rules.
 
-[Choose integer widths and convert](../../guides/howto/choose-integer-widths-and-convert.md)
+[Choose an integer type and convert values](../../guides/howto/choose-integer-widths-and-convert.md)
 and [Use arrays](../../guides/howto/use-arrays.md) give the procedures.
 [Add an instruction](../implementation/adding-an-instruction.md) gives the steps for a
 new instruction. [0002. A dialect for logex, and a survey for each word](0002-own-dialect-and-names.md)

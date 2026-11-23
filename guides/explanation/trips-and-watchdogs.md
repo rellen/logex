@@ -355,7 +355,7 @@ logex has the same default.
   rules.
 - [Restart after a trip](../howto/restart-after-a-trip.md): the steps to start the
   plant again.
-- [Set the watchdogs](../howto/set-watchdogs.md): the steps to give each task its
+- [Set watchdogs](../howto/set-watchdogs.md): the steps to give each task its
   watchdog.
 - [Safety and limits](safety-and-limits.md): what logex is not.
 - [Warm and cold restarts](warm-and-cold-restarts.md): what a restart keeps.

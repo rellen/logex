@@ -297,7 +297,7 @@ with, and this store's first line is not
 
 That logex starts only with `start: :cold`, which copies the store to
 `box.retain.dropped.1` first. The values that it counts after that are in its own store,
-not in the copy. [Recover a refused store](../../guides/howto/recover-a-refused-store.md)
+not in the copy. [Recover from a refused store](../../guides/howto/recover-a-refused-store.md)
 gives the steps for a user.
 
 ### The end line
@@ -522,7 +522,7 @@ Each test file of this table is in `test/logex/`:
   table of paths.
 - [The store](../../guides/reference/store.md):
   the rules for a user.
-- [Recover a refused store](../../guides/howto/recover-a-refused-store.md) and
+- [Recover from a refused store](../../guides/howto/recover-a-refused-store.md) and
   [Edit the store by hand](../../guides/howto/edit-the-store-by-hand.md): the steps for a
   user.
 - [Glossary](../../guides/reference/glossary.md): the technical words of logex.

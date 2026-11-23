@@ -316,7 +316,7 @@ the I/O list. The last 8 lines are a table of the cycles. This table explains it
 | Limit the time of 1 run of a task | A [watchdog](../reference/glossary.md#watchdog): `watchdog 50` at the end of the task line | [Set watchdogs](set-watchdogs.md) |
 | Let a program read a global by its name | `var_external estop bool` in the program | [Share a global](share-a-global.md) |
 | Keep a value across a [warm restart](../reference/glossary.md#warm-restart) | `var_global retain total dint 0` | [Keep values across a restart](keep-values-across-a-restart.md) |
-| Put an [array](../reference/glossary.md#array) at consecutive points | `var_global zone_t real[8] at card.i.0` | [Map I/O points](map-io-points.md) |
+| Put an [array](../reference/glossary.md#array) at consecutive points | `var_global zone_t real[8] at card.i.0` | [Map tags to I/O points](map-io-points.md) |
 
 ## Run the plant, and load a file with errors
 
