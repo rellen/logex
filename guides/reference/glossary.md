@@ -561,6 +561,12 @@ crash. A fresh start of a runner that has a store is warm: it reads the retained
 from the store. With the option `start: :cold`, it is cold: it writes the initial values
 over the store.
 
+### deploy
+
+A fresh start of a runner from changed files: a new version of a program file or of a
+configuration file. A deploy without `start: :cold` reads the retained values that the
+earlier files wrote in the store.
+
 ### retained image
 
 The retained values of an instance or of a resource as plain data. The host can take the
