@@ -161,7 +161,7 @@ A check runs at the call where a value comes in from the host. A program gets it
 | A program | 1 time, where it comes in. `Logex.Runtime.instance/1,2`. `Logex.Edit.accept/3`, for the running program and the candidate. `Logex.Configuration.check/1`, and so `new!/1`, `compile/3` and `start/1`. `Logex.Configuration.Edit.accept/3`, for each program type that runs and the candidate | 190, 200 |
 | A program that the host changes after that check | The scan that gets to a changed `add` or timer | 194 |
 | A type in `types:` | Compiled again from its text, 1 time for each compile | 54 |
-| A global from `Global.new!/3` | Its initial value at the call, in the words of `check/1`. Its name, its type and its location at `new!/1` and `check/1` | 555, 575 |
+| A global from `Global.new!/3` | Each error of the 1 global at the call, in the words of `check/1`: its name, its type, its location and its value. What needs the other globals or the devices at `new!/1` and `check/1` | 555, 575 to 577 |
 
 The check of a program finds only these hand edits:
 
@@ -422,8 +422,8 @@ Each refusal is 1 `ArgumentError`, and result 7 gives its 2 errors as 2 lines.
 - Result 11: `get/2` returns the reason, and `get!/2` raises it.
 - Result 12: the global from Elixir gets the words of the
   [configuration file](../../guides/reference/glossary.md#configuration-file).
-  `Global.new!/3` raises them when it is called, before `new!/1` runs (decisions 555 and
-  575).
+  `Global.new!/3` raises them when it is called, before `new!/1` runs (decisions 555,
+  575 and 577).
 
 ## Consequences
 
@@ -498,7 +498,7 @@ This record sums up these decisions of
 - Programs and types from the host: 54, 169, 182, 190, 194, 200, 371, 404, 430, 432
   and 436.
 - States and resources: 171 to 174, 184 to 186 and 188.
-- Globals from the host: 555 and 575.
+- Globals from the host: 555, 575 to 577 and 583.
 - The bounds of a compile: 369, 370, 403, 429, 478, 520, 522 and 524 to 526.
 
 [§4.6](../organisation.md#46-execution-model) of the same document says why the runtime

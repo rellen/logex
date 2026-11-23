@@ -110,8 +110,9 @@ otherwise.
 - `Logex.Configuration.Task`: a struct, 1 [task](glossary.md#task).
   `Logex.Configuration.new!/1` and `check/1` check it.
 - `Logex.Configuration.Global`: a struct, 1 [global](glossary.md#global). Its function
-  `new!/3` makes one. It refuses a wrong option and an initial value that the type does
-  not hold. `new!/1` and `check/1` check its name, its type and its location.
+  `new!/3` makes one. It refuses each error of that 1 global when you call it: a wrong
+  option, name, type, location or initial value. `new!/1` and `check/1` check what needs
+  the other globals or the devices, for example 2 globals of 1 name.
 - `Logex.Configuration.Instance`: a struct, 1 program instance of a configuration.
   `new!/1` and `check/1` check it.
 - `Logex.Configuration.Connection`: a struct, 1 [connection](glossary.md#connection).
@@ -310,9 +311,10 @@ argument. `new!/1` raises both kinds in 1 message, the wrong arguments first.
 
 > #### Note {: .info}
 >
-> `Logex.Configuration.Global.new!/3` refuses an initial value that the type does not
-> hold when you call it. It does not check the name, the type or the location:
-> `new!/1` and `check/1` refuse those.
+> `Logex.Configuration.Global.new!/3` refuses each error of 1 global when you call it:
+> its name, its type, its location and its initial value. It uses the words of
+> `check/1`. It does not compare the global with the other globals or with the devices.
+> `new!/1` and `check/1` refuse 2 globals of 1 name and 2 globals at 1 point.
 > [Example: wrong calls to compile and declare](#example-wrong-calls-to-compile-and-declare)
 > shows a global of the type `bool` with the initial value 5.
 
@@ -1296,7 +1298,7 @@ check/1 of a priority of 1.5:
 The file `motor.txt` is not a wrong argument: `compile_file/1` returns a diagnostic.
 `Logex.Configuration.Global.new!/3` refuses the initial value 5 for a `bool` when it is
 called. The script gives `Logex.Configuration.new!/1` that global as a struct, so
-`new!/1` refuses it beside its 4 other problems. The
+`new!/1` refuses it beside its 4 other problems, in the same words. The
 configuration of `check/1` has no instance, so `check/1` also gives a second diagnostic.
 
 ### Example: wrong calls to the edits, the I/O, the runner and its clocks

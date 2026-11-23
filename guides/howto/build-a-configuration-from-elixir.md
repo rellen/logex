@@ -393,9 +393,11 @@ that `Logex.Configuration.Text.print/1` prints for the data.
   `%Connection{instance: "m2", member: "speed_sp", to: "speeds[1]"}` gives
   `m2.speed_sp speeds[1]`.
 
-`Logex.Configuration.Global.new!/3` makes a global. When you call it, it refuses a wrong
-option and an initial value that the type does not hold. A global at a point takes no
-initial value and no `retain: true`: `new!/1` refuses those.
+`Logex.Configuration.Global.new!/3` makes a global. When you call it, it refuses each
+error of that global: a wrong option, name, type, location or initial value. A global
+at a point takes no initial value and no `retain: true`, and `Global.new!/3` refuses
+those too. `Logex.Configuration.new!/1` refuses 2 globals of 1 name, and 2 globals at 1
+point.
 
 ## Other ways to get a configuration
 
