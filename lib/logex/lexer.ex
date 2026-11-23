@@ -44,7 +44,10 @@ defmodule Logex.Lexer do
   name holding a longer subscript or bit number `{:long_name, run}`, and an exponent past
   it, `0.0e10000000`, `{:exponent_range, run}`, so that no number read costs more than its
   text, and the store's and the forces file's readers, which read a number here, refuse
-  them too.
+  them too. Since decision 583 a host's refusal quotes a long number it is given the same
+  way, by its first 24 characters and how many it has, `` `100000000000000000000000…`
+  (100001 characters) ``: `Logex.Tag.new!/5`'s, `Logex.Configuration.Global.new!/3`'s
+  and `Logex.Configuration.check/1`'s.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
@@ -87,6 +90,90 @@ defmodule Logex.Lexer do
 
   @doc false
   def largest_exponent, do: @largest_exponent
+
+  # Decision 583 (RV-31): the one place a number is cut where a message quotes it. A
+  # compile quotes a literal past `longest_number/0` characters by its first 24 and `…`,
+  # with how many it has (`{:long_number, run}`, below); a host's refusal quotes a number
+  # given from Elixir past that length the same way, its first 24 characters and `…`, and
+  # how many it has, `100000000000000000000000… (100001 characters)`, so that the
+  # refusals of `Logex.Tag.new!/5`, `Logex.Configuration.Global.new!/3` and
+  # `Logex.Configuration.check/1` stay short however long the number, and cost what a
+  # short one does: a long integer's text is never made whole, `Integer.to_string/1`'s
+  # time growing with the square of its digits, 9 s of a million, where its first digits
+  # and its length take a power of ten and one division. A number of at most
+  # `longest_number/0` characters is quoted whole, as a compile quotes a literal it reads
+  # (provisional: `PLAN.md`'s RV-31, question 1). The refusals the decision names, and
+  # what they show, read this; another of the host contract's quotes as it did
+  # (provisional: question 3).
+  @shown_start 24
+  @past_positive Integer.pow(10, @longest_number)
+  @past_negative -Integer.pow(10, @longest_number - 1)
+
+  defguardp is_long(n)
+            when is_integer(n) and (n >= @past_positive or n <= @past_negative)
+
+  @doc false
+  # A number as a message shows it: whole, or a long integer cut, its count after it.
+  def shown_number(n) when is_long(n), do: cut_shown(cut_integer(n))
+  def shown_number(n) when is_float(n), do: Float.to_string(n)
+  def shown_number(n) when is_integer(n), do: Integer.to_string(n)
+
+  @doc false
+  # A number as a message quotes it, in backquotes: `` `300` ``, or a long integer's cut
+  # start quoted and its count after it, `` `100000000000000000000000…` (100001
+  # characters) ``.
+  def quoted_number(n) when is_long(n), do: cut_quoted(cut_integer(n))
+  def quoted_number(n), do: "`" <> shown_number(n) <> "`"
+
+  @doc false
+  # A value as a message shows it, as `inspect/2` does, with every long integer in it cut,
+  # however deep.
+  def inspected(value, options \\ []),
+    do: inspect(value, [inspect_fun: &inspected_part/2] ++ options)
+
+  defp inspected_part(n, _options) when is_long(n), do: Inspect.Algebra.string(shown_number(n))
+  defp inspected_part(value, options), do: Inspect.inspect(value, options)
+
+  defp cut_shown({start, count}), do: "#{start} (#{count} characters)"
+  defp cut_quoted({start, count}), do: "`#{start}` (#{count} characters)"
+
+  # A long integer's first 24 characters with `…`, its sign among them, and how many it
+  # has, from its size and its leading digits alone.
+  defp cut_integer(n) when n < 0, do: cut_integer(-n, "-")
+  defp cut_integer(n), do: cut_integer(n, "")
+
+  defp cut_integer(n, sign) do
+    want = @shown_start - byte_size(sign)
+    {lead, digits} = leading(n, estimated(n), want)
+    {sign <> Integer.to_string(lead) <> "…", digits + byte_size(sign)}
+  end
+
+  # The power of ten below `n`, from its bits: log10(2^(bits - 1)), within one of it,
+  # which leading/3 settles.
+  defp estimated(n), do: trunc((bits(n) - 1) * 0.30102999566398120)
+
+  defp bits(n) do
+    <<top, _::binary>> = bytes = :binary.encode_unsigned(n)
+    (byte_size(bytes) - 1) * 8 + length(Integer.digits(top, 2))
+  end
+
+  # `n`'s first `want` digits and how many digits it has, `power` the estimated exponent
+  # of its leading digit: the quotient by 10^(power + 1 - want) has `want` digits, between
+  # `low` and `high`, where the estimate holds, one more where it fell short, and fewer
+  # where it went over.
+  defp leading(n, power, want),
+    do: leading(n, power, want, {Integer.pow(10, want - 1), Integer.pow(10, want)})
+
+  defp leading(n, power, want, bounds),
+    do: settled(div(n, Integer.pow(10, power + 1 - want)), n, power, {want, bounds})
+
+  defp settled(lead, n, power, {_want, {_low, high}} = wanted) when lead >= high,
+    do: settled(div(lead, 10), n, power + 1, wanted)
+
+  defp settled(lead, n, power, {want, {low, _high} = bounds}) when lead < low,
+    do: leading(n, power - 1, want, bounds)
+
+  defp settled(lead, _n, power, _wanted), do: {lead, power + 1}
   defguardp is_name_char(ch) when is_name_start(ch) or ch in ?0..?9
 
   @doc """
@@ -191,7 +278,8 @@ defmodule Logex.Lexer do
         "2.2250738585072014e-308"
 
   # RV-2 (M13): a number past the longest logex reads is quoted by its first characters
-  # alone, so that its message stays short however long the number is.
+  # alone, so that its message stays short however long the number is: the one cut
+  # (decision 583), which a host's refusal of a long number makes too (`quoted_number/1`).
   def format_error({:long_number, text}),
     do:
       "#{quoted_start(text)} is no number logex reads: a number is written in at most " <>
@@ -214,7 +302,7 @@ defmodule Logex.Lexer do
 
   # The first 24 characters of a long run, then `…`, and a short run whole, each quoted as
   # every other run is (since RV-2's review, where a long one was quoted in backticks).
-  defp quoted_start(<<start::binary-size(24), _::binary>>), do: shown(start <> "…")
+  defp quoted_start(<<start::binary-size(@shown_start), _::binary>>), do: shown(start <> "…")
   defp quoted_start(text), do: shown(text)
 
   # RV-2 (the review after Milestone 6, a1-frontend-10): a run quoted as a string even

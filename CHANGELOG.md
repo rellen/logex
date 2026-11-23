@@ -153,6 +153,17 @@ changed after its last item was written, under "The host's API".
   stay `check/1`'s. Look for: a `Global.new!/2,3` call whose name, type or location a
   later step corrects, or that sets an initial value or `retain: true` on a located
   global, which now raises where the global is built.
+- **A long number is quoted cut in a host's refusal** (decision 583): `Logex.Tag.new!/5`,
+  `Logex.Configuration.Global.new!/3` and `Logex.Configuration.check/1`, and so
+  `Logex.Configuration.new!/1`, quote a number past 10,000 characters by its first 24 and
+  how many it has, as a compile quotes a long literal, where they quoted it whole: a
+  totaliser's `Global.new!("total_boxes", :dint, initial: 10 ** 100_000)` raises
+  `` `total_boxes` is a dint: `100000000000000000000000…` (100001 characters) is outside
+  -2147483648 to 2147483647 ``, some 100 bytes where it was a hundred thousand digits,
+  and in milliseconds where the whole text took time growing with the square of its
+  digits, a second for 320,000. A number of 10,000 characters or fewer is quoted whole,
+  as before; one inside a value that is no number, a list's, is cut the same way. Look
+  for: code that reads a number back out of such a message.
 
 ### What it carries, by the work that built it
 

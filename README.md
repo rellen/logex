@@ -3265,7 +3265,9 @@ broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
   name, a type or a location that is none, `new!("conveyor speed", :dint)`,
   `new!("speed", :float)` and `new!("speed", :dint, at: 5)`, each in `check/1`'s line.
   Two globals of one name, or two on one point, are `check/1`'s to refuse, which needs
-  the configuration.
+  the configuration. A number past 10,000 characters is quoted by its first 24 and how
+  many it has, as a compile quotes a long literal, here, in `Logex.Tag.new!/5` and in
+  `check/1` (decision 583).
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision

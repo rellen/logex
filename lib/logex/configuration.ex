@@ -148,6 +148,11 @@ defmodule Logex.Configuration do
   retained but driven by `w1.count`, which is not: the first round writes over it",
   looked for only where a global is retained.
 
+  A number `check/1` quotes, a global's initial value, an array's size, a task's interval,
+  priority or watchdog, a connection's constant or an element's line, is quoted whole up
+  to 10,000 characters and past that by its first 24 and how many it has, as a compile
+  quotes a long literal (decision 583), so that a refusal stays short.
+
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
   `Logex.Compiler.instructionize/2` raises on a tree no source could say: a configuration
@@ -318,7 +323,13 @@ defmodule Logex.Configuration do
       element, a line each; and a location not written in its one spelling, `` `panel.I.0`
       is not a location as written: … ``, or on a device a keyword names.
 
-    A name that is no text is shown as Elixir shows it, `:g cannot name a global: …`.
+    A name that is no text is shown as Elixir shows it, `:g cannot name a global: …`. A
+    number a line quotes is quoted whole up to 10,000 characters, and past that by its
+    first 24 and how many it has, as a compile quotes a long literal (decision 583):
+    `new!("total_boxes", :dint, initial: 10 ** 100_000)` raises `` `total_boxes` is a
+    dint: `100000000000000000000000…` (100001 characters) is outside -2147483648 to
+    2147483647 ``, and `check/1` quotes every number it is given so, a long one inside a
+    value it shows among them.
     Whatever it is given, `new!/3` gives a struct or raises an `ArgumentError`, nothing
     else. `new!/2` judges the same, with no initial value.
     """
@@ -358,7 +369,7 @@ defmodule Logex.Configuration do
     defp options([{key, value} | rest], all, global, seen, problems) when key in @qualifiers,
       do:
         options(rest, all, global, Map.put(seen, key, value), [
-          "`#{key}:` for #{label(global.name)} takes true or false, found #{inspect(value)}"
+          "`#{key}:` for #{label(global.name)} takes true or false, found #{Logex.Lexer.inspected(value)}"
           | problems
         ])
 
@@ -368,7 +379,7 @@ defmodule Logex.Configuration do
     defp options([{key, value} | rest], all, global, seen, problems) when is_atom(key),
       do:
         options(rest, all, global, Map.put(seen, key, value), [
-          "unknown option #{inspect(key)} for #{label(global.name)}: " <>
+          "unknown option #{Logex.Lexer.inspected(key)} for #{label(global.name)}: " <>
             "Logex.Configuration.Global.new!/3 takes `initial:`, `at:`, `retain:` and " <>
             "`non_retain:`"
           | problems
@@ -418,10 +429,10 @@ defmodule Logex.Configuration do
     defp shape(options, name),
       do:
         "the options of #{label(name)} are a keyword list of `initial:`, `at:`, " <>
-          "`retain: true` or `non_retain: true`, found #{inspect(options)}"
+          "`retain: true` or `non_retain: true`, found #{Logex.Lexer.inspected(options)}"
 
     defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: inspect(name)
+    defp label(name), do: Logex.Lexer.inspected(name)
 
     @typedoc "A global's type: an elementary type, or an array of one."
     @type type ::
@@ -572,7 +583,7 @@ defmodule Logex.Configuration do
     # An element of the configuration's whose name no line can say: a task's, a global's
     # or a program instance's.
     def cannot_name(element),
-      do: "#{inspect(element.name)} cannot name a #{kind(element)}: " <> rule()
+      do: "#{Logex.Lexer.inspected(element.name)} cannot name a #{kind(element)}: " <> rule()
 
     defp kind(%Logex.Configuration.Task{}), do: "task"
     defp kind(%Global{}), do: "global"
@@ -625,7 +636,7 @@ defmodule Logex.Configuration do
 
     defp sizes_said(false, %Global{name: name, type: type}),
       do: [
-        "global #{label(name)} has type #{inspect(type)}: a global is " <>
+        "global #{label(name)} has type #{Logex.Lexer.inspected(type)}: a global is " <>
           Declarations.either(&inspect/1) <>
           ", or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of " <>
           "one integer a dimension"
@@ -652,7 +663,7 @@ defmodule Logex.Configuration do
     def value_said(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
       do: [
         "the initial value of global #{label(name)}, an array, must be a list of its " <>
-          "elements' values, found #{inspect(initial)}"
+          "elements' values, found #{Logex.Lexer.inspected(initial)}"
       ]
 
     def value_said(%Global{initial: initial}) when is_integer(initial),
@@ -673,12 +684,12 @@ defmodule Logex.Configuration do
 
     def value_said(%Global{name: name, type: type, initial: initial}) when type in @reals,
       do: [
-        "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
+        "the initial value of global #{label(name)} must be a number, found #{Logex.Lexer.inspected(initial)}"
       ]
 
     def value_said(%Global{name: name, initial: initial}),
       do: [
-        "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
+        "the initial value of global #{label(name)} must be an integer, found #{Logex.Lexer.inspected(initial)}"
       ]
 
     def minus_zero(name),
@@ -694,7 +705,7 @@ defmodule Logex.Configuration do
       do: [
         "the initial value of global #{label(name)}, an array#{of(type)}, " <>
           "must be a list of its elements' values, each a number, found " <>
-          inspect(initial)
+          Logex.Lexer.inspected(initial)
       ]
 
     # RV-30's review (F1): an array whose elements' type is none, `{:array, :ton, [2]}`,
@@ -725,7 +736,7 @@ defmodule Logex.Configuration do
 
     defp retain_said(%Global{name: name, retain: retain}),
       do: [
-        "unknown qualifier #{inspect(retain)} on global #{label(name)}: logex has :retain " <>
+        "unknown qualifier #{Logex.Lexer.inspected(retain)} on global #{label(name)}: logex has :retain " <>
           "and :non_retain, or nil for none"
       ]
 
@@ -852,13 +863,12 @@ defmodule Logex.Configuration do
     defp fit(false, %Global{name: name, type: type, initial: v}),
       do: ["#{label(name)} is #{Declarations.a_type(type)}: " <> misfit(type, v)]
 
+    # Decision 583 (RV-31): a number quoted through the one cut a compile makes, a long
+    # one's first characters and how many it has (`Logex.Lexer.quoted_number/1`).
     defp misfit(type, v) when is_float(v) or type in @reals,
-      do: Declarations.literal_misfit(type, v, "`#{shown(v)}`")
+      do: Declarations.literal_misfit(type, v, Logex.Lexer.quoted_number(v))
 
-    defp misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
-
-    defp shown(v) when is_float(v), do: Float.to_string(v)
-    defp shown(v), do: "#{v}"
+    defp misfit(type, v), do: Declarations.initial_misfit(type, Logex.Lexer.quoted_number(v))
 
     # `Logex.Configuration.location/1`'s rule: a location's parts, `{:ok, {device, "i" |
     # "q", address}}`, or `:error`.
@@ -930,7 +940,7 @@ defmodule Logex.Configuration do
       do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
 
     defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: inspect(name)
+    defp label(name), do: Logex.Lexer.inspected(name)
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
@@ -1544,7 +1554,7 @@ defmodule Logex.Configuration do
   end
 
   defp checking(false, other),
-    do: raise(ArgumentError, "expected a %Logex.Configuration{}, got: #{inspect(other)}")
+    do: raise(ArgumentError, "expected a %Logex.Configuration{}, got: #{shown(other)}")
 
   defp checked([], diagnostics), do: diagnostics
   defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Enum.join(mistakes, "\n"))
@@ -1666,7 +1676,7 @@ defmodule Logex.Configuration do
       {nil,
        [
          "a configuration's file is a file name, or nil for one built from Elixir, " <>
-           "got: #{inspect(other)}"
+           "got: #{shown(other)}"
        ]}
 
   defp line_order(%Diagnostic{line: nil}), do: {1, 0}
@@ -1682,7 +1692,7 @@ defmodule Logex.Configuration do
   defp configuration_name(name), do: shaped(Declarations.name?(name), name, "a configuration")
 
   defp shaped(true, _name, _what), do: []
-  defp shaped(false, name, what), do: ["#{inspect(name)} cannot name #{what}: " <> rule()]
+  defp shaped(false, name, what), do: ["#{shown(name)} cannot name #{what}: " <> rule()]
 
   defp rule, do: Judge.rule()
 
@@ -1719,8 +1729,7 @@ defmodule Logex.Configuration do
 
   defp programs(other),
     do:
-      {%{},
-       ["programs must be a map of program names to %Logex.Program{}, got: #{inspect(other)}"]}
+      {%{}, ["programs must be a map of program names to %Logex.Program{}, got: #{shown(other)}"]}
 
   defp program(name, %Program{name: name, tags: tags, rungs: rungs} = program, ok, mistakes)
        when is_binary(name) and is_map(tags) and is_list(rungs),
@@ -1738,7 +1747,7 @@ defmodule Logex.Configuration do
       {ok,
        [
          "the program under #{label(key)} is not a %Logex.Program{} from " <>
-           "Logex.compile/2, got: #{inspect(other)}"
+           "Logex.compile/2, got: #{shown(other)}"
          | mistakes
        ]}
 
@@ -1795,7 +1804,7 @@ defmodule Logex.Configuration do
     {items, good, mistakes} =
       proper(list, &element(&1, &2, module), {[], [], []}, fn _tail, {items, good, mistakes} ->
         {items, good,
-         ["#{part} must be a list of %#{inspect(module)}{}, got: #{inspect(list)}" | mistakes]}
+         ["#{part} must be a list of %#{shown(module)}{}, got: #{shown(list)}" | mistakes]}
       end)
 
     {Enum.reverse(items), Enum.reverse(good), Enum.reverse(mistakes)}
@@ -1813,8 +1822,7 @@ defmodule Logex.Configuration do
 
   defp element_of(false, other, {items, good, mistakes}, module),
     do:
-      {items, good,
-       ["#{one(module)} is a %#{inspect(module)}{}, got: #{inspect(other)}" | mistakes]}
+      {items, good, ["#{one(module)} is a %#{shown(module)}{}, got: #{shown(other)}" | mistakes]}
 
   # A struct with every key its module gives it. A map that names the struct but lacks a
   # key, as Map.delete/2 makes one, is not that struct: nothing here reads it, so no
@@ -1836,7 +1844,7 @@ defmodule Logex.Configuration do
       {[%{item | line: nil} | items], good,
        Enum.reverse(
          [
-           "#{describe(item)} has line #{inspect(line)}: a line is a positive integer, " <>
+           "#{describe(item)} has line #{shown(line)}: a line is a positive integer, " <>
              "or nil for one built from Elixir"
            | said(item)
          ],
@@ -1866,7 +1874,7 @@ defmodule Logex.Configuration do
       named(instance) ++
         of_word(
           word?(type),
-          "#{describe(instance)}: its type is a program's name, found #{inspect(type)}"
+          "#{describe(instance)}: its type is a program's name, found #{shown(type)}"
         ) ++
         instance_task(task, instance)
 
@@ -1890,11 +1898,11 @@ defmodule Logex.Configuration do
       of_word(
         word?(single),
         "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
-          "found #{inspect(single)}"
+          "found #{shown(single)}"
       )
 
   defp counted(value, _rule) when value == nil or is_integer(value), do: []
-  defp counted(value, rule), do: [rule <> ", found #{inspect(value)}"]
+  defp counted(value, rule), do: [rule <> ", found #{shown(value)}"]
 
   defp interval_rule(name), do: "task #{label(name)}: an interval is 1 to 2147483647 ms"
   defp watchdog_rule(name), do: "task #{label(name)}: a watchdog is 1 to 2147483647 ms"
@@ -1904,7 +1912,7 @@ defmodule Logex.Configuration do
   defp flag(continuous, _name) when is_boolean(continuous), do: []
 
   defp flag(continuous, name),
-    do: ["task #{label(name)}: continuous is true or false, found #{inspect(continuous)}"]
+    do: ["task #{label(name)}: continuous is true or false, found #{shown(continuous)}"]
 
   defp priority_rule(name), do: "task #{label(name)}: a priority is 0, the highest, to 65535"
 
@@ -1914,7 +1922,7 @@ defmodule Logex.Configuration do
     do:
       of_word(
         word?(task),
-        "#{describe(instance)}: its task is a task's name, or nil for none, found #{inspect(task)}"
+        "#{describe(instance)}: its task is a task's name, or nil for none, found #{shown(task)}"
       )
 
   # A connection's line writes its instance and member as one path, `m1.start`, whose
@@ -1925,11 +1933,11 @@ defmodule Logex.Configuration do
   defp ends_rule(%Connection{instance: instance, member: member}),
     do:
       "a connection's instance is a name, and with its member makes one path, as in " <>
-        "`m1.start`, found #{inspect(instance)} and #{inspect(member)}"
+        "`m1.start`, found #{shown(instance)} and #{shown(member)}"
 
   defp other_end_rule(%Connection{instance: instance, member: member, to: to}),
     do:
-      "#{path(instance, member)} is connected to #{inspect(to)}: a connection's other end is " <>
+      "#{path(instance, member)} is connected to #{shown(to)}: a connection's other end is " <>
         "a global, by name, or a constant"
 
   # What a connection's other end is: a global's name, a constant, or the host's mistake.
@@ -1958,7 +1966,7 @@ defmodule Logex.Configuration do
       for(
         item <- unlined,
         do:
-          "#{describe(item)} has no line, beside #{describe(first)} on line #{first.line}" <>
+          "#{describe(item)} has no line, beside #{describe(first)} on line #{shown_number(first.line)}" <>
             @lines
       )
 
@@ -1973,8 +1981,8 @@ defmodule Logex.Configuration do
 
   defp follows(false, before, item),
     do: [
-      "#{describe(item)} is on line #{item.line}, but follows #{describe(before)}, on line " <>
-        "#{before.line}" <> @lines
+      "#{describe(item)} is on line #{shown_number(item.line)}, but follows " <>
+        "#{describe(before)}, on line #{shown_number(before.line)}" <> @lines
     ]
 
   # A line two lists share. Two of one list are rising/1's to refuse.
@@ -2001,7 +2009,8 @@ defmodule Logex.Configuration do
     do:
       {held,
        [
-         "#{describe(item)} is on line #{item.line}, as #{describe(first)} is" <> @lines
+         "#{describe(item)} is on line #{shown_number(item.line)}, as #{describe(first)} is" <>
+           @lines
          | mistakes
        ]}
 
@@ -2013,15 +2022,15 @@ defmodule Logex.Configuration do
     do: "the connection of #{path(instance, member)}"
 
   defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: inspect(name)
+  defp label(name), do: shown(name)
 
   defp path(instance, member) when is_binary(instance) and is_binary(member),
     do: "`#{instance}.#{member}`"
 
-  defp path(instance, member), do: "#{inspect(instance)}.#{inspect(member)}"
+  defp path(instance, member), do: "#{shown(instance)}.#{shown(member)}"
 
   defp where(%{line: nil}), do: ""
-  defp where(%{line: line}), do: " (line #{line})"
+  defp where(%{line: line}), do: " (line #{shown_number(line)})"
 
   # The elements whose name the lexer reads as one token: any other name is the host's
   # mistake, refused already.
@@ -2133,10 +2142,10 @@ defmodule Logex.Configuration do
   defp kept_as(ref, _element), do: ref
 
   defp first_as(nil, kind), do: "the first is #{a(kind)}"
-  defp first_as(line, kind), do: "first on line #{line}, as #{a(kind)}"
+  defp first_as(line, kind), do: "first on line #{shown_number(line)}, as #{a(kind)}"
 
   defp at_line(nil), do: ""
-  defp at_line(line), do: " (line #{line})"
+  defp at_line(line), do: " (line #{shown_number(line)})"
 
   defp a(kind), do: Judge.a(kind)
 
@@ -2232,7 +2241,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the watchdog of `#{name}` is `#{watchdog}` ms: a watchdog is 1 to 2147483647 ms"
+        "the watchdog of `#{name}` is #{Logex.Lexer.quoted_number(watchdog)} ms: a watchdog " <>
+          "is 1 to 2147483647 ms"
       )
     ]
 
@@ -2291,7 +2301,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the interval of `#{name}` is `#{interval}` ms: an interval is 1 to 2147483647 ms"
+        "the interval of `#{name}` is #{Logex.Lexer.quoted_number(interval)} ms: an interval " <>
+          "is 1 to 2147483647 ms"
       )
     ]
 
@@ -2316,7 +2327,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the priority of `#{name}` is `#{priority}`: a priority is 0 to 65535, and 0 is " <>
+        "the priority of `#{name}` is #{Logex.Lexer.quoted_number(priority)}: a priority is 0 to 65535, and 0 is " <>
           "the highest"
       )
     ]
@@ -2437,8 +2448,12 @@ defmodule Logex.Configuration do
 
   defp a_point(location, global), do: Judge.a_point(location, global)
 
-  defp shown_number(v) when is_float(v), do: Float.to_string(v)
-  defp shown_number(v), do: "#{v}"
+  # Decision 583 (RV-31): a number shown through the one cut a compile makes.
+  defp shown_number(v), do: Logex.Lexer.shown_number(v)
+
+  # A value a refusal of check/1's shows, as `inspect/1` does, a long number in it cut
+  # (decision 583).
+  defp shown(value), do: Logex.Lexer.inspected(value)
 
   @doc """
   A global's value before anything sets it: its `initial`, or 0 without one, so that an
@@ -3315,7 +3330,7 @@ defmodule Logex.Configuration do
 
   defp end_label(to) when is_binary(to) or is_integer(to), do: "`#{to}`"
   defp end_label(to) when is_float(to), do: "`#{Float.to_string(to)}`"
-  defp end_label(to), do: inspect(to)
+  defp end_label(to), do: shown(to)
 
   defp source(:global, connection, tag, acc, world),
     do: read_global(global_of(connection.to, tag.type, world), connection, tag, acc)
@@ -3327,7 +3342,7 @@ defmodule Logex.Configuration do
         acc,
         connection,
         "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}, and " <>
-          "the constant `#{shown_number(connection.to)}` is one value: connect it to a global " <>
+          "the constant #{Logex.Lexer.quoted_number(connection.to)} is one value: connect it to a global " <>
           "array of its sizes, or each element to a constant, as in " <>
           "`#{connection.instance}.#{Logex.Array.name(tag.name, Enum.map(elem(type, 2), fn _ -> 0 end))} " <>
           "#{shown_number(connection.to)}`"
@@ -3346,7 +3361,11 @@ defmodule Logex.Configuration do
         acc,
         connection,
         "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}: " <>
-          Declarations.literal_misfit(type, connection.to, "`#{shown_number(connection.to)}`")
+          Declarations.literal_misfit(
+            type,
+            connection.to,
+            Logex.Lexer.quoted_number(connection.to)
+          )
       )
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.

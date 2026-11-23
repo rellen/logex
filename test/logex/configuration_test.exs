@@ -2036,6 +2036,215 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # Decision 583 (RV-31; the maintainer, 2026-11-16, RV-30's question 9): a refusal of
+  # `Global.new!/3`, of `Logex.Tag.new!/5` and of check/1 quotes a long number cut, as a
+  # compile cuts a long literal it quotes: past `Logex.Lexer.longest_number/0`
+  # characters, its first 24 and `…`, and how many it has, where it was quoted whole, a
+  # hundred thousand digits for `10 ** 100_000`. A number of at most 10,000 characters
+  # is quoted whole, as a compile quotes a literal it reads.
+  describe "a long number in a host's refusal, cut as a compile cuts one (decision 583)" do
+    @dint "is outside -2147483648 to 2147483647"
+
+    test "Global.new!/3, Logex.Tag.new!/5 and check/1 quote a long number cut, pinned whole",
+         %{seal: seal} do
+      big = 10 ** 100_000
+      cut = "`100000000000000000000000…` (100001 characters)"
+
+      for {fun, message} <- [
+            {fn -> Global.new!("total_boxes", :dint, initial: big) end,
+             "`total_boxes` is a dint: #{cut} " <> @dint},
+            {fn -> Logex.Tag.new!("total_boxes", :dint, :var, big) end,
+             "`total_boxes` is a dint: #{cut} " <> @dint},
+            {fn -> Global.new!("total_boxes", :dint, initial: -big) end,
+             "`total_boxes` is a dint: `-10000000000000000000000…` (100002 characters) " <>
+               @dint},
+            {fn -> Global.new!("fan_on", :bool, initial: big) end,
+             "`fan_on` is a bool: its initial value must be 0 or 1, found #{cut}"},
+            {fn -> Logex.Tag.new!("rate", :real, :var, big) end,
+             "`rate` is a real: #{cut} is beyond a real's range, -3.4028234663852886e38 to " <>
+               "3.4028234663852886e38"},
+            {fn -> Global.new!("limits", {:array, :int, [2]}, initial: [1, big]) end,
+             "`limits[1]` is an int: #{cut} is outside -32768 to 32767"},
+            {fn -> Logex.Tag.new!("limits", {:array, :int, [big]}) end,
+             "`limits` would hold 100000000000000000000000… (100001 characters) elements, " <>
+               "`[100000000000000000000000… (100001 characters)]`: an array holds 65536 at most"},
+            # Inside a value that is no number, as `inspect/1` shows it, the number cut.
+            {fn -> Global.new!("g", :dint, initial: [7, big]) end,
+             "the initial value of global `g` must be an integer, found " <>
+               "[7, 100000000000000000000000… (100001 characters)]"},
+            {fn -> Logex.Tag.new!("g", :dint, :var, [7, -big]) end,
+             "the initial value of `g` must be an integer, found " <>
+               "[7, -10000000000000000000000… (100002 characters)]"},
+            {fn -> Global.new!(big, :bool) end,
+             "100000000000000000000000… (100001 characters) cannot name a global: a name is a " <>
+               "letter or `_`, then letters, digits or `_`"},
+            {fn -> Global.new!("g", :bool, retain: big) end,
+             "`retain:` for `g` takes true or false, found 100000000000000000000000… (100001 " <>
+               "characters)"},
+            {fn -> Logex.Tag.new!("g", :bool, :var, nil, non_retain: -big) end,
+             "`non_retain:` for `g` takes true or false, found -10000000000000000000000… " <>
+               "(100002 characters)"}
+          ] do
+        assert_raise ArgumentError, message, fun
+      end
+
+      # check/1 of the same global built by hand, and of a configuration's other numbers:
+      # a task's interval, priority and watchdog, a connection's constant, an element's
+      # line, each quoted cut where it quotes one.
+      assert of_hand(seal, %Global{name: "total_boxes", type: :dint, initial: big}) ==
+               {:diagnostics, ["`total_boxes` is a dint: #{cut} " <> @dint]}
+
+      fields = base(seal)
+      config = Configuration.new!(fields)
+
+      assert Enum.map(
+               Configuration.check(%{
+                 config
+                 | tasks: [
+                     %Configuration.Task{name: "t", interval: big, priority: big, watchdog: -big}
+                   ],
+                   instances: [%Instance{name: "m", type: "seal", task: "t"}],
+                   connections: [
+                     %Connection{instance: "m", member: "start", to: "pb"},
+                     %Connection{instance: "m", member: "stop", to: big},
+                     %Connection{instance: "m", member: "motor", to: "k"}
+                   ]
+               }),
+               & &1.message
+             ) == [
+               "the interval of `t` is #{cut} ms: an interval is 1 to 2147483647 ms",
+               "the priority of `t` is #{cut}: a priority is 0 to 65535, and 0 is the highest",
+               "the watchdog of `t` is `-10000000000000000000000…` (100002 characters) ms: a " <>
+                 "watchdog is 1 to 2147483647 ms",
+               "`m.stop` is a bool: only 0 or 1 fit, found #{cut}"
+             ]
+
+      assert mistakes(%{
+               config
+               | globals: fields[:globals] ++ [%Global{name: "h", type: :dint, line: -big}]
+             }) == [
+               "global `h` has line -10000000000000000000000… (100002 characters): a line is a " <>
+                 "positive integer, or nil for one built from Elixir"
+             ]
+    end
+
+    test "the cut is the compile's: past 10,000 characters, its first 24 and how many it has",
+         %{seal: seal} do
+      # The compile's own cut of a literal of 10,001 nines, and the host's of the number.
+      nines = String.duplicate("9", 10_001)
+
+      assert {:error, [%Logex.Diagnostic{message: compiled}]} =
+               Logex.compile("var x lint\nmove #{nines} x\n", name: "p")
+
+      assert compiled ==
+               "\"999999999999999999999999…\" is no number logex reads: a number is written " <>
+                 "in at most 10000 characters, and this one has 10001"
+
+      assert_raise ArgumentError,
+                   "`x` is an lint: `999999999999999999999999…` (10001 characters) is outside " <>
+                     "-9223372036854775808 to 9223372036854775807",
+                   fn -> Logex.Tag.new!("x", :lint, :var, String.to_integer(nines)) end
+
+      # At the edge: 10,000 characters quoted whole, a sign among them, and one more cut.
+      for {n, shown} <- [
+            {10 ** 10_000 - 1, "`#{String.duplicate("9", 10_000)}`"},
+            {10 ** 10_000, "`100000000000000000000000…` (10001 characters)"},
+            {-(10 ** 9_999) + 1, "`-#{String.duplicate("9", 9_999)}`"},
+            {-(10 ** 9_999), "`-10000000000000000000000…` (10001 characters)"}
+          ] do
+        assert_raise ArgumentError, "`g` is a dint: #{shown} " <> @dint, fn ->
+          Global.new!("g", :dint, initial: n)
+        end
+
+        assert of_hand(seal, %Global{name: "g", type: :dint, initial: n}) ==
+                 {:diagnostics, ["`g` is a dint: #{shown} " <> @dint]}
+      end
+
+      # A number's first digits and its length read exactly, whatever its digits.
+      for n <- [7 * 10 ** 54_321 + 123, 98_765 * 10 ** 30_000 + 1, 10 ** 12_345 - 1] do
+        text = Integer.to_string(n)
+
+        assert_raise ArgumentError,
+                     "`g` is a dint: `#{binary_part(text, 0, 24)}…` (#{byte_size(text)} " <>
+                       "characters) " <> @dint,
+                     fn -> Global.new!("g", :dint, initial: n) end
+      end
+    end
+
+    # A long value that is no number is shown as `inspect/1` shows it, bounded by its own
+    # limits, 200 elements in all and 4,096 bytes of a text, as RV-30's review pinned
+    # sixty numbers shown whole (provisional: the decision names a number, `PLAN.md`'s
+    # RV-31, question 2).
+    test "a long text or list is shown as inspect/1 shows it, a long number in it cut" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Global.new!("g", :dint, initial: Enum.to_list(1..300))
+        end
+
+      assert error.message ==
+               "the initial value of global `g` must be an integer, found " <>
+                 inspect(Enum.to_list(1..300))
+
+      assert String.ends_with?(error.message, "199, 200, ...]")
+
+      text = String.duplicate("a", 5_000)
+      error = assert_raise ArgumentError, fn -> Global.new!("g", :dint, initial: text) end
+
+      assert error.message ==
+               "the initial value of global `g` must be an integer, found " <> inspect(text)
+
+      assert byte_size(error.message) < 4_200
+    end
+
+    # The refusal's cost and its message's length as the number grows: four times the
+    # digits cost less than twice the reductions, where the whole text made took some
+    # sixteen times (the parent: 235,096 and 3,795,848 for 80,000 and 320,000 digits), and
+    # the message is the same but for the count. Counted in reductions, the least of three
+    # counts, at two sizes in the same run.
+    defp refused_cost(fun) do
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          %ArgumentError{} = catch_error(fun.())
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    defp counted(message), do: String.replace(message, ~r/\(\d+ characters\)/, "(n characters)")
+
+    test "a long number's refusal: its cost and its message's length bounded as it grows",
+         %{seal: seal} do
+      config = Configuration.new!(base(seal))
+
+      for {name, refuse} <- [
+            {"Global.new!/3", &Global.new!("total_boxes", :dint, initial: &1)},
+            {"Logex.Tag.new!/5", &Logex.Tag.new!("total_boxes", :dint, :var, &1)},
+            {"check/1",
+             fn n ->
+               Configuration.check(%{
+                 config
+                 | globals: config.globals ++ [%Global{name: "h", type: :dint, line: -n}]
+               })
+             end}
+          ] do
+        [small, large] = for digits <- [80_000, 320_000], do: 10 ** digits + 7
+        ratio = refused_cost(fn -> refuse.(large) end) / refused_cost(fn -> refuse.(small) end)
+        assert ratio < 2.0, "#{name}: 4x the digits took #{Float.round(ratio, 2)}x the reductions"
+
+        [short, long] =
+          for n <- [small, large] do
+            %ArgumentError{message: message} = catch_error(refuse.(n))
+            message
+          end
+
+        assert counted(long) == counted(short), name
+        assert byte_size(long) < 200, name
+      end
+    end
+  end
+
   describe "globals" do
     test "a bool or a dint, its initial value fitting it, a dint's negative too, and none " <>
            "on a located global",
