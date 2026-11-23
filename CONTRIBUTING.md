@@ -184,7 +184,7 @@ of seeds is one sample too: the compile, runtime and resource walks of
 `{n, 77, 7}`, `{n, 1, 1}` and `{7, n, 2026}`. Size a walk's draws from its rarest atom's
 rate per draw, read over one family, so that the atom is expected 15 times a run or more,
 and then hold the reach under 60 seeds or more drawn from more than one family the draws
-were not sized on. Those three now take 2,000, 150 and 400, and each holds under 100
+were not sized on. Those three now take 2,000, 150 and 1,000, and each holds under 100
 seeds of each of the three families.
 
 A property that restates a rule cannot catch that rule's defect. OE-1's edit walk checks
