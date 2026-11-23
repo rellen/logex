@@ -105,7 +105,10 @@ by its number.
 | [The online edit of a resource](architecture/online-edit-of-a-resource.md) | The edit of a [configuration](../guides/reference/glossary.md#configuration) over a [resource](../guides/reference/glossary.md#resource), its generation and the edit through the [runner](../guides/reference/glossary.md#runner) |
 | [The architecture of the store and its files](architecture/store-and-files.md) | The [retained image](../guides/reference/glossary.md#retained-image), the text of the [store](../guides/reference/glossary.md#store), its digests and versions, and the refusals |
 | [The writes and the copies of the store](architecture/store-writes.md) | The atomic write, the numbered copies of the store and the [forces file](../guides/reference/glossary.md#forces-file) |
-| [The test strategy](implementation/testing-strategy.md) | How the suite finds a defect by a run: oracles, walks, mutation tables, cost in reductions and load runs |
+| [The test strategy](implementation/testing-strategy.md) | How the suite finds a defect by a run: the kinds of test, oracles and walks |
+| [The cost of a stage in reductions](implementation/testing-cost.md) | The growth tests, the bounds against a twin and the ceilings |
+| [Tests of time](implementation/testing-time.md) | The manual clock, the tests on the real clock and the load runs |
+| [The checks of a change](implementation/testing-checks.md) | The mutation tables, the examples of the pages, the tests that read the source and the gate |
 | [Add an instruction](implementation/adding-an-instruction.md) | The survey of the name, then the steps in the code and in the suite |
 
 ### Decision records
