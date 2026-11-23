@@ -1,0 +1,8 @@
+// packer.logex -- a scale and an eye on the panel
+task fast interval 10 priority 1
+var_global weight int  at panel.i.0
+var_global eye    bool at panel.i.1
+
+program s1 packer with fast
+  s1.weight weight
+  s1.eye    eye
