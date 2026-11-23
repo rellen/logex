@@ -598,7 +598,10 @@ defmodule Logex.Program do
   arithmetic instruction whose destination has no integer type (`destination/2`), its
   destination's tag retyped or taken out of the table, and since decision 197 a routine
   whose `units` are not the ones its tags give (`units/1`), a long timer's left out, a
-  plain timer's or another tag's given one, or one that differs, each routine's units
+  plain timer's or another tag's given one, or one that differs; since M5-10, M5-11 and
+  M6-1 a routine whose `reals`, `arrays` or `retained` are not the ones its tags give
+  (`reals/1` and the like); and a bitwise instruction whose destination has no type it
+  can compute in (`destination/3`), each routine's units, reals, arrays and retained
   first and then its rungs in order, the program's routine first and then each body's, by
   the block's name. `[]` for every program a compile gives. One walk of the program's
   rungs and of each body once: a body in the program's one table of block types (decision

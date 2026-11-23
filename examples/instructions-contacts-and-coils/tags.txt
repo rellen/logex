@@ -1,0 +1,10 @@
+var_input  eye    bool
+var_input  slot   dint
+var_output lamp   bool
+var_output box_in bool
+var        s1     bool
+var        status word
+var        lamps  bool[4]
+var        speed  dint
+var        delay  ton
+var        boxes  ctu

@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="737" viewBox="0 0 364 737" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of status.ld</title>
+<desc id="description">8 rungs between two power rails. Rung 1: xic status.3 ote at_speed. Rung 2: not at_speed slow. Rung 3: not at_speed slow_w. Rung 4: and status 16#00ff low. Rung 5: word_to_int status code. Rung 6: shl status shift moved ote moved_ok. Rung 7: move status flags. Rung 8: xic at_speed otl flags.15.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="736" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="725"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="725"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="138" y1="52" x2="254" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="103" y="35" text-anchor="middle">status.3</text>
+<line class="ink" x1="68" y1="52" x2="96" y2="52"/>
+<line class="ink" x1="96" y1="41" x2="96" y2="63"/>
+<line class="ink" x1="110" y1="41" x2="110" y2="63"/>
+<line class="ink" x1="110" y1="52" x2="138" y2="52"/>
+<text class="tag" x="322" y="35" text-anchor="end">at_speed</text>
+<line class="ink" x1="254" y1="52" x2="290" y2="52"/>
+<path class="ink" d="M 295 41 Q 285 52 295 63"/>
+<path class="ink" d="M 307 41 Q 317 52 307 63"/>
+<line class="ink" x1="312" y1="52" x2="324" y2="52"/>
+<text class="dim" x="36" y="103" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="99" x2="68" y2="99"/>
+<line class="ink" x1="68" y1="99" x2="244" y2="99"/>
+<line class="ink" x1="324" y1="99" x2="346" y2="99"/>
+<rect class="box" x="244" y="86" width="80" height="68" rx="3"/>
+<line class="ink" x1="244" y1="112" x2="324" y2="112"/>
+<text class="op" x="284" y="103" text-anchor="middle">not</text>
+<text class="tag" x="314" y="126" text-anchor="end">at_speed</text>
+<text class="dim" x="254" y="144">to</text>
+<text class="tag" x="314" y="144" text-anchor="end">slow</text>
+<text class="dim" x="36" y="191" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="187" x2="68" y2="187"/>
+<line class="ink" x1="68" y1="187" x2="236" y2="187"/>
+<line class="ink" x1="324" y1="187" x2="346" y2="187"/>
+<rect class="box" x="236" y="174" width="88" height="68" rx="3"/>
+<line class="ink" x1="236" y1="200" x2="324" y2="200"/>
+<text class="op" x="280" y="191" text-anchor="middle">not</text>
+<text class="tag" x="314" y="214" text-anchor="end">at_speed</text>
+<text class="dim" x="246" y="232">to</text>
+<text class="tag" x="314" y="232" text-anchor="end">slow_w</text>
+<text class="dim" x="36" y="279" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="275" x2="68" y2="275"/>
+<line class="ink" x1="68" y1="275" x2="250" y2="275"/>
+<line class="ink" x1="324" y1="275" x2="346" y2="275"/>
+<rect class="box" x="250" y="262" width="74" height="86" rx="3"/>
+<line class="ink" x1="250" y1="288" x2="324" y2="288"/>
+<text class="op" x="287" y="279" text-anchor="middle">and</text>
+<text class="tag" x="314" y="302" text-anchor="end">status</text>
+<text class="tag" x="314" y="320" text-anchor="end">16#00ff</text>
+<text class="dim" x="260" y="338">to</text>
+<text class="tag" x="314" y="338" text-anchor="end">low</text>
+<text class="dim" x="36" y="385" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="381" x2="68" y2="381"/>
+<line class="ink" x1="68" y1="381" x2="222" y2="381"/>
+<line class="ink" x1="324" y1="381" x2="346" y2="381"/>
+<rect class="box" x="222" y="368" width="102" height="68" rx="3"/>
+<line class="ink" x1="222" y1="394" x2="324" y2="394"/>
+<text class="op" x="273" y="385" text-anchor="middle">word_to_int</text>
+<text class="tag" x="314" y="408" text-anchor="end">status</text>
+<text class="dim" x="232" y="426">to</text>
+<text class="tag" x="314" y="426" text-anchor="end">code</text>
+<text class="dim" x="36" y="490" text-anchor="end">6</text>
+<line class="ink" x1="46" y1="486" x2="68" y2="486"/>
+<line class="ink" x1="148" y1="486" x2="254" y2="486"/>
+<line class="ink" x1="324" y1="486" x2="346" y2="486"/>
+<rect class="box" x="68" y="473" width="80" height="86" rx="3"/>
+<line class="ink" x1="68" y1="499" x2="148" y2="499"/>
+<text class="op" x="108" y="490" text-anchor="middle">shl</text>
+<text class="tag" x="138" y="513" text-anchor="end">status</text>
+<text class="tag" x="138" y="531" text-anchor="end">shift</text>
+<text class="dim" x="78" y="549">to</text>
+<text class="tag" x="138" y="549" text-anchor="end">moved</text>
+<text class="tag" x="322" y="469" text-anchor="end">moved_ok</text>
+<line class="ink" x1="254" y1="486" x2="290" y2="486"/>
+<path class="ink" d="M 295 475 Q 285 486 295 497"/>
+<path class="ink" d="M 307 475 Q 317 486 307 497"/>
+<line class="ink" x1="312" y1="486" x2="324" y2="486"/>
+<text class="dim" x="36" y="596" text-anchor="end">7</text>
+<line class="ink" x1="46" y1="592" x2="68" y2="592"/>
+<line class="ink" x1="68" y1="592" x2="244" y2="592"/>
+<line class="ink" x1="324" y1="592" x2="346" y2="592"/>
+<rect class="box" x="244" y="579" width="80" height="68" rx="3"/>
+<line class="ink" x1="244" y1="605" x2="324" y2="605"/>
+<text class="op" x="284" y="596" text-anchor="middle">move</text>
+<text class="tag" x="314" y="619" text-anchor="end">status</text>
+<text class="dim" x="254" y="637">to</text>
+<text class="tag" x="314" y="637" text-anchor="end">flags</text>
+<text class="dim" x="36" y="701" text-anchor="end">8</text>
+<line class="ink" x1="46" y1="697" x2="68" y2="697"/>
+<line class="ink" x1="138" y1="697" x2="254" y2="697"/>
+<line class="ink" x1="324" y1="697" x2="346" y2="697"/>
+<text class="tag" x="103" y="680" text-anchor="middle">at_speed</text>
+<line class="ink" x1="68" y1="697" x2="96" y2="697"/>
+<line class="ink" x1="96" y1="686" x2="96" y2="708"/>
+<line class="ink" x1="110" y1="686" x2="110" y2="708"/>
+<line class="ink" x1="110" y1="697" x2="138" y2="697"/>
+<text class="tag" x="322" y="680" text-anchor="end">flags.15</text>
+<line class="ink" x1="254" y1="697" x2="290" y2="697"/>
+<path class="ink" d="M 295 686 Q 285 697 295 708"/>
+<path class="ink" d="M 307 686 Q 317 697 307 708"/>
+<line class="ink" x1="312" y1="697" x2="324" y2="697"/>
+<text class="op" x="301" y="701" text-anchor="middle">L</text>
+</svg>

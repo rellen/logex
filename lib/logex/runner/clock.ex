@@ -1,8 +1,10 @@
 defmodule Logex.Runner.Clock do
   @moduledoc """
   What the wall-clock runner reads time from (M4-1, `docs/organisation.md` §4.11), so that
-  a test can move time. `Logex.Runtime` reads no clock: the runner does, through this
-  behaviour, and nothing else in logex does.
+  a test can move time. `Logex.Runtime` reads no clock: the runner reads the plant's time
+  through this behaviour, and nothing else in logex reads it. The runner and its writer
+  read the machine's monotonic clock only to bound a file call by `write_limit:` in real
+  time (decisions 353 and 400), which a manual clock does not move.
 
   A clock is a module and a term the module's callbacks take, `{module, clock}`:
   `Logex.Runner.Clock.Monotonic`, the machine's monotonic clock, whose term is not read;

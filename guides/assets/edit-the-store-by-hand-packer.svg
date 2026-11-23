@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="303" viewBox="0 0 364 303" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of packer.ld</title>
+<desc id="description">2 rungs between two power rails. Rung 1: move weight weights[place]. Rung 2: xic eye ons e add place 1 place.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="302" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="291"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="291"/>
+<text class="note dim" x="54" y="34">the scale is under the place: its weight</text>
+<text class="note dim" x="54" y="48">goes to that place</text>
+<text class="dim" x="36" y="71" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="67" x2="68" y2="67"/>
+<line class="ink" x1="68" y1="67" x2="178" y2="67"/>
+<line class="ink" x1="324" y1="67" x2="346" y2="67"/>
+<rect class="box" x="178" y="54" width="146" height="68" rx="3"/>
+<line class="ink" x1="178" y1="80" x2="324" y2="80"/>
+<text class="op" x="251" y="71" text-anchor="middle">move</text>
+<text class="tag" x="314" y="94" text-anchor="end">weight</text>
+<text class="dim" x="188" y="112">to</text>
+<text class="tag" x="314" y="112" text-anchor="end">weights[place]</text>
+<text class="note dim" x="54" y="154">the eye sees the box leave: the next box</text>
+<text class="note dim" x="54" y="168">goes to the next place</text>
+<text class="dim" x="36" y="208" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="204" x2="68" y2="204"/>
+<line class="ink" x1="182" y1="204" x2="244" y2="204"/>
+<line class="ink" x1="324" y1="204" x2="346" y2="204"/>
+<text class="tag" x="91" y="187" text-anchor="middle">eye</text>
+<line class="ink" x1="68" y1="204" x2="84" y2="204"/>
+<line class="ink" x1="84" y1="193" x2="84" y2="215"/>
+<line class="ink" x1="98" y1="193" x2="98" y2="215"/>
+<line class="ink" x1="98" y1="204" x2="114" y2="204"/>
+<line class="ink" x1="114" y1="204" x2="130" y2="204"/>
+<text class="tag" x="156" y="187" text-anchor="middle">e</text>
+<line class="ink" x1="130" y1="204" x2="137" y2="204"/>
+<rect class="box" x="137" y="194" width="38" height="20" rx="3"/>
+<text class="op" x="156" y="208" text-anchor="middle">ons</text>
+<line class="ink" x1="175" y1="204" x2="182" y2="204"/>
+<rect class="box" x="244" y="191" width="80" height="86" rx="3"/>
+<line class="ink" x1="244" y1="217" x2="324" y2="217"/>
+<text class="op" x="284" y="208" text-anchor="middle">add</text>
+<text class="tag" x="314" y="231" text-anchor="end">place</text>
+<text class="tag" x="314" y="249" text-anchor="end">1</text>
+<text class="dim" x="254" y="267">to</text>
+<text class="tag" x="314" y="267" text-anchor="end">place</text>
+</svg>

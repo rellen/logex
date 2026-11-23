@@ -1,8 +1,8 @@
 defmodule Logex.CeilingTest do
   @moduledoc """
   Decision 459 (RV-17): one ceiling a stage. Each test holds one stage's cost on a standard
-  program, README's motor and plant as they stand at RV-17, under twice a figure recorded
-  with it: the compile, a scan, a cycle and a round. A same-run bound (decision 357) holds
+  program, the examples' motor and plant (`examples/motor.ld`, `examples/plant.logex`) as
+  they stand at RV-17, under twice a figure recorded with it: the compile, a scan, a cycle and a round. A same-run bound (decision 357) holds
   a guarded path against a twin that makes every other call as often, so a cost both twins
   pay alike cancels out of it: each instruction dispatched, read or lowered, each cycle step
   or round step, made dearer across the board, turns no such bound red. A ceiling catches
@@ -12,7 +12,7 @@ defmodule Logex.CeilingTest do
   `CONTRIBUTING.md`'s "Hold each stage under a ceiling twice its recorded figure".
 
   Since RV-17's review each stage is held twice: whole, on the motor and the plant as
-  README has them, which holds what the stage pays a call and a tag, a compile's
+  the examples have them, which holds what the stage pays a call and a tag, a compile's
   declarations, a scan's checks of its state, a cycle's connections, a round's devices,
   the most of its cost; and a rung, the same stage over the motor with its five rungs
   written sixteen times over less the same over eight, a rung of the forty between them,
@@ -54,7 +54,7 @@ defmodule Logex.CeilingTest do
   # tried read less (`PLAN.md`'s RV-17).
   @rung_figures %{compile: 999.2, scans: 3_110.0, cycles: 3_762.9, round: 37.5}
 
-  # README's `motor.ld`.
+  # The examples' `motor.ld`.
   @motor """
   var_input start bool
   var_input stop bool
@@ -72,7 +72,7 @@ defmodule Logex.CeilingTest do
   xic fault move 0 speed_sp
   """
 
-  # README's `plant.logex`: two instances of the motor, on a 10 ms task and a 50 ms one.
+  # The examples' `plant.logex`: two instances of the motor, on a 10 ms task and a 50 ms one.
   @plant """
   task fast interval 10 priority 1
   task slow interval 50 priority 2
@@ -123,7 +123,7 @@ defmodule Logex.CeilingTest do
     plant
   end
 
-  # README's motor with its five rungs written `times` over, its declarations as they are,
+  # The examples' motor with its five rungs written `times` over, its declarations as they are,
   # so that what a stage pays a tag, a compile's declarations, a scan's checks of its state
   # and its outputs, a cycle's connections, is the same at any `times`, and a rung more
   # costs a rung's work alone.
@@ -182,7 +182,7 @@ defmodule Logex.CeilingTest do
   # A motor's source compiled.
   defp compiled(source), do: fn -> {:ok, _} = Logex.compile(source, name: "motor") end
 
-  test "the compile: README's motor.ld by Logex.compile/2, and a rung of it" do
+  test "the compile: the examples' motor.ld by Logex.compile/2, and a rung of it" do
     under_ceiling(:compile, least(fn -> reductions(compiled(@motor)) end))
     under_ceiling(:compile, :rung, a_rung(sources(), &reductions(compiled(&1))))
   end
@@ -200,7 +200,7 @@ defmodule Logex.CeilingTest do
     end
   end
 
-  test "a scan: 100 scans of README's motor, its start button toggled before each, and a " <>
+  test "a scan: 100 scans of the examples' motor, its start button toggled before each, and a " <>
          "rung of them" do
     under_ceiling(:scans, least(fn -> reductions(scans(motor())) end))
     under_ceiling(:scans, :rung, a_rung(both(& &1), &reductions(scans(&1))))
@@ -219,13 +219,13 @@ defmodule Logex.CeilingTest do
     end
   end
 
-  test "a cycle: 100 cycles of README's plant, 10 ms apart, both start buttons toggled, and " <>
+  test "a cycle: 100 cycles of the examples' plant, 10 ms apart, both start buttons toggled, and " <>
          "a rung of them" do
     under_ceiling(:cycles, least(fn -> reductions(cycles(plant())) end))
     under_ceiling(:cycles, :rung, a_rung(both(&plant/1), &reductions(cycles(&1))))
   end
 
-  # The runner's reductions a round over 200 rounds of README's plant on the manual clock,
+  # The runner's reductions a round over 200 rounds of the examples' plant on the manual clock,
   # a panel and a drive simulated, both start buttons toggled every 100 ms, less what the
   # clock's synchronisation costs the runner a round: `Manual.advance/2` follows each timer
   # it delivers with `:sys.get_state/2`, whose answer copies the runner's state, the
@@ -263,7 +263,7 @@ defmodule Logex.CeilingTest do
     (b - a) / rounds - (d - c) / 200
   end
 
-  test "a round: README's plant on the runner, its own reductions a round, and a rung of it" do
+  test "a round: the examples' plant on the runner, its own reductions a round, and a rung of it" do
     plant = plant()
     under_ceiling(:round, least(fn -> own_round(plant) end))
     under_ceiling(:round, :rung, a_rung(both(&plant/1), &own_round/1))

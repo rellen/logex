@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="396" height="151" viewBox="0 0 396 151" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of sorter.ld</title>
+<desc id="description">1 rung between two power rails. Rung 1: xic auto cal k eyes[lane] kick ote ran.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="395" height="150" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="139"/>
+<line class="rail" x1="378" y1="14" x2="378" y2="139"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="254" y1="52" x2="310" y2="52"/>
+<line class="ink" x1="356" y1="52" x2="378" y2="52"/>
+<text class="tag" x="91" y="35" text-anchor="middle">auto</text>
+<line class="ink" x1="68" y1="52" x2="84" y2="52"/>
+<line class="ink" x1="84" y1="41" x2="84" y2="63"/>
+<line class="ink" x1="98" y1="41" x2="98" y2="63"/>
+<line class="ink" x1="98" y1="52" x2="114" y2="52"/>
+<line class="ink" x1="114" y1="52" x2="130" y2="52"/>
+<rect class="box" x="130" y="39" width="124" height="86" rx="3"/>
+<line class="ink" x1="130" y1="65" x2="254" y2="65"/>
+<text class="op" x="192" y="56" text-anchor="middle">cal</text>
+<text class="tag" x="244" y="79" text-anchor="end">k</text>
+<text class="dim" x="140" y="97">box</text>
+<text class="tag" x="244" y="97" text-anchor="end">eyes[lane]</text>
+<text class="dim" x="140" y="115">kick</text>
+<text class="tag" x="244" y="115" text-anchor="end">kick</text>
+<text class="tag" x="333" y="35" text-anchor="middle">ran</text>
+<line class="ink" x1="310" y1="52" x2="322" y2="52"/>
+<path class="ink" d="M 327 41 Q 317 52 327 63"/>
+<path class="ink" d="M 339 41 Q 349 52 339 63"/>
+<line class="ink" x1="344" y1="52" x2="356" y2="52"/>
+</svg>

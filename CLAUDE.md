@@ -16,8 +16,18 @@ own documentation holds:
   designing anything that adds a data type (§4.12), retains a value (§4.13), names a
   program, schedules one, binds I/O, changes a running controller (§4.9) or runs one on
   the clock (§4.11).
+- **The decision records** under `docs/adr/` each sum up the decisions of one large
+  choice, curated beside §7, which stays the full log (decision 547); `docs/adr/README.md`
+  lists them and the record to read before a change to each part.
 - **The plan and the history** are `PLAN.md`; the review of the whole codebase, every
   finding with its repro, is `docs/review-2026-11-01.md`.
+- **Where the pages are.** The user's, the site's, under `guides/` by kind:
+  `guides/tutorials/`, `guides/howto/`, `guides/reference/` (the host contract, the
+  cheatsheet, the glossary) and `guides/explanation/`, their pictures in `guides/assets/`.
+  The contributor's under `docs/`: `docs/architecture/` how each part works,
+  `docs/implementation/` how it is tested and how an instruction is named and added,
+  `docs/contributing/` the toolchain, the release and the project's history, and
+  `docs/adr/`; `docs/README.md` maps every document.
 - **The names** are `docs/naming.md`, one stanza a word. Read `docs/instruction-sets.md`,
   the reference it cites, before writing a stanza: it carries the IEC feature numbers a
   stanza should cite.
@@ -29,9 +39,11 @@ own documentation holds:
   `docs/check-a-page.md`, the kinds and how to add and check a page; its technical words
   are the headings of `guides/reference/glossary.md`, and each kind starts from its
   template under `docs/templates/`.
-- **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`; what logex
-  is and how to use it is `README.md`, whose examples the suite runs from their files
-  under `examples/`, a project of their own (`examples/mix.exs`, logex its dependency).
+- **How to work here**, each practice with what broke it, is `CONTRIBUTING.md`. `README.md`
+  is the short first page, what logex is, a small program, how to run it and what logex
+  is not, linking the site; how to use logex is the user's pages. The suite runs every
+  page's examples, README's among them, from their files under `examples/`, a project of
+  their own (`examples/mix.exs`, logex its dependency).
 
 ## Commands
 
@@ -239,7 +251,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/typespec_test.exs` — every spec of the host contract reached, each value a
   function gives and each argument it is given held to its spec as `Code.Typespec` reads
   it, what Dialyzer cannot type among them.
-- `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
+- `test/logex/ceiling_test.exs` — each stage on the examples' motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.
 - `test/logex/counter_test.exs` — the counters `ctu`, `ctd` and `ctud`.
@@ -325,7 +337,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/docs_test.exs` — the documentation's build: `mix.exs` giving no dependency
   outside the `docs` environment, read by a `mix` with no Hex, and `mix.lock` ExDoc's alone;
   `docs/pages.exs`, the one list of pages, a line a page, held to every Markdown file,
-  each page's kind to its directory and group, the legacy documents to the ten it names; `mix.exs`'s site read from it, the host contract's modules first; each
+  each page's kind to its directory and group, the legacy documents to the ten it names,
+  no page a stub; `mix.exs`'s site read from it, the host contract's modules first; each
   refusal of `scripts/site.exs`, a page's name in the site and each link's anchor made
   ExDoc's; `scripts/docs.sh` over a stand-in `mix`; and `.github/workflows/docs.yml`, its
   keys, toolchain and permissions, its question to GitHub run as written.
@@ -405,8 +418,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   `{false, env}`: without the de-energised clause the instruction raises
   `FunctionClauseError` the moment a contact opens. A built-in type it runs is a row of
   `Logex.FbType.rules/1`. The mnemonic is reserved in any case, so it breaks a program with
-  a tag of that name: say so in the commit. Where the power it passes on is not settled,
-  the compiler refuses anything after it on its path, as after `ton`.
+  a tag of that name: say so in the commit. One that runs a built-in instance is a key of
+  its type's `runs` (`Logex.FbType.runners/0`), and the compiler refuses anything after it
+  on its path, as after `ton`; any other settles its power in its clauses.
 - **Every tag is declared,** in the source, `var aa bool` before the first rung, or from
   Elixir with `Logex.Tag.new!/4,5` (`validation_test.exs`'s `@declared`). A new section,
   qualifier or elementary type word is a row of `Logex.Declarations` and a built-in block
@@ -431,15 +445,16 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - **A new syntax form** goes into `printer_test.exs`'s generator and `@required_shapes`
   before it lands, and the golden record stays green; nothing checks the grammar for
   ambiguity but those.
-- **The pages are checked.** A language change stales README's syntax list and instruction
-  table and the pages' examples; each example's output is compared by `readme_test.exs`,
+- **The pages are checked.** A language change stales the syntax reference, the cheatsheet
+  and the pages' examples; each example's output is compared by `readme_test.exs`,
   on whichever page shows it, a file an example reads is marked `<!-- file: path -->`
   above its block or linked to the page that shows it, each block is its file under
   `examples/`, changed with it, and an `elixir` block shown with no output is a fragment
-  its page marks or the test names (`CONTRIBUTING.md`). README's prose has no test: its
-  "What logex is not" says plainly what logex does not do, a safety function first, each
-  claim checked against the code, so a change that adds what it says logex lacks, an
-  adapter, output forcing, a backward jump or a type among them, stales it.
+  its page marks or the test names (`CONTRIBUTING.md`). No test reads a page's claims:
+  README's "What logex is not", `guides/explanation/safety-and-limits.md` and
+  `guides/reference/not-supported.md` say what logex does not do, a safety function first,
+  each claim checked against the code, so a change that adds what they say logex lacks, an
+  adapter, output forcing, a backward jump or a type among them, stales them.
 - **Cite decisions and fixes by `docs/organisation.md` §7's numbers alone**, never a label
   only a design pass's notes define (`edit_test.exs`, "the labels this work cites").
 - **Keep this file an index.** A module's rules go in its moduledoc, the reasons in

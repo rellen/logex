@@ -30,6 +30,6 @@ Say what logex does. Use the present tense.
 
 - Name each alternative and say why it was not chosen.
 
-## Decisions in section 7
+## The decisions that this record sums up
 
 List the numbers of the decisions of `docs/organisation.md` that this record sums up.

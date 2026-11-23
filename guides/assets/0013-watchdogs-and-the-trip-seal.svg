@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="410" height="148" viewBox="0 0 410 148" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of conveyor.ld</title>
+<desc id="description">1 rung between two power rails. Rung 3: ( xic start | xic motor ) xio stop xio fault ote motor.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="409" height="147" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="136"/>
+<line class="rail" x1="392" y1="14" x2="392" y2="136"/>
+<text class="dim" x="36" y="56" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="266" y1="52" x2="322" y2="52"/>
+<line class="ink" x1="370" y1="52" x2="392" y2="52"/>
+<line class="ink" x1="68" y1="52" x2="68" y2="108"/>
+<line class="ink" x1="140" y1="52" x2="140" y2="108"/>
+<text class="tag" x="104" y="35" text-anchor="middle">start</text>
+<line class="ink" x1="80" y1="52" x2="97" y2="52"/>
+<line class="ink" x1="97" y1="41" x2="97" y2="63"/>
+<line class="ink" x1="111" y1="41" x2="111" y2="63"/>
+<line class="ink" x1="111" y1="52" x2="128" y2="52"/>
+<line class="ink" x1="68" y1="52" x2="80" y2="52"/>
+<line class="ink" x1="128" y1="52" x2="140" y2="52"/>
+<text class="tag" x="104" y="91" text-anchor="middle">motor</text>
+<line class="ink" x1="80" y1="108" x2="97" y2="108"/>
+<line class="ink" x1="97" y1="97" x2="97" y2="119"/>
+<line class="ink" x1="111" y1="97" x2="111" y2="119"/>
+<line class="ink" x1="111" y1="108" x2="128" y2="108"/>
+<line class="ink" x1="68" y1="108" x2="80" y2="108"/>
+<line class="ink" x1="128" y1="108" x2="140" y2="108"/>
+<line class="ink" x1="140" y1="52" x2="156" y2="52"/>
+<text class="tag" x="179" y="35" text-anchor="middle">stop</text>
+<line class="ink" x1="156" y1="52" x2="172" y2="52"/>
+<line class="ink" x1="172" y1="41" x2="172" y2="63"/>
+<line class="ink" x1="186" y1="41" x2="186" y2="63"/>
+<line class="ink" x1="186" y1="52" x2="202" y2="52"/>
+<line class="ink" x1="174" y1="61" x2="184" y2="43"/>
+<line class="ink" x1="202" y1="52" x2="218" y2="52"/>
+<text class="tag" x="242" y="35" text-anchor="middle">fault</text>
+<line class="ink" x1="218" y1="52" x2="235" y2="52"/>
+<line class="ink" x1="235" y1="41" x2="235" y2="63"/>
+<line class="ink" x1="249" y1="41" x2="249" y2="63"/>
+<line class="ink" x1="249" y1="52" x2="266" y2="52"/>
+<line class="ink" x1="237" y1="61" x2="247" y2="43"/>
+<text class="tag" x="368" y="35" text-anchor="end">motor</text>
+<line class="ink" x1="322" y1="52" x2="336" y2="52"/>
+<path class="ink" d="M 341 41 Q 331 52 341 63"/>
+<path class="ink" d="M 353 41 Q 363 52 353 63"/>
+<line class="ink" x1="358" y1="52" x2="370" y2="52"/>
+</svg>

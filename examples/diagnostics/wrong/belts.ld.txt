@@ -1,0 +1,11 @@
+// 2 conveyor belts. Each belt is an instance of the function block `seal`.
+var_input start_1 bool
+var_input start_2 bool
+var_input stop bool
+var_output belt_1 bool
+var_output belt_2 bool
+var s1 seal
+var s2 seal
+
+cal s1 start_1 stop belt_1
+cal s2 start_2 stop belt_3

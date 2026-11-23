@@ -16,8 +16,11 @@ requirement; recent history is direct-to-main. Do not invent process here.
 
 | Question | File |
 |---|---|
-| What is logex, what works, how do I run it? | `README.md` |
-| How do I build and test it? | `CLAUDE.md` |
+| What is logex, and how do I run it? | `README.md`, the short first page, then the site's user pages under `guides/`: `tutorials/`, `howto/`, `reference/` and `explanation/` |
+| Where is every document, and who reads it? | `docs/README.md`, the map |
+| How is it built inside? | `docs/architecture/` and `docs/implementation/` |
+| How do I build and test it? | `CLAUDE.md`, and `docs/contributing/toolchain.md` |
+| Why is it built this way? | the decision records under `docs/adr/`, indexed by `docs/adr/README.md`, each a curated summary of one large choice; `docs/organisation.md` §7 stays the full log of every numbered decision with its options, which the records cite (decision 547) |
 | What is broken, what is next, in what order, and why? | `PLAN.md` |
 | What should this instruction be called? | `docs/naming.md` |
 | How do I work on it? | this file |
@@ -40,7 +43,7 @@ observed pattern across four separate audits of these documents. A plausible-sou
 statement about this codebase is roughly a coin flip.
 
 So: run it. Paste the real output. If you cannot run it, say so and mark the claim
-`unverified` — `docs/naming.md` does this in eight places and is more trustworthy for it.
+`unverified` — `docs/naming.md` does this throughout and is more trustworthy for it.
 Never close the gap with a guess.
 
 ---
@@ -62,8 +65,8 @@ expensive trap this project had (`PLAN.md` §2·M0-3). The lexer and parser are 
 `.ex` files now, and Elixir 1.20's compiler compares size and content as well as mtime, so
 little of it is left: measured on 1.20.4, an edit in the same second as the last build is
 picked up, and only a *second* same-size edit landing in that same second was lost — once
-in five attempts. If an edit to the lexer or parser seems to do nothing, `mix compile
---force` settles it.
+in five attempts. The same holds for every file of `lib/`, not the front end alone: if an
+edit to any of them seems to do nothing, `mix compile --force` settles it.
 
 A checkout built before the rewrite keeps the old front end's modules in `_build` after
 pulling. The first build of an environment that was built before the pull deletes the
@@ -74,7 +77,8 @@ that command, until you do.
 ### The toolchain
 
 Elixir 1.20.4 on Erlang/OTP 28, the pair `mix.exs`, `shell.nix`, `flake.nix`,
-`.tool-versions` and CI pin. `nix develop` (or `nix-shell`) gives it, and so does
+`.tool-versions` and CI pin; `guides/howto/install-and-run.md` shows a reader's
+`.tool-versions` with the same two lines, which a change of the pair changes too. `nix develop` (or `nix-shell`) gives it, and so does
 [asdf](https://asdf-vm.com) from `.tool-versions`: `asdf plugin add erlang`, `asdf plugin
 add elixir`, then `asdf install` in the checkout. `mix.exs` requires `~> 1.20`, so on an
 older Elixir `mix` aborts before it runs anything; install the pinned pair rather than
@@ -183,7 +187,7 @@ of seeds is one sample too: the compile, runtime and resource walks of
 `{n, 77, 7}`, `{n, 1, 1}` and `{7, n, 2026}`. Size a walk's draws from its rarest atom's
 rate per draw, read over one family, so that the atom is expected 15 times a run or more,
 and then hold the reach under 60 seeds or more drawn from more than one family the draws
-were not sized on. Those three now take 2,000, 150 and 400, and each holds under 100
+were not sized on. Those three now take 2,000, 150 and 1,000, and each holds under 100
 seeds of each of the three families.
 
 A property that restates a rule cannot catch that rule's defect. OE-1's edit walk checks
@@ -241,7 +245,7 @@ Two steps, in `CLAUDE.md`, and step 1 has a test behind it.
 edited `CLAUDE.md`, shifting every `CLAUDE.md` line reference in `PLAN.md`. `747d630`
 cleaned that up.
 
-Cite `the {:xic, _, [{:name, _, arg}]} clause of evaluate/3`, not `compiler.ex:79`. Clause heads,
+Cite `the {:xic, _, [operand]} clause of evaluate/3`, not `compiler.ex:79`. Clause heads,
 function names, grammar productions and bullet titles survive edits above them. §1 and §2
 keep their numbers deliberately; §2 is explicitly historical.
 
@@ -255,45 +259,46 @@ clause" until `b8a9bd8`.
 
 ### Landing work stales the plan
 
-`PLAN.md` §1's counts, §7's Status column and the README's "What has landed" list all go
-out of date when you ship. This repo brings them current in a separate audit pass
+`PLAN.md` §1's counts, §7's Status column and the list of items of
+`docs/contributing/project-history.md` all go out of date when you ship. This repo brings them current in a separate audit pass
 (`440bc83`, `4e256ff`) rather than in the same commit — either is fine, but the pass has to
 happen. A plan that disagrees with the code is worse than no plan, because it is trusted.
 
-Any language change stales the README: a new instruction adds a row, a syntax change
-touches the syntax list, the instruction table *and* the worked examples. The examples'
-output is real, and `test/logex/readme_test.exs` keeps it so (decision 359), in README
-and, since decision 546 (e), in every page `docs/pages.exs` lists that is not a document
-from before that decision ("Writing a page of the documentation", below, for what a page
-adds to this): each `elixir`
+Any language change stales the pages: a new instruction adds a row to the cheatsheet and
+its reference, a syntax change touches `guides/reference/source-syntax.md`, the
+instruction references *and* the worked examples. The examples' output is real, and
+`test/logex/readme_test.exs` keeps it so (decision 359), in every page `docs/pages.exs`
+lists that is not `:legacy`, README among them (decision 546 (e); "Writing a page of the
+documentation", below, for what a page adds to this): each `elixir`
 block followed at once by a block beginning `$ mix run x.exs` is an example, run in a
 fresh VM in a directory of its own, `tmp/readme/<page>/x.exs/`, its output compared
 exactly with the rest of that block. A block a script reads from the disk is marked by
 the line straight above its fence, `<!-- file: conveyor.ld -->`, which GitHub does not
-show, and from there on it is that file of every later example of its page; a file README
-only describes in
-prose, `faster/packing.logex` "being `packing.logex` with `interval 5`", is made in the
-test's `@derived` table from the file it names, and a script README shows as the rest of
-another, `a_trip.exs`, in its `@continues`, each beside README's words, which the test
-checks are still there. The real-clock example's figures line, which README says is this
-run's alone, is compared by its beginning. An `elixir` block that no `$ mix run` block
+show, and from there on it is that file of every later example of its page; a file a page
+only describes in prose, `faster/packing.logex` "which is `packing.logex` with `interval
+5`" on the forcing reference, is made in the test's `@derived` table from the file it
+names, and a script a page shows as the rest of another, `a_trip.exs`, in its
+`@continues`, each beside its page's words, which the test checks are still there. The
+real-clock example's figures line, which its page says is this run's alone, is compared
+by its beginning. An `elixir` block that no `$ mix run` block
 follows is no example, so the test refuses one unless its `@fragments` names it by its
 first line, a fragment of prose the test parses and, where the table gives it a setup, runs
-in that setup, held to what README's prose says of it (decision 365): today the one call
-made from another process in "Running a plant on the clock", run on a runner whose first
-round's write was slow, which must wait for an owed round and then answer. So a new
+in that setup, held to what its page's prose says of it (decision 365): today the one call
+made from another process in the runner reference's "Example: a plant on the manual
+clock", run on a runner whose first round's write was slow, which must wait for an owed
+round and then answer. So a new
 example needs its files marked and its output shown, and
-a changed one is run by the suite: when the test fails, the code or the README is wrong,
-and the diff it prints says which line. The prose, the syntax list and the instruction
-table have no test behind them.
+a changed one is run by the suite: when the test fails, the code or the page is wrong,
+and the diff it prints says which line. The prose and the tables of a page have no test
+behind them but `scripts/prose.exs`'s rules.
 
 The examples are files a host can copy, under `examples/` (decision 517 (b)): every
-script and every file README shows, the files `@derived` makes and each continued script
+script and every file a page shows, the files `@derived` makes and each continued script
 whole, beside `examples/mix.exs`, a project naming logex in the directory above, so that
 `mix run scan.exs` from there runs one as README does. The test runs each example from
-its files there, copied to its directory under `tmp/readme/`, holds every block README
+its files there, copied to its directory under `tmp/readme/`, holds every block a page
 shows to its file and `examples/` to nothing else, and runs `scan.exs` through the
-project with `mix run`, its build kept under `tmp/`; so a block changed in README is
+project with `mix run`, its build kept under `tmp/`; so a block changed on a page is
 changed in its file in the same commit, and a path is marked once on a page, a later
 file of the same name named apart, `broken_retain.logex`. `test/logex/clauses_test.exs`
 holds every script there to the clauses rule, as it holds the harness.
@@ -301,7 +306,8 @@ holds every script there to the clauses rule, as it holds the harness.
 ### Writing a page of the documentation
 
 The documentation is a site ExDoc builds (decisions 546 to 548): README first, the pages
-under `guides/`, and the modules' own documentation. `docs/style-guide.md` is the rule
+under `guides/`, the contributor pages and the decision records under `docs/`, and the
+modules' own documentation. `docs/style-guide.md` is the rule
 for a page, who reads it and the words it may use, with three pages beside it:
 `docs/house-manner.md`, the forms of these older documents a page does not have,
 `docs/examples-and-pictures.md`, the marks of a block and of a picture, and
@@ -312,12 +318,12 @@ under `docs/templates/`. What it rests on, each held by a test:
 - **One list of pages.** `docs/pages.exs` has a line for every Markdown file of the
   repository, its kind and its place in the site, one line a page, which the formatter
   is kept off; `mix.exs` builds the site from it, and a file with no line fails
-  `test/logex/docs_test.exs`. The ten documents from before decision 546, this one among
-  them, are listed `:legacy`: the writing rules are not applied to them, and all but
-  README are read on GitHub, not in the site, where no script follows their links;
-  README's examples are run and its links followed, as a page's are. The ten are named
-  in the test, and no page joins them: a new page has its kind, and README, written
-  again, is a `:readme`.
+  `test/logex/docs_test.exs`. Nine documents from before decision 546, this one among
+  them, are listed `:legacy`: the writing rules are not applied to them, and they are
+  read on GitHub, not in the site, where no script follows their links. README, written
+  again, is the `:readme`, the site's first page, its examples run and its links
+  followed as a page's are. The test names the ten of before decision 546, and no page
+  joins them: a new page has its kind.
 - **One reading of a page.** `scripts/page.exs` cuts a page into prose and code blocks
   for the checker, the site, the pictures and the examples' test alike, as GitHub cuts
   it. A fence it cannot take as the page means it, one not closed or with more than a
@@ -357,9 +363,8 @@ under `docs/templates/`. What it rests on, each held by a test:
 
 The rule below holds in the pages too: the glossary gives a term's word in "the
 conventional set" beside IEC 61131-3's, and names no vendor for it; a page names Logix
-only where it compares what a controller does, as README does. Whether a user's page may
-name the product a reader comes from is a question `PLAN.md` puts to the maintainer under
-DOC-1's step 1.
+only where it compares what a controller does, as the explanation pages do; no user's
+page names the product a reader comes from beside each word (decision 561).
 
 ### Do not restore vendor names
 
@@ -497,7 +502,7 @@ choice, not an oversight to fix.
   bound cancels what both its twins pay alike, so a slowdown across the board, each
   instruction dispatched, read or lowered, each cycle step or round step made dearer,
   turns none red, however gross. `ceiling_test.exs` holds each stage on a standard
-  program, README's motor and plant: the compile, 100 scans, 100 cycles and a round, each
+  program, the examples' motor and plant: the compile, 100 scans, 100 cycles and a round, each
   under twice a figure recorded with it, the one bound of logex's against a figure alone,
   and wide on purpose; and, since RV-17's review, each stage a rung, the same over the
   motor's five rungs written sixteen times over less over eight, a rung of the forty

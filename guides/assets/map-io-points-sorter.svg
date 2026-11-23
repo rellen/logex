@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="454" viewBox="0 0 364 454" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of sorter.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: ( xic start | xic motor ) xio stop ote motor. Rung 2: xic eye[0] ote lamp[0]. Rung 3: xic eye[1] ote lamp[1]. Rung 4: xic eye[2] ote lamp[2]. Rung 5: xic eye[3] ote lamp[3].</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="453" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="442"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="442"/>
+<text class="note dim" x="54" y="34">the motor of the conveyor, with a seal-in</text>
+<text class="dim" x="36" y="74" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="70" x2="68" y2="70"/>
+<line class="ink" x1="202" y1="70" x2="276" y2="70"/>
+<line class="ink" x1="324" y1="70" x2="346" y2="70"/>
+<line class="ink" x1="68" y1="70" x2="68" y2="126"/>
+<line class="ink" x1="140" y1="70" x2="140" y2="126"/>
+<text class="tag" x="104" y="53" text-anchor="middle">start</text>
+<line class="ink" x1="80" y1="70" x2="97" y2="70"/>
+<line class="ink" x1="97" y1="59" x2="97" y2="81"/>
+<line class="ink" x1="111" y1="59" x2="111" y2="81"/>
+<line class="ink" x1="111" y1="70" x2="128" y2="70"/>
+<line class="ink" x1="68" y1="70" x2="80" y2="70"/>
+<line class="ink" x1="128" y1="70" x2="140" y2="70"/>
+<text class="tag" x="104" y="109" text-anchor="middle">motor</text>
+<line class="ink" x1="80" y1="126" x2="97" y2="126"/>
+<line class="ink" x1="97" y1="115" x2="97" y2="137"/>
+<line class="ink" x1="111" y1="115" x2="111" y2="137"/>
+<line class="ink" x1="111" y1="126" x2="128" y2="126"/>
+<line class="ink" x1="68" y1="126" x2="80" y2="126"/>
+<line class="ink" x1="128" y1="126" x2="140" y2="126"/>
+<line class="ink" x1="140" y1="70" x2="156" y2="70"/>
+<text class="tag" x="179" y="53" text-anchor="middle">stop</text>
+<line class="ink" x1="156" y1="70" x2="172" y2="70"/>
+<line class="ink" x1="172" y1="59" x2="172" y2="81"/>
+<line class="ink" x1="186" y1="59" x2="186" y2="81"/>
+<line class="ink" x1="186" y1="70" x2="202" y2="70"/>
+<line class="ink" x1="174" y1="79" x2="184" y2="61"/>
+<text class="tag" x="322" y="53" text-anchor="end">motor</text>
+<line class="ink" x1="276" y1="70" x2="290" y2="70"/>
+<path class="ink" d="M 295 59 Q 285 70 295 81"/>
+<path class="ink" d="M 307 59 Q 317 70 307 81"/>
+<line class="ink" x1="312" y1="70" x2="324" y2="70"/>
+<text class="note dim" x="54" y="172">a lamp for each lane that has a box at</text>
+<text class="note dim" x="54" y="186">its photo-eye</text>
+<text class="dim" x="36" y="226" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="222" x2="68" y2="222"/>
+<line class="ink" x1="124" y1="222" x2="260" y2="222"/>
+<line class="ink" x1="324" y1="222" x2="346" y2="222"/>
+<text class="tag" x="96" y="205" text-anchor="middle">eye[0]</text>
+<line class="ink" x1="68" y1="222" x2="89" y2="222"/>
+<line class="ink" x1="89" y1="211" x2="89" y2="233"/>
+<line class="ink" x1="103" y1="211" x2="103" y2="233"/>
+<line class="ink" x1="103" y1="222" x2="124" y2="222"/>
+<text class="tag" x="322" y="205" text-anchor="end">lamp[0]</text>
+<line class="ink" x1="260" y1="222" x2="290" y2="222"/>
+<path class="ink" d="M 295 211 Q 285 222 295 233"/>
+<path class="ink" d="M 307 211 Q 317 222 307 233"/>
+<line class="ink" x1="312" y1="222" x2="324" y2="222"/>
+<text class="dim" x="36" y="290" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="286" x2="68" y2="286"/>
+<line class="ink" x1="124" y1="286" x2="260" y2="286"/>
+<line class="ink" x1="324" y1="286" x2="346" y2="286"/>
+<text class="tag" x="96" y="269" text-anchor="middle">eye[1]</text>
+<line class="ink" x1="68" y1="286" x2="89" y2="286"/>
+<line class="ink" x1="89" y1="275" x2="89" y2="297"/>
+<line class="ink" x1="103" y1="275" x2="103" y2="297"/>
+<line class="ink" x1="103" y1="286" x2="124" y2="286"/>
+<text class="tag" x="322" y="269" text-anchor="end">lamp[1]</text>
+<line class="ink" x1="260" y1="286" x2="290" y2="286"/>
+<path class="ink" d="M 295 275 Q 285 286 295 297"/>
+<path class="ink" d="M 307 275 Q 317 286 307 297"/>
+<line class="ink" x1="312" y1="286" x2="324" y2="286"/>
+<text class="dim" x="36" y="354" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="350" x2="68" y2="350"/>
+<line class="ink" x1="124" y1="350" x2="260" y2="350"/>
+<line class="ink" x1="324" y1="350" x2="346" y2="350"/>
+<text class="tag" x="96" y="333" text-anchor="middle">eye[2]</text>
+<line class="ink" x1="68" y1="350" x2="89" y2="350"/>
+<line class="ink" x1="89" y1="339" x2="89" y2="361"/>
+<line class="ink" x1="103" y1="339" x2="103" y2="361"/>
+<line class="ink" x1="103" y1="350" x2="124" y2="350"/>
+<text class="tag" x="322" y="333" text-anchor="end">lamp[2]</text>
+<line class="ink" x1="260" y1="350" x2="290" y2="350"/>
+<path class="ink" d="M 295 339 Q 285 350 295 361"/>
+<path class="ink" d="M 307 339 Q 317 350 307 361"/>
+<line class="ink" x1="312" y1="350" x2="324" y2="350"/>
+<text class="dim" x="36" y="418" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="414" x2="68" y2="414"/>
+<line class="ink" x1="124" y1="414" x2="260" y2="414"/>
+<line class="ink" x1="324" y1="414" x2="346" y2="414"/>
+<text class="tag" x="96" y="397" text-anchor="middle">eye[3]</text>
+<line class="ink" x1="68" y1="414" x2="89" y2="414"/>
+<line class="ink" x1="89" y1="403" x2="89" y2="425"/>
+<line class="ink" x1="103" y1="403" x2="103" y2="425"/>
+<line class="ink" x1="103" y1="414" x2="124" y2="414"/>
+<text class="tag" x="322" y="397" text-anchor="end">lamp[3]</text>
+<line class="ink" x1="260" y1="414" x2="290" y2="414"/>
+<path class="ink" d="M 295 403 Q 285 414 295 425"/>
+<path class="ink" d="M 307 403 Q 317 414 307 425"/>
+<line class="ink" x1="312" y1="414" x2="324" y2="414"/>
+</svg>

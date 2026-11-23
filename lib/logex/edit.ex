@@ -74,13 +74,14 @@ defmodule Logex.Edit do
     exactly the `.pre` its test found. Where logic has changed it since, the two rules
     below apply instead. A new edit's record starts empty, so it gives back no `.pre` an
     earlier edit's switch moved;
-  - *`.pre`, a `ton` in both:* where both programs run a `ton` on the timer, a `.pre`
-    still at the preset of the program stopped moves to that of the program started, and
-    one that logic changed is kept;
-  - *`.pre`, a `ton` stopped or restored:* a timer the program started runs no `ton` on
-    keeps its `.pre` frozen, and one it runs that the program stopped did not takes its
-    preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
-    restart would;
+  - *`.pre`, a timer's instruction in both:* where both programs run the timer's
+    instruction, `ton`, `tof`, `tp` or `rto`, on it, a `.pre` still at the preset of the
+    program stopped moves to that of the program started, and one that logic changed is
+    kept;
+  - *`.pre`, a timer's instruction stopped or restored:* a timer the program started runs
+    no instruction on keeps its `.pre` frozen, and one it runs that the program stopped did
+    not takes its preset outright, so an instruction removed and restored at a new preset
+    gives the `.pre` a restart would;
   - *one rule for a timer's time* (decisions 339 to 341, superseding decision 336's
     special cases): a timer's time runs only while a program that runs it holds the
     instance, and not while the instance is set aside (`Logex.Configuration.Edit`). The

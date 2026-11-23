@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="689" height="320" viewBox="0 0 689 320" role="img" aria-labelledby="title description">
+<title id="title">add: total wraps from 125 to -106 and from -96 to 120</title>
+<desc id="description">10 scans, 100 ms a scan. Each signal after each scan, from scan 1: boxes: 25, 25, 25, 25, 25, 25, 25, 25, -40, -40. total: 25, 50, 75, 100, 125, -106, -81, -56, -96, 120. fits: 1, 1, 1, 1, 1, 0, 1, 1, 1, 0. wrapped: 0, 0, 0, 0, 0, 1, 1, 1, 1, 1.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="688" height="319" rx="6"/>
+<text class="head" x="14" y="24">add: total wraps from 125 to -106 and from -96 to 120</text>
+<text class="dim" x="14" y="294">scan</text>
+<text class="dim" x="14" y="308">time</text>
+<line class="grid" x1="104.1" y1="36" x2="104.1" y2="278"/>
+<line class="grid" x1="160.1" y1="36" x2="160.1" y2="278"/>
+<line class="grid" x1="216.1" y1="36" x2="216.1" y2="278"/>
+<line class="grid" x1="272.1" y1="36" x2="272.1" y2="278"/>
+<line class="grid" x1="328.1" y1="36" x2="328.1" y2="278"/>
+<line class="grid" x1="384.1" y1="36" x2="384.1" y2="278"/>
+<line class="grid" x1="440.1" y1="36" x2="440.1" y2="278"/>
+<line class="grid" x1="496.1" y1="36" x2="496.1" y2="278"/>
+<line class="grid" x1="552.1" y1="36" x2="552.1" y2="278"/>
+<line class="grid" x1="608.1" y1="36" x2="608.1" y2="278"/>
+<line class="grid" x1="664.1" y1="36" x2="664.1" y2="278"/>
+<text class="tag" x="14" y="75">boxes</text>
+<line class="grid" x1="104.1" y1="98" x2="664.1" y2="98"/>
+<text class="dim" x="96.1" y="48" text-anchor="end">25</text>
+<text class="dim" x="96.1" y="102" text-anchor="end">-40</text>
+<polyline class="wave" points="104.1,64.8 104.1,44 160.1,44 160.1,44 216.1,44 216.1,44 272.1,44 272.1,44 328.1,44 328.1,44 384.1,44 384.1,44 440.1,44 440.1,44 496.1,44 496.1,44 552.1,44 552.1,98 608.1,98 608.1,98 664.1,98"/>
+<text class="tag" x="14" y="151">total</text>
+<line class="grid" x1="104.1" y1="174" x2="664.1" y2="174"/>
+<text class="dim" x="96.1" y="124" text-anchor="end">125</text>
+<text class="dim" x="96.1" y="178" text-anchor="end">-106</text>
+<polyline class="wave" points="104.1,149.2 104.1,143.4 160.1,143.4 160.1,137.5 216.1,137.5 216.1,131.7 272.1,131.7 272.1,125.8 328.1,125.8 328.1,120 384.1,120 384.1,174 440.1,174 440.1,168.2 496.1,168.2 496.1,162.3 552.1,162.3 552.1,171.7 608.1,171.7 608.1,121.2 664.1,121.2"/>
+<text class="tag" x="14" y="213">fits</text>
+<line class="grid" x1="104.1" y1="222" x2="664.1" y2="222"/>
+<polyline class="wave" points="104.1,222 104.1,196 160.1,196 160.1,196 216.1,196 216.1,196 272.1,196 272.1,196 328.1,196 328.1,196 384.1,196 384.1,222 440.1,222 440.1,196 496.1,196 496.1,196 552.1,196 552.1,196 608.1,196 608.1,222 664.1,222"/>
+<text class="tag" x="14" y="261">wrapped</text>
+<line class="grid" x1="104.1" y1="270" x2="664.1" y2="270"/>
+<polyline class="wave" points="104.1,270 104.1,270 160.1,270 160.1,270 216.1,270 216.1,270 272.1,270 272.1,270 328.1,270 328.1,270 384.1,270 384.1,244 440.1,244 440.1,244 496.1,244 496.1,244 552.1,244 552.1,244 608.1,244 608.1,244 664.1,244"/>
+<text class="dim" x="104.1" y="294" text-anchor="middle">1</text>
+<text class="dim" x="104.1" y="308" text-anchor="middle">100 ms</text>
+<text class="dim" x="160.1" y="294" text-anchor="middle">2</text>
+<text class="dim" x="160.1" y="308" text-anchor="middle">200 ms</text>
+<text class="dim" x="216.1" y="294" text-anchor="middle">3</text>
+<text class="dim" x="216.1" y="308" text-anchor="middle">300 ms</text>
+<text class="dim" x="272.1" y="294" text-anchor="middle">4</text>
+<text class="dim" x="272.1" y="308" text-anchor="middle">400 ms</text>
+<text class="dim" x="328.1" y="294" text-anchor="middle">5</text>
+<text class="dim" x="328.1" y="308" text-anchor="middle">500 ms</text>
+<text class="dim" x="384.1" y="294" text-anchor="middle">6</text>
+<text class="dim" x="384.1" y="308" text-anchor="middle">600 ms</text>
+<text class="dim" x="440.1" y="294" text-anchor="middle">7</text>
+<text class="dim" x="440.1" y="308" text-anchor="middle">700 ms</text>
+<text class="dim" x="496.1" y="294" text-anchor="middle">8</text>
+<text class="dim" x="496.1" y="308" text-anchor="middle">800 ms</text>
+<text class="dim" x="552.1" y="294" text-anchor="middle">9</text>
+<text class="dim" x="552.1" y="308" text-anchor="middle">900 ms</text>
+<text class="dim" x="608.1" y="294" text-anchor="middle">10</text>
+<text class="dim" x="608.1" y="308" text-anchor="middle">1 s</text>
+</svg>

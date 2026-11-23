@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="588" viewBox="0 0 364 588" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of fan_panel.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: mul hz 60.0 speed. Rung 2: real_to_int speed rpm ote rpm_ok. Rung 3: real_trunc_int speed whole. Rung 4: word_to_int status code. Rung 5: dint_to_sint boxes shown ote shown_ok.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="587" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="576"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="576"/>
+<text class="note dim" x="54" y="34">the fan's speed in revolutions a minute,</text>
+<text class="note dim" x="54" y="48">in 2 int tags</text>
+<text class="dim" x="36" y="71" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="67" x2="68" y2="67"/>
+<line class="ink" x1="68" y1="67" x2="244" y2="67"/>
+<line class="ink" x1="324" y1="67" x2="346" y2="67"/>
+<rect class="box" x="244" y="54" width="80" height="86" rx="3"/>
+<line class="ink" x1="244" y1="80" x2="324" y2="80"/>
+<text class="op" x="284" y="71" text-anchor="middle">mul</text>
+<text class="tag" x="314" y="94" text-anchor="end">hz</text>
+<text class="tag" x="314" y="112" text-anchor="end">60.0</text>
+<text class="dim" x="254" y="130">to</text>
+<text class="tag" x="314" y="130" text-anchor="end">speed</text>
+<text class="dim" x="36" y="194" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="190" x2="68" y2="190"/>
+<line class="ink" x1="170" y1="190" x2="268" y2="190"/>
+<line class="ink" x1="324" y1="190" x2="346" y2="190"/>
+<rect class="box" x="68" y="177" width="102" height="68" rx="3"/>
+<line class="ink" x1="68" y1="203" x2="170" y2="203"/>
+<text class="op" x="119" y="194" text-anchor="middle">real_to_int</text>
+<text class="tag" x="160" y="217" text-anchor="end">speed</text>
+<text class="dim" x="78" y="235">to</text>
+<text class="tag" x="160" y="235" text-anchor="end">rpm</text>
+<text class="tag" x="322" y="173" text-anchor="end">rpm_ok</text>
+<line class="ink" x1="268" y1="190" x2="290" y2="190"/>
+<path class="ink" d="M 295 179 Q 285 190 295 201"/>
+<path class="ink" d="M 307 179 Q 317 190 307 201"/>
+<line class="ink" x1="312" y1="190" x2="324" y2="190"/>
+<text class="dim" x="36" y="282" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="278" x2="68" y2="278"/>
+<line class="ink" x1="68" y1="278" x2="198" y2="278"/>
+<line class="ink" x1="324" y1="278" x2="346" y2="278"/>
+<rect class="box" x="198" y="265" width="126" height="68" rx="3"/>
+<line class="ink" x1="198" y1="291" x2="324" y2="291"/>
+<text class="op" x="261" y="282" text-anchor="middle">real_trunc_int</text>
+<text class="tag" x="314" y="305" text-anchor="end">speed</text>
+<text class="dim" x="208" y="323">to</text>
+<text class="tag" x="314" y="323" text-anchor="end">whole</text>
+<text class="note dim" x="54" y="365">the drive's status word as a number</text>
+<text class="dim" x="36" y="388" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="384" x2="68" y2="384"/>
+<line class="ink" x1="68" y1="384" x2="222" y2="384"/>
+<line class="ink" x1="324" y1="384" x2="346" y2="384"/>
+<rect class="box" x="222" y="371" width="102" height="68" rx="3"/>
+<line class="ink" x1="222" y1="397" x2="324" y2="397"/>
+<text class="op" x="273" y="388" text-anchor="middle">word_to_int</text>
+<text class="tag" x="314" y="411" text-anchor="end">status</text>
+<text class="dim" x="232" y="429">to</text>
+<text class="tag" x="314" y="429" text-anchor="end">code</text>
+<text class="note dim" x="54" y="471">the box count in 8 bits, for the panel</text>
+<text class="dim" x="36" y="511" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="507" x2="68" y2="507"/>
+<line class="ink" x1="178" y1="507" x2="254" y2="507"/>
+<line class="ink" x1="324" y1="507" x2="346" y2="507"/>
+<rect class="box" x="68" y="494" width="110" height="68" rx="3"/>
+<line class="ink" x1="68" y1="520" x2="178" y2="520"/>
+<text class="op" x="123" y="511" text-anchor="middle">dint_to_sint</text>
+<text class="tag" x="168" y="534" text-anchor="end">boxes</text>
+<text class="dim" x="78" y="552">to</text>
+<text class="tag" x="168" y="552" text-anchor="end">shown</text>
+<text class="tag" x="322" y="490" text-anchor="end">shown_ok</text>
+<line class="ink" x1="254" y1="507" x2="290" y2="507"/>
+<path class="ink" d="M 295 496 Q 285 507 295 518"/>
+<path class="ink" d="M 307 496 Q 317 507 307 518"/>
+<line class="ink" x1="312" y1="507" x2="324" y2="507"/>
+</svg>

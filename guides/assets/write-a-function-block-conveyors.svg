@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="468" viewBox="0 0 364 468" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of conveyors.ld</title>
+<desc id="description">3 rungs between two power rails. Rung 1: cal c1 start_1 stop eye_1 belt_1 jam_1. Rung 2: cal c2 start_2 stop eye_2 belt_2 jam_2. Rung 3: ( xic c1.jammed | xic c2.jammed ) ote jam_lamp.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="467" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="456"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="456"/>
+<text class="dim" x="36" y="39" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="35" x2="68" y2="35"/>
+<line class="ink" x1="68" y1="35" x2="208" y2="35"/>
+<line class="ink" x1="324" y1="35" x2="346" y2="35"/>
+<rect class="box" x="208" y="22" width="116" height="140" rx="3"/>
+<line class="ink" x1="208" y1="48" x2="324" y2="48"/>
+<text class="op" x="266" y="39" text-anchor="middle">cal</text>
+<text class="tag" x="314" y="62" text-anchor="end">c1</text>
+<text class="dim" x="218" y="80">start</text>
+<text class="tag" x="314" y="80" text-anchor="end">start_1</text>
+<text class="dim" x="218" y="98">stop</text>
+<text class="tag" x="314" y="98" text-anchor="end">stop</text>
+<text class="dim" x="218" y="116">eye</text>
+<text class="tag" x="314" y="116" text-anchor="end">eye_1</text>
+<text class="dim" x="218" y="134">run</text>
+<text class="tag" x="314" y="134" text-anchor="end">belt_1</text>
+<text class="dim" x="218" y="152">jammed</text>
+<text class="tag" x="314" y="152" text-anchor="end">jam_1</text>
+<text class="dim" x="36" y="199" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="195" x2="68" y2="195"/>
+<line class="ink" x1="68" y1="195" x2="208" y2="195"/>
+<line class="ink" x1="324" y1="195" x2="346" y2="195"/>
+<rect class="box" x="208" y="182" width="116" height="140" rx="3"/>
+<line class="ink" x1="208" y1="208" x2="324" y2="208"/>
+<text class="op" x="266" y="199" text-anchor="middle">cal</text>
+<text class="tag" x="314" y="222" text-anchor="end">c2</text>
+<text class="dim" x="218" y="240">start</text>
+<text class="tag" x="314" y="240" text-anchor="end">start_2</text>
+<text class="dim" x="218" y="258">stop</text>
+<text class="tag" x="314" y="258" text-anchor="end">stop</text>
+<text class="dim" x="218" y="276">eye</text>
+<text class="tag" x="314" y="276" text-anchor="end">eye_2</text>
+<text class="dim" x="218" y="294">run</text>
+<text class="tag" x="314" y="294" text-anchor="end">belt_2</text>
+<text class="dim" x="218" y="312">jammed</text>
+<text class="tag" x="314" y="312" text-anchor="end">jam_2</text>
+<text class="dim" x="36" y="376" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="372" x2="68" y2="372"/>
+<line class="ink" x1="170" y1="372" x2="254" y2="372"/>
+<line class="ink" x1="324" y1="372" x2="346" y2="372"/>
+<line class="ink" x1="68" y1="372" x2="68" y2="428"/>
+<line class="ink" x1="170" y1="372" x2="170" y2="428"/>
+<text class="tag" x="119" y="355" text-anchor="middle">c1.jammed</text>
+<line class="ink" x1="80" y1="372" x2="112" y2="372"/>
+<line class="ink" x1="112" y1="361" x2="112" y2="383"/>
+<line class="ink" x1="126" y1="361" x2="126" y2="383"/>
+<line class="ink" x1="126" y1="372" x2="158" y2="372"/>
+<line class="ink" x1="68" y1="372" x2="80" y2="372"/>
+<line class="ink" x1="158" y1="372" x2="170" y2="372"/>
+<text class="tag" x="119" y="411" text-anchor="middle">c2.jammed</text>
+<line class="ink" x1="80" y1="428" x2="112" y2="428"/>
+<line class="ink" x1="112" y1="417" x2="112" y2="439"/>
+<line class="ink" x1="126" y1="417" x2="126" y2="439"/>
+<line class="ink" x1="126" y1="428" x2="158" y2="428"/>
+<line class="ink" x1="68" y1="428" x2="80" y2="428"/>
+<line class="ink" x1="158" y1="428" x2="170" y2="428"/>
+<text class="tag" x="322" y="355" text-anchor="end">jam_lamp</text>
+<line class="ink" x1="254" y1="372" x2="290" y2="372"/>
+<path class="ink" d="M 295 361 Q 285 372 295 383"/>
+<path class="ink" d="M 307 361 Q 317 372 307 383"/>
+<line class="ink" x1="312" y1="372" x2="324" y2="372"/>
+</svg>

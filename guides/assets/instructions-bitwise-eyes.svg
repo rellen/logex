@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="370" height="451" viewBox="0 0 370 451" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of eyes.ld</title>
+<desc id="description">4 rungs between two power rails. Rung 1: xor eyes last changed. Rung 2: or alarms changed alarms. Rung 3: move eyes last. Rung 4: xic step ons stepped rol lamps 1 lamps.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="369" height="450" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="439"/>
+<line class="rail" x1="352" y1="14" x2="352" y2="439"/>
+<text class="dim" x="36" y="39" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="35" x2="68" y2="35"/>
+<line class="ink" x1="68" y1="35" x2="236" y2="35"/>
+<line class="ink" x1="330" y1="35" x2="352" y2="35"/>
+<rect class="box" x="236" y="22" width="94" height="86" rx="3"/>
+<line class="ink" x1="236" y1="48" x2="330" y2="48"/>
+<text class="op" x="283" y="39" text-anchor="middle">xor</text>
+<text class="tag" x="320" y="62" text-anchor="end">eyes</text>
+<text class="tag" x="320" y="80" text-anchor="end">last</text>
+<text class="dim" x="246" y="98">to</text>
+<text class="tag" x="320" y="98" text-anchor="end">changed</text>
+<text class="dim" x="36" y="145" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="141" x2="68" y2="141"/>
+<line class="ink" x1="68" y1="141" x2="242" y2="141"/>
+<line class="ink" x1="330" y1="141" x2="352" y2="141"/>
+<rect class="box" x="242" y="128" width="88" height="86" rx="3"/>
+<line class="ink" x1="242" y1="154" x2="330" y2="154"/>
+<text class="op" x="286" y="145" text-anchor="middle">or</text>
+<text class="tag" x="320" y="168" text-anchor="end">alarms</text>
+<text class="tag" x="320" y="186" text-anchor="end">changed</text>
+<text class="dim" x="252" y="204">to</text>
+<text class="tag" x="320" y="204" text-anchor="end">alarms</text>
+<text class="dim" x="36" y="251" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="247" x2="68" y2="247"/>
+<line class="ink" x1="68" y1="247" x2="258" y2="247"/>
+<line class="ink" x1="330" y1="247" x2="352" y2="247"/>
+<rect class="box" x="258" y="234" width="72" height="68" rx="3"/>
+<line class="ink" x1="258" y1="260" x2="330" y2="260"/>
+<text class="op" x="294" y="251" text-anchor="middle">move</text>
+<text class="tag" x="320" y="274" text-anchor="end">eyes</text>
+<text class="dim" x="268" y="292">to</text>
+<text class="tag" x="320" y="292" text-anchor="end">last</text>
+<text class="dim" x="36" y="356" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="352" x2="68" y2="352"/>
+<line class="ink" x1="194" y1="352" x2="250" y2="352"/>
+<line class="ink" x1="330" y1="352" x2="352" y2="352"/>
+<text class="tag" x="91" y="335" text-anchor="middle">step</text>
+<line class="ink" x1="68" y1="352" x2="84" y2="352"/>
+<line class="ink" x1="84" y1="341" x2="84" y2="363"/>
+<line class="ink" x1="98" y1="341" x2="98" y2="363"/>
+<line class="ink" x1="98" y1="352" x2="114" y2="352"/>
+<line class="ink" x1="114" y1="352" x2="130" y2="352"/>
+<text class="tag" x="162" y="335" text-anchor="middle">stepped</text>
+<line class="ink" x1="130" y1="352" x2="143" y2="352"/>
+<rect class="box" x="143" y="342" width="38" height="20" rx="3"/>
+<text class="op" x="162" y="356" text-anchor="middle">ons</text>
+<line class="ink" x1="181" y1="352" x2="194" y2="352"/>
+<rect class="box" x="250" y="339" width="80" height="86" rx="3"/>
+<line class="ink" x1="250" y1="365" x2="330" y2="365"/>
+<text class="op" x="290" y="356" text-anchor="middle">rol</text>
+<text class="tag" x="320" y="379" text-anchor="end">lamps</text>
+<text class="tag" x="320" y="397" text-anchor="end">1</text>
+<text class="dim" x="260" y="415">to</text>
+<text class="tag" x="320" y="415" text-anchor="end">lamps</text>
+</svg>

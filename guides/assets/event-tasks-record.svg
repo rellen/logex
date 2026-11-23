@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="364" height="470" viewBox="0 0 364 470" role="img" aria-labelledby="title description">
+<title id="title">Ladder diagram of record.ld</title>
+<desc id="description">5 rungs between two power rails. Rung 1: xic motor ote motor_was. Rung 2: xic stop ctu presses 1000. Rung 3: move presses.cv stops. Rung 4: xic stop osr s1 pressed. Rung 5: xic stop ton held 60000.</desc>
+<style>
+  .panel { fill: #ffffff; stroke: #d0d7de; }
+  .ink { stroke: #1f2328; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .rail { stroke: #1f2328; stroke-width: 2.6; stroke-linecap: round; }
+  .box { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.6; }
+  .grid { stroke: #d8dee4; stroke-width: 1; }
+  .mark { stroke: #bc4c00; stroke-width: 1.4; stroke-dasharray: 5 4; fill: none; }
+  .wave { stroke: #0550ae; stroke-width: 2; fill: none; stroke-linejoin: miter; }
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; fill: #1f2328; }
+  .tag { fill: #0550ae; }
+  .dim { fill: #57606a; font-size: 11px; }
+  .op { font-weight: 700; }
+  .note { fill: #57606a; font-style: italic; }
+  .head { font-weight: 700; font-size: 13px; }
+  .marked { fill: #bc4c00; font-size: 11px; }
+</style>
+<rect class="panel" x="0.5" y="0.5" width="363" height="469" rx="6"/>
+<line class="rail" x1="46" y1="14" x2="46" y2="458"/>
+<line class="rail" x1="346" y1="14" x2="346" y2="458"/>
+<text class="dim" x="36" y="56" text-anchor="end">1</text>
+<line class="ink" x1="46" y1="52" x2="68" y2="52"/>
+<line class="ink" x1="116" y1="52" x2="246" y2="52"/>
+<line class="ink" x1="324" y1="52" x2="346" y2="52"/>
+<text class="tag" x="92" y="35" text-anchor="middle">motor</text>
+<line class="ink" x1="68" y1="52" x2="85" y2="52"/>
+<line class="ink" x1="85" y1="41" x2="85" y2="63"/>
+<line class="ink" x1="99" y1="41" x2="99" y2="63"/>
+<line class="ink" x1="99" y1="52" x2="116" y2="52"/>
+<text class="tag" x="322" y="35" text-anchor="end">motor_was</text>
+<line class="ink" x1="246" y1="52" x2="290" y2="52"/>
+<path class="ink" d="M 295 41 Q 285 52 295 63"/>
+<path class="ink" d="M 307 41 Q 317 52 307 63"/>
+<line class="ink" x1="312" y1="52" x2="324" y2="52"/>
+<text class="dim" x="36" y="120" text-anchor="end">2</text>
+<line class="ink" x1="46" y1="116" x2="68" y2="116"/>
+<line class="ink" x1="114" y1="116" x2="224" y2="116"/>
+<line class="ink" x1="324" y1="116" x2="346" y2="116"/>
+<text class="tag" x="91" y="99" text-anchor="middle">stop</text>
+<line class="ink" x1="68" y1="116" x2="84" y2="116"/>
+<line class="ink" x1="84" y1="105" x2="84" y2="127"/>
+<line class="ink" x1="98" y1="105" x2="98" y2="127"/>
+<line class="ink" x1="98" y1="116" x2="114" y2="116"/>
+<rect class="box" x="224" y="103" width="100" height="68" rx="3"/>
+<line class="ink" x1="224" y1="129" x2="324" y2="129"/>
+<text class="op" x="274" y="120" text-anchor="middle">ctu</text>
+<text class="tag" x="314" y="143" text-anchor="end">presses</text>
+<text class="dim" x="234" y="161">preset</text>
+<text class="tag" x="314" y="161" text-anchor="end">1000</text>
+<text class="dim" x="36" y="208" text-anchor="end">3</text>
+<line class="ink" x1="46" y1="204" x2="68" y2="204"/>
+<line class="ink" x1="68" y1="204" x2="228" y2="204"/>
+<line class="ink" x1="324" y1="204" x2="346" y2="204"/>
+<rect class="box" x="228" y="191" width="96" height="68" rx="3"/>
+<line class="ink" x1="228" y1="217" x2="324" y2="217"/>
+<text class="op" x="276" y="208" text-anchor="middle">move</text>
+<text class="tag" x="314" y="231" text-anchor="end">presses.cv</text>
+<text class="dim" x="238" y="249">to</text>
+<text class="tag" x="314" y="249" text-anchor="end">stops</text>
+<text class="dim" x="36" y="313" text-anchor="end">4</text>
+<line class="ink" x1="46" y1="309" x2="68" y2="309"/>
+<line class="ink" x1="114" y1="309" x2="244" y2="309"/>
+<line class="ink" x1="324" y1="309" x2="346" y2="309"/>
+<text class="tag" x="91" y="292" text-anchor="middle">stop</text>
+<line class="ink" x1="68" y1="309" x2="84" y2="309"/>
+<line class="ink" x1="84" y1="298" x2="84" y2="320"/>
+<line class="ink" x1="98" y1="298" x2="98" y2="320"/>
+<line class="ink" x1="98" y1="309" x2="114" y2="309"/>
+<text class="tag" x="322" y="292" text-anchor="end">pressed</text>
+<line class="ink" x1="244" y1="309" x2="290" y2="309"/>
+<path class="ink" d="M 295 298 Q 285 309 295 320"/>
+<path class="ink" d="M 307 298 Q 317 309 307 320"/>
+<line class="ink" x1="312" y1="309" x2="324" y2="309"/>
+<text class="op" x="301" y="313" text-anchor="middle">P</text>
+<text class="dim" x="322" y="335" text-anchor="end">storage <tspan class="tag">s1</tspan></text>
+<text class="dim" x="36" y="393" text-anchor="end">5</text>
+<line class="ink" x1="46" y1="389" x2="68" y2="389"/>
+<line class="ink" x1="114" y1="389" x2="216" y2="389"/>
+<line class="ink" x1="324" y1="389" x2="346" y2="389"/>
+<text class="tag" x="91" y="372" text-anchor="middle">stop</text>
+<line class="ink" x1="68" y1="389" x2="84" y2="389"/>
+<line class="ink" x1="84" y1="378" x2="84" y2="400"/>
+<line class="ink" x1="98" y1="378" x2="98" y2="400"/>
+<line class="ink" x1="98" y1="389" x2="114" y2="389"/>
+<rect class="box" x="216" y="376" width="108" height="68" rx="3"/>
+<line class="ink" x1="216" y1="402" x2="324" y2="402"/>
+<text class="op" x="270" y="393" text-anchor="middle">ton</text>
+<text class="tag" x="314" y="416" text-anchor="end">held</text>
+<text class="dim" x="226" y="434">preset</text>
+<text class="tag" x="314" y="434" text-anchor="end">60000</text>
+</svg>
