@@ -255,11 +255,12 @@ IEC 61131-3: an implicit type conversion.
 
 An instruction that reads a value and writes it in the type that its mnemonic names last.
 The mnemonic names 2 types, for example `dint_to_sint` or `real_trunc_int`. logex has 182
-conversions. Use a conversion where the first type does not widen into the second. If the
-value does not fit an integer type, the conversion keeps the low bits and passes no power.
-If the value is past the limit of a real type, the conversion writes the largest value of
-that sign. It passes no power. A conversion to or from a bit string keeps the low bits and
-passes power.
+conversions. Use a conversion where the first type does not widen into the second.
+
+If the value does not fit an integer type, the conversion keeps the low bits and passes no
+power. If the value is past the limit of a real type, the conversion writes the largest
+value of that sign. It passes no power. A conversion to or from a bit string keeps the low
+bits and passes power.
 
 IEC 61131-3: a typed conversion function, for example DINT_TO_SINT.
 
