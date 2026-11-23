@@ -137,6 +137,7 @@
   {"docs/architecture/online-edit.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/online-edit-of-a-resource.md", :contributor, "Architecture and implementation"},
   {"docs/architecture/store-and-files.md", :contributor, "Architecture and implementation"},
+  {"docs/architecture/store-writes.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/testing-strategy.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/adding-an-instruction.md", :contributor, "Architecture and implementation"},
   {"docs/adr/README.md", :adr, "Decision records"},

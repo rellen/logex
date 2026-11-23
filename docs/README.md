@@ -103,7 +103,8 @@ by its number.
 | [The file work of the runner](architecture/runner-files.md) | The writer of the period, a write with a limit, the write of a [force](../guides/reference/glossary.md#force) and the table of paths |
 | [The architecture of an online edit](architecture/online-edit.md) | The plans, the [switch](../guides/reference/glossary.md#switch) and the [state](../guides/reference/glossary.md#state) of an [instance](../guides/reference/glossary.md#instance) across an [online edit](../guides/reference/glossary.md#online-edit) |
 | [The online edit of a resource](architecture/online-edit-of-a-resource.md) | The edit of a [configuration](../guides/reference/glossary.md#configuration) over a [resource](../guides/reference/glossary.md#resource), its generation and the edit through the [runner](../guides/reference/glossary.md#runner) |
-| [The architecture of the store and its files](architecture/store-and-files.md) | The [retained image](../guides/reference/glossary.md#retained-image), the text of the [store](../guides/reference/glossary.md#store), the atomic writes and the refusals |
+| [The architecture of the store and its files](architecture/store-and-files.md) | The [retained image](../guides/reference/glossary.md#retained-image), the text of the [store](../guides/reference/glossary.md#store), its digests and versions, and the refusals |
+| [The writes and the copies of the store](architecture/store-writes.md) | The atomic write, the numbered copies of the store and the [forces file](../guides/reference/glossary.md#forces-file) |
 | [The test strategy](implementation/testing-strategy.md) | How the suite finds a defect by a run: oracles, walks, mutation tables, cost in reductions and load runs |
 | [Add an instruction](implementation/adding-an-instruction.md) | The survey of the name, then the steps in the code and in the suite |
 
