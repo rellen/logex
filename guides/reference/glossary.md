@@ -554,6 +554,13 @@ The file in which a runner keeps its forces, so that they stay after the runner 
 
 The file in which a runner keeps the retained values on the disk of the host.
 
+### fresh start
+
+A start of a new runner with `Logex.Runner.start_link/1`, for example after a stop or a
+crash. A fresh start of a runner that has a store is warm: it reads the retained values
+from the store. With the option `start: :cold`, it is cold: it writes the initial values
+over the store.
+
 ### retained image
 
 The retained values of an instance or of a resource as plain data. The host can take the
