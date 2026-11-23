@@ -1071,8 +1071,9 @@ compiler, from text or from a program built as data. Recompiling a Spark-defined
 module through `Code.compile_string/2` took 74–95 ms for a 4-tag program and 0.5–0.7 s
 for a 200-tag one, against 22 µs and 1.7 ms for `Logex.compile/2` on the same two
 programs; it ran arbitrary code written in the edit; and an edit that failed validation
-unloaded the module that was running, because Elixir purges a module whose compilation
-raises. Spark is not adopted inside logex. An Elixir authoring package outside it may
+unloaded the module that was running, because Elixir purges a module whose body raises
+as it compiles (a syntax error leaves the old one loaded, a run on 1.20.4 of
+2026-11-23). Spark is not adopted inside logex. An Elixir authoring package outside it may
 come later, as a one-way seed that emits the same data (`PLAN.md` B9).
 
 **The edit cycle is staged, as the conventional family's is.**
