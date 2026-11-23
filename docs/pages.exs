@@ -176,6 +176,7 @@
   {"docs/examples-and-pictures.md", :contributor, "Project"},
   {"docs/check-a-page.md", :contributor, "Project"},
   {"docs/contributing/project-history.md", :contributor, "Project"},
+  {"docs/contributing/project-history-review.md", :contributor, "Project"},
   {"docs/templates/tutorial.md", :tutorial, :github},
   {"docs/templates/howto.md", :howto, :github},
   {"docs/templates/reference.md", :reference, :github},
