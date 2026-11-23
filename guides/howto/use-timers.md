@@ -323,8 +323,10 @@ gives each diagnostic of a timer.
 - [Instructions: timers and counters](../reference/instructions-timers-and-counters.md):
   each rule of `ton`, `tof`, `tp` and `rto`, and of the long timers.
 - [Execution model](../reference/execution-model.md): the time of each scan.
-- [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): how a timer gets
-  its time.
+- [How a timer counts time](../explanation/how-a-timer-counts-time.md): how a timer gets
+  its time from the scans.
+- [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): the time of a
+  scan and of a cycle.
 - [Use an event task](use-an-event-task.md): a timer in a program that runs only on an
   event.
 - [Glossary](../reference/glossary.md): the words of this guide.

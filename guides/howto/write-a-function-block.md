@@ -308,8 +308,10 @@ block.
   `cal`.
 - [Host contract](../reference/host-contract.md): how a host reads a member, in a program
   instance and in a configuration.
-- [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): why an instance
-  keeps its values while its `cal` is on a false rung.
+- [The scan, the cycle and time](../explanation/scan-cycle-and-time.md): how a scan gets
+  its time.
+- [Rungs that a scan does not run](../explanation/rungs-that-do-not-run.md): why an
+  instance keeps its values while its `cal` is on a false rung.
 - [Use arrays of timers, counters and function blocks](use-arrays-of-instances.md): an
   array of instances of a function block.
 - [Glossary](../reference/glossary.md): the words of this guide.

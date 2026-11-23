@@ -88,7 +88,8 @@ This table gives what each instruction does in the 2 cases.
 
 A counter or a one-shot compares its power in with the power in of its last run. Thus it
 finds a rising edge or a [falling edge](glossary.md#falling-edge) only between 2 of its
-runs. These are the rules:
+runs. [Rungs that a scan does not run](../explanation/rungs-that-do-not-run.md) explains
+these rules with a timer and a counter. These are the rules:
 
 - Its storage bit holds the power in of its last run. For a counter, the storage bit is
   the member `cu` or `cd`.
@@ -1521,6 +1522,7 @@ These pages define the rules of a different subject:
 | The contacts, the coils, the one-shots and the power in of an instruction | [Instructions: contacts and coils](instructions-contacts-and-coils.md) |
 | The timers and the counters | [Instructions: timers and counters](instructions-timers-and-counters.md) |
 | The sequence of a scan | [Execution model](execution-model.md) |
+| Why a skipped rung keeps its values | [Rungs that a scan does not run](../explanation/rungs-that-do-not-run.md) |
 | What an [online edit](glossary.md#online-edit) does to a `jmp`, a `lbl` and an instance | [Online edit](online-edit.md) |
 | The fields of a fault, and what logex does with a major fault | [Faults](faults.md) |
 | Each warning of logex | [Warnings](warnings.md) |

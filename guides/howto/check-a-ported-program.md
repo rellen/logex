@@ -223,6 +223,9 @@ slot 8
 ## See also
 
 - [Port a program from Logix or IEC 61131-3](port-a-program.md): the steps of a port.
+- [How logex differs from Logix](../explanation/differences-from-logix.md) and
+  [How logex differs from IEC 61131-3](../explanation/differences-from-iec.md): each
+  difference of behaviour, with its source.
 - [Types and overflow](../explanation/types-and-overflow.md): why a value wraps and why
   the instruction passes no power.
 - [Faults](../reference/faults.md): each fault, and what a scan and a runner do.

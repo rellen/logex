@@ -14,7 +14,8 @@ or sees a cost test fail. It says how the tests of logex hold the cost of a
 - A ceiling holds each stage under 2 times a figure recorded with the test.
 
 [The test strategy](../implementation/testing-strategy.md) gives the other tests of the
-suite. `CONTRIBUTING.md`, in
+suite, and [The cost of a stage in reductions](../implementation/testing-cost.md) gives
+each cost test and its figures. `CONTRIBUTING.md`, in
 [Things that will bite you](../../CONTRIBUTING.md#things-that-will-bite-you), gives the
 steps to write a cost test. It also gives each rule of cost with the figures of each
 review.

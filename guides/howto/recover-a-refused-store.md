@@ -56,7 +56,7 @@ words:
 | Word | Meaning |
 |---|---|
 | The backup | The copy of the refused store that you make in step 2, `tally.retain.bak` |
-| A numbered copy | A file `<store>.dropped.<n>` that the runner writes beside the store, for example `tally.retain.dropped.1`. It holds a store that a start did not read whole. |
+| A numbered copy | A file `<store>.dropped.<n>` that the runner writes beside the store, for example `tally.retain.dropped.1`. It holds a store that a start did not read whole. [The numbered copies](../reference/store.md#the-numbered-copies) gives the rules. |
 | The end line | The last line of the store, for example `end 15 lines`. Its count includes each line of the store, the end line also. |
 | A digest | The 32 lowercase hexadecimal digits after `resource` or after `program <type>`. A warm start compares them with its configuration and [program](../reference/glossary.md#program). |
 

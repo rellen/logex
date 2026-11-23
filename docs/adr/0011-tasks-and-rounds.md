@@ -140,7 +140,8 @@ A configuration has 1 continuous task at most, and its line takes no `interval`,
 with no `with`. The events name the continuous task if the configuration declares it,
 and `:none` if it does not (decision 111).
 [Configuration file](../../guides/reference/configuration-file.md) gives the lines of a
-task and each message of `Logex.Configuration.compile/3`.
+task, and [Configuration file: messages](../../guides/reference/configuration-file-messages.md)
+each message of `Logex.Configuration.compile/3`.
 
 A [trip](../../guides/reference/glossary.md#trip) can stop a round between 2 steps. A
 step is the run of 1 task in a round. 2 rules keep the trigger of a later event task

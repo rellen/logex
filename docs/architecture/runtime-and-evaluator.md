@@ -388,7 +388,7 @@ Read the moduledoc of `Logex.Runtime`, `Logex.Instance` and `Logex.Scan` first.
 
 ### Add an instruction
 
-1. Do the naming survey of
+1. Do [The naming survey](../implementation/naming-survey.md) of
    [Add an instruction](../implementation/adding-an-instruction.md).
 2. Write a test case that runs a program through `call/4`. See it fail.
 3. Add the mnemonic and its operands to `@instructions` in `lib/logex/compiler.ex`.

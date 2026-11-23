@@ -288,7 +288,8 @@ To change a rule of a cycle:
   records](../adr/README.md).
 - [The runtime and the evaluator](runtime-and-evaluator.md): the scan of 1 instance.
 - [The architecture of the runner](runner.md): the round, the watchdogs and the trip.
-- [The architecture of an online edit](online-edit.md): the switch of a configuration.
+- [The online edit of a resource](online-edit-of-a-resource.md): the switch of a
+  configuration.
 - [Execution model](../../guides/reference/execution-model.md): the rules of a cycle for
   a user.
 - [Tasks and the schedule](../../guides/explanation/tasks-and-scheduling.md): the model

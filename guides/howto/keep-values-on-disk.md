@@ -7,6 +7,7 @@ This guide is for a reader who runs a [plant](../reference/glossary.md#plant) on
 [`retain`](../reference/glossary.md#retain) stay after the runner stops or crashes. The
 store is a text file on the disk of the [host](../reference/glossary.md#host). Then the
 guide kills the runner, to show what a crash loses.
+[The store](../reference/store.md#what-a-crash-loses) gives the rule.
 
 > #### Warning {: .warning}
 >

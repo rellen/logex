@@ -167,5 +167,8 @@ print more diagnostics.
   guide.
 - [Check the behaviour of a ported program](check-a-ported-program.md): the steps after
   this guide.
+- [How logex differs from Logix](../explanation/differences-from-logix.md) and
+  [How logex differs from IEC 61131-3](../explanation/differences-from-iec.md): each
+  difference of behaviour, with its source.
 - [Diagnostics](../reference/diagnostics.md): the form of each diagnostic.
 - [Glossary](../reference/glossary.md): the technical words of logex.

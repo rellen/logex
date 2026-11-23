@@ -160,7 +160,8 @@ sets `motor`, and rung 2 reads that value and sets `run_lamp`.
 | `Logex.Runtime` | The instance | The value of each tag, the time and the [faults](../../guides/reference/glossary.md#fault) of the last scan |
 
 [The compile pipeline](compile-pipeline.md) gives each stage of the front end. [The
-runtime and the evaluator](runtime-and-evaluator.md) gives the scan and the cycle.
+runtime and the evaluator](runtime-and-evaluator.md) gives the scan, and
+[The resource and the schedule](resource-and-schedule.md) gives the cycle.
 
 ## The processes
 
@@ -214,7 +215,8 @@ sequence, for a host with no runner.
 [The architecture of the runner](runner.md) gives the round, the
 [watchdogs](../../guides/reference/glossary.md#watchdog), the
 [trip](../../guides/reference/glossary.md#trip) and the devices. [The architecture of
-the store and its files](store-and-files.md) gives the writer and the paths.
+the store and its files](store-and-files.md) gives the store, and
+[The file work of the runner](runner-files.md) gives the writer and the paths.
 
 ## How it is built
 

@@ -390,5 +390,8 @@ The second fault is the same, with `instruction: :xic` and `line: 24`.
   operands of each instruction.
 - [Host contract](../reference/host-contract.md): `Logex.Runtime.get/2`.
 - [Online edits](../reference/online-edit.md): the reports of an edit.
+- [How logex differs from Logix](../explanation/differences-from-logix.md) and
+  [How logex differs from IEC 61131-3](../explanation/differences-from-iec.md): each
+  difference of behaviour, with its source.
 - [The dialect and IEC 61131-3](../explanation/the-dialect-and-iec.md): how logex
   differs from IEC 61131-3.

@@ -605,6 +605,11 @@ force fan_out
 - [Safety and limits](../explanation/safety-and-limits.md): what logex is not, and why.
 - [Port a program](../howto/port-a-program.md): move a program from a controller to
   logex.
+- [How logex differs from Logix](../explanation/differences-from-logix.md) and
+  [How logex differs from IEC 61131-3](../explanation/differences-from-iec.md): what a
+  ported program does differently, with the source of each claim.
+- [Short pulses on input points](../explanation/short-pulses.md): why a short pulse can
+  be missed, and how long a signal must hold.
 - [The dialect and IEC 61131-3](../explanation/the-dialect-and-iec.md): how the dialect
   of logex differs from IEC 61131-3.
 - [Declarations and types](declarations-and-types.md): the types and the sections that

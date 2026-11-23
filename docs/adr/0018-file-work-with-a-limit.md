@@ -14,7 +14,8 @@ call runs in a separate process with a limit of real time. It also says these th
 
 [Runner](../../guides/reference/runner.md) gives each option, report and message for a
 user. [The architecture of the runner](../architecture/runner.md) gives the processes
-and the code.
+and the code. [The file work of the runner](../architecture/runner-files.md) gives the
+writer, the write limit and the table of paths.
 
 These words have 1 meaning on this page:
 

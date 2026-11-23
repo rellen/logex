@@ -523,7 +523,9 @@ That refusal names the instance, not a line, as in
 A fresh start that drops a value writes over the old store within 1 period. A mistaken
 deploy then loses the dropped values. So a start that drops a value copies the store, as
 it read it, before its first write over the store (decision 360). It names the copy
-`<store>.dropped.<n>`, and it never replaces a copy (decision 418). Result 2 makes
+`<store>.dropped.<n>`, and it never replaces a copy (decision 418).
+[The numbered copies](../../guides/reference/store.md#the-numbered-copies) gives the
+rules for a user. Result 2 makes
 `tally.retain.dropped.1`, and result 3 puts it back.
 
 | Event | Copy |

@@ -391,5 +391,7 @@ the work of that start.
 - [Keep retained values on disk](keep-values-on-disk.md): keep the values after the host
   stops.
 - [Restart after a trip](restart-after-a-trip.md): restart a runner warm or cold.
+- [The limits of retained values](../explanation/limits-of-retained-values.md): what a
+  retained value does not give.
 - [Safety and limits](../explanation/safety-and-limits.md): what logex is not.
 - [Glossary](../reference/glossary.md): the words of this guide.

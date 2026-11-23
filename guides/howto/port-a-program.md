@@ -308,6 +308,9 @@ The motor does not start before the operator presses reset. After the warm resta
   messages that a port often gives.
 - [Check the behaviour of a ported program](check-a-ported-program.md): the behaviour that
   is different in logex.
+- [How logex differs from Logix](../explanation/differences-from-logix.md) and
+  [How logex differs from IEC 61131-3](../explanation/differences-from-iec.md): each
+  difference of behaviour, with its source.
 - [The dialect and IEC 61131-3](../explanation/the-dialect-and-iec.md): why logex has a
   dialect, and where its names come from.
 - [Source syntax](../reference/source-syntax.md): the exact rules of the text of a

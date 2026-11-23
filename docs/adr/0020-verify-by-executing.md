@@ -44,6 +44,9 @@ The rules are these:
 > a defect in the code or in the test. Find which, and correct it.
 
 [The test strategy](../implementation/testing-strategy.md) gives the steps of each check.
+[The checks of a change](../implementation/testing-checks.md) gives the mutation tables
+and the gate. [Tests of time](../implementation/testing-time.md) gives the tests on the
+clocks and the load runs.
 `CONTRIBUTING.md` gives each rule with the commits that broke it, in 3 sections:
 
 - [its first rule](../../CONTRIBUTING.md#the-one-rule), "Verify by executing, not by

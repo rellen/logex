@@ -226,7 +226,8 @@ To add a form of operand:
 - [The compile pipeline](compile-pipeline.md): the stages that make the IR.
 - [The runtime and the evaluator](runtime-and-evaluator.md): the scan of the IR.
 - [The architecture of an online edit](online-edit.md): how an edit compares 2 program
-  types.
+  types, and [The online edit of a resource](online-edit-of-a-resource.md) the switch of
+  a configuration.
 - [Declarations and types](../../guides/reference/declarations-and-types.md): the rules
   of the tag table.
 - [Glossary](../../guides/reference/glossary.md): the technical words of logex.

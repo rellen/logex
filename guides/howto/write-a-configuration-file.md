@@ -324,6 +324,8 @@ The column **What you see** shows part of a diagnostic or a warning. The full me
 also gives the file, and the line if there is one.
 [Read a diagnostic](read-diagnostics.md) shows how to read it, and
 [Configuration file](../reference/configuration-file.md) gives each rule.
+[Configuration file: messages](../reference/configuration-file-messages.md) gives each
+message of a configuration from a run.
 
 ### The task lines
 

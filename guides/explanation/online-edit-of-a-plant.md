@@ -68,7 +68,9 @@ stateDiagram-v2
 Figure: an instance that only the old configuration runs. A test sets it aside, and the
 assemble removes it.
 
-A step on an old edit raises an `ArgumentError` with this message:
+A step on an old edit raises an `ArgumentError` with this message.
+[Edit a running plant without the runner](../howto/edit-a-plant-without-the-runner.md)
+shows the run that prints it:
 
 <!-- unchecked: the message of an ArgumentError, from a run of edit_plant.exs, which a different page shows -->
 ```text

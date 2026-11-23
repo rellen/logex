@@ -5,9 +5,12 @@ commit. It says why logex builds on 1 toolchain only. It says why a commit must 
 gates, and why a script judges each gate by its exit code. It also says why the suite
 compares the changelog with the decisions at each commit, while the maintainer plans no
 release.
-[The toolchain and the gates](../contributing/toolchain.md) gives the steps. It gives the
-files that name the versions, how to install the toolchain, how to run each gate and
-what CI does.
+
+[The toolchain and the gates](../contributing/toolchain.md) gives the steps.
+[The pinned versions](../contributing/toolchain.md#the-pinned-versions) gives the files
+that name the versions and how to install the toolchain.
+[`scripts/gate.sh`](../contributing/toolchain.md#scriptsgatesh) gives how to run each
+gate, and the page also says what CI does.
 
 > #### Caution {: .error}
 >
