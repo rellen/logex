@@ -62,10 +62,11 @@ defmodule Site do
   # ---- stage ----
 
   def stage(out \\ @staged) do
-    site = on_site(Page.listed())
+    listed = Page.listed()
+    site = on_site(listed)
     texts = Map.new(site, &{&1, File.read!(&1)})
     anchors = Map.new(texts, fn {path, text} -> {path, anchors(text, [2, 3])} end)
-    context = %{site: site, anchors: anchors}
+    context = %{site: site, anchors: anchors, github: github_anchors(listed)}
 
     {staged, refusals} =
       Enum.map_reduce(site, twice(site), fn path, refusals ->
@@ -193,13 +194,14 @@ defmodule Site do
          do: {:ok, page(file) <> anchor}
   end
 
-  defp local({true, true, false, false, false}, file, fragment, target, _context) do
+  defp local({true, true, false, false, false}, file, fragment, target, context) do
     with :ok <-
            on_github(
              Path.extname(file) in @markdown and File.regular?(file),
              file,
              fragment,
-             target
+             target,
+             context.github
            ),
          do: {:ok, "#{@github}/#{tree(File.dir?(file))}/main/#{file}" <> fragment(fragment)}
   end
@@ -236,12 +238,24 @@ defmodule Site do
   defp named(at, exdoc, _page, _fragment, _target), do: {:ok, "#" <> Enum.at(exdoc, at)}
 
   # A link to a Markdown file read on GitHub names a heading of it, of any level, by
-  # GitHub's anchor, or none.
-  defp on_github(_markdown, _file, nil, _target), do: :ok
-  defp on_github(false, _file, _fragment, _target), do: :ok
+  # GitHub's anchor, or none. The anchors of each page of the list read on GitHub are
+  # read once a stage, not once a link: `docs/organisation.md` and `PLAN.md` take most of
+  # a second each to read, and dozens of links name a heading of them. Any other
+  # Markdown file, one no line of the list names, is read where a link names it.
+  defp github_anchors(listed) do
+    for {path, _kind, :github} <- listed,
+        File.regular?(path),
+        into: %{},
+        do: {path, anchors(File.read!(path), 1..6).github}
+  end
 
-  defp on_github(true, file, fragment, target),
-    do: given(fragment in anchors(File.read!(file), 1..6).github, file, fragment, target)
+  defp on_github(_markdown, _file, nil, _target, _github), do: :ok
+  defp on_github(false, _file, _fragment, _target, _github), do: :ok
+
+  defp on_github(true, file, fragment, target, github) do
+    read = Map.get_lazy(github, file, fn -> anchors(File.read!(file), 1..6).github end)
+    given(fragment in read, file, fragment, target)
+  end
 
   defp given(true, _file, _fragment, _target), do: :ok
 
