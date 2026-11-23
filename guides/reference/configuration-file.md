@@ -525,7 +525,7 @@ elements, `"temps[1]" => 50.0`. 1 call cannot do both.
 | A located global takes no `retain`. An input point gets its value again at each start. An output point starts at 0 until a program writes it. `non_retain` is correct. | `var_global retain estop bool at panel.i.7` |
 
 [Cases 53 to 66](configuration-file-messages.md#locations-cases-53-to-66) show the
-diagnostics of a location. [Map I/O points](../howto/map-io-points.md) shows how to put
+diagnostics of a location. [Map tags to I/O points](../howto/map-io-points.md) shows how to put
 globals at points, and [I/O adapters](io-adapters.md) gives the rules of an
 [adapter](glossary.md#adapter) and its device.
 
@@ -833,7 +833,7 @@ The functions of `Logex.Configuration`:
 
 | Function | What it does |
 |---|---|
-| `Global.new!/3` | Takes the name, the type and the options `initial:`, `at:`, `retain: true` and `non_retain: true`. It refuses each error of the 1 global: an option, the name, the type, the location and the initial value, in the words of `new!/1`. `new!/1` also checks the global against the other globals and the devices. |
+| `Global.new!/3` | Takes the name, the type and the options `initial:`, `at:`, `retain: true` and `non_retain: true`. It refuses the errors of the 1 global: an option, the name, the type, the location and the initial value, in the words of `new!/1`. First it refuses each argument that no line can give, such as the name `"1x"`. Only if there is none does it refuse what a line can give wrong, such as the value 5 for a `bool`. `new!/1` also checks the global against the other globals and the devices. |
 | `Text.print/1` | Returns the text of a configuration. |
 
 ### Rules of the data
@@ -972,7 +972,7 @@ the errors of the data.
 - [Runner](runner.md) gives the rules of the runner and its watchdogs.
 - [Declarations and types](declarations-and-types.md) gives the types and the rules of
   `var_external`.
-- [Map I/O points](../howto/map-io-points.md) shows how to put globals at the points of
+- [Map tags to I/O points](../howto/map-io-points.md) shows how to put globals at the points of
   a device.
 - [Retained values](retained-values-and-store.md) and [The store](store.md) give the rules of
   `retain` and of the [store](glossary.md#store).

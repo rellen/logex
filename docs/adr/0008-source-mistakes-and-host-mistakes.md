@@ -161,7 +161,7 @@ A check runs at the call where a value comes in from the host. A program gets it
 | A program | 1 time, where it comes in. `Logex.Runtime.instance/1,2`. `Logex.Edit.accept/3`, for the running program and the candidate. `Logex.Configuration.check/1`, and so `new!/1`, `compile/3` and `start/1`. `Logex.Configuration.Edit.accept/3`, for each program type that runs and the candidate | 190, 200 |
 | A program that the host changes after that check | The scan that gets to a changed `add` or timer | 194 |
 | A type in `types:` | Compiled again from its text, 1 time for each compile | 54 |
-| A global from `Global.new!/3` | Each error of the 1 global at the call, in the words of `check/1`: its name, its type, its location and its value. What needs the other globals or the devices at `new!/1` and `check/1` | 555, 575 to 577 |
+| A global from `Global.new!/3` | The errors of the 1 global at the call, in the words of `check/1`: its name, its type, its location and its value. First each argument that no line can give. Only with none of those, what a line can give wrong. A misspelled location gets both of its lines. What needs the other globals or the devices at `new!/1` and `check/1` | 555, 575 to 577, 588 |
 
 The check of a program finds only these hand edits:
 
@@ -220,6 +220,13 @@ The readers of the [store](../../guides/reference/glossary.md#store) and of the
 than 10,000 characters (decision 369).
 [The store](../../guides/reference/store.md) and
 [Forcing](../../guides/reference/forcing.md) give their messages.
+
+A refusal of the host quotes a number whole up to 10,000 characters, as a compile quotes
+a literal. It quotes a longer number by its first 24 characters and its length
+(decisions 583 and 584). It shows a text or a list as `inspect/1` shows it (decision 585).
+`Logex.Configuration.Global.new!/3`, `Logex.Tag.new!/5` and `Logex.Configuration.check/1`
+cut a number so. Decision 586 makes each refusal of the host contract cut a number so,
+and RV-32 builds it.
 
 `test/logex/compile_total_test.exs` does a seeded walk of changed source texts. No text
 raises.
@@ -498,7 +505,8 @@ This record sums up these decisions of
 - Programs and types from the host: 54, 169, 182, 190, 194, 200, 371, 404, 430, 432
   and 436.
 - States and resources: 171 to 174, 184 to 186 and 188.
-- Globals from the host: 555, 575 to 577 and 583.
+- Globals from the host: 555, 575 to 577 and 588.
+- A long value in a refusal of the host: 583 to 586. RV-32 builds 586.
 - The bounds of a compile: 369, 370, 403, 429, 478, 520, 522 and 524 to 526.
 
 [§4.6](../organisation.md#46-execution-model) of the same document says why the runtime

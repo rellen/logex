@@ -110,9 +110,10 @@ otherwise.
 - `Logex.Configuration.Task`: a struct, 1 [task](glossary.md#task).
   `Logex.Configuration.new!/1` and `check/1` check it.
 - `Logex.Configuration.Global`: a struct, 1 [global](glossary.md#global). Its function
-  `new!/3` makes one. It refuses each error of that 1 global when you call it: a wrong
-  option, name, type, location or initial value. `new!/1` and `check/1` check what needs
-  the other globals or the devices, for example 2 globals of 1 name.
+  `new!/3` makes one. It refuses the errors of that 1 global when you call it: a wrong
+  option, name, type, location or initial value. It judges in 2 steps, which
+  the part on `Logex.Configuration` of [The functions](#the-functions) gives. `new!/1` and `check/1` check what needs the other globals or the devices,
+  for example 2 globals of 1 name.
 - `Logex.Configuration.Instance`: a struct, 1 program instance of a configuration.
   `new!/1` and `check/1` check it.
 - `Logex.Configuration.Connection`: a struct, 1 [connection](glossary.md#connection).
@@ -311,12 +312,18 @@ argument. `new!/1` raises both kinds in 1 message, the wrong arguments first.
 
 > #### Note {: .info}
 >
-> `Logex.Configuration.Global.new!/3` refuses each error of 1 global when you call it:
+> `Logex.Configuration.Global.new!/3` refuses the errors of 1 global when you call it:
 > its name, its type, its location and its initial value. It uses the words of
 > `check/1`. It does not compare the global with the other globals or with the devices.
 > `new!/1` and `check/1` refuse 2 globals of 1 name and 2 globals at 1 point.
 > [Example: wrong calls to compile and declare](#example-wrong-calls-to-compile-and-declare)
 > shows a global of the type `bool` with the initial value 5.
+
+`Global.new!/3` judges in 2 steps, by these 2 kinds of problem. First it raises each wrong
+argument, such as the name `"1x"`, the type `:nope` or the location `5`. If there is
+none, it raises each problem that a line can hold, such as the value 5 for a `bool` or
+the location `zz`. Thus `Global.new!("1x", :bool, at: "zz")` raises the line of the name
+alone.
 
 ### `Logex.Configuration.Edit`
 
@@ -616,8 +623,9 @@ These rules give the form of each message of an `ArgumentError`:
   ``input `level` is a usint: 256 is outside 0 to 255``.
 - A number of more than 10,000 characters shows as its first 24 characters and its
   length. `Logex.Configuration.Global.new!/3` and `Logex.Tag.new!/5` do this, and so
-  does a diagnostic of `Logex.Configuration.check/1`. For example:
-  ``…`100000000000000000000000…` (10001 characters) is outside -128 to 127``.
+  does a diagnostic of `Logex.Configuration.check/1`. For example, `Global.new!("trim",
+  :sint, initial: 10 ** 10000)` raises
+  `` `trim` is an sint: `100000000000000000000000…` (10001 characters) is outside -128 to 127 ``.
 - A check of a list gives 1 line for each problem. Each other check stops at the first
   problem. [Example: wrong calls on 1 instance](#example-wrong-calls-on-1-instance)
   shows both.
