@@ -401,8 +401,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   `{false, env}`: without the de-energised clause the instruction raises
   `FunctionClauseError` the moment a contact opens. A built-in type it runs is a row of
   `Logex.FbType.rules/1`. The mnemonic is reserved in any case, so it breaks a program with
-  a tag of that name: say so in the commit. Where the power it passes on is not settled,
-  the compiler refuses anything after it on its path, as after `ton`.
+  a tag of that name: say so in the commit. One that runs a built-in instance is a key of
+  its type's `runs` (`Logex.FbType.runners/0`), and the compiler refuses anything after it
+  on its path, as after `ton`; any other settles its power in its clauses.
 - **Every tag is declared,** in the source, `var aa bool` before the first rung, or from
   Elixir with `Logex.Tag.new!/4,5` (`validation_test.exs`'s `@declared`). A new section,
   qualifier or elementary type word is a row of `Logex.Declarations` and a built-in block
