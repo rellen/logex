@@ -463,6 +463,45 @@ defmodule Logex.ArrayConfigurationTest do
       assert refused(text) == [
                "`m1.w` is an array of 3 ints, and the constant `5` is one value: connect it to a global array of its sizes, or each element to a constant, as in `m1.w[0] 5`"
              ]
+
+      # RV-31's review (F5): a constant from Elixir past 10,000 characters, which the
+      # message quotes cut (decision 583), gives no line to copy with the cut in it, but
+      # the element to connect.
+      {:ok, config} = compiled(@configuration)
+
+      for {to, quoted} <- [
+            {10 ** 20_000, "`100000000000000000000000…` (20001 characters)"},
+            {-(10 ** 20_000), "`-10000000000000000000000…` (20002 characters)"}
+          ] do
+        connections =
+          Enum.map(config.connections, fn
+            %{member: "w"} = connection -> %{connection | to: to}
+            connection -> connection
+          end)
+
+        assert Enum.map(Configuration.check(%{config | connections: connections}), & &1.message) ==
+                 [
+                   "`m1.w` is an array of 3 ints, and the constant #{quoted} is one value: " <>
+                     "connect it to a global array of its sizes, or each element to a constant, " <>
+                     "the first `m1.w[0]`"
+                 ]
+      end
+
+      # At 10,000 characters the constant is quoted whole, in the line to copy too.
+      to = 10 ** 9_999
+
+      connections =
+        Enum.map(config.connections, fn
+          %{member: "w"} = connection -> %{connection | to: to}
+          connection -> connection
+        end)
+
+      assert Enum.map(Configuration.check(%{config | connections: connections}), & &1.message) ==
+               [
+                 "`m1.w` is an array of 3 ints, and the constant `#{to}` is one value: connect " <>
+                   "it to a global array of its sizes, or each element to a constant, as in " <>
+                   "`m1.w[0] #{to}`"
+               ]
     end
 
     test "an array var_input is connected whole, or at every element" do

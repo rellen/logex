@@ -551,9 +551,9 @@ defmodule Logex.TypespecTest do
   end
 
   # Decision 555 (RV-30; RV-24's question 7): `Global.t()` is true of the struct
-  # `Global.new!/2,3` gives for a name, a type and a location that are a global's, which
-  # it keeps as given (RV-30's review, F7: one of those that is none it keeps too, the
-  # struct outside `t()`, shown at the end; provisional, `PLAN.md`'s RV-30, question 3).
+  # `Global.new!/2,3` gives. Since decision 577 (RV-31) of every struct it gives: a name,
+  # a type or a location that is none, which it kept until then as given, the struct
+  # outside `t()` (RV-30's review, F7), is refused at once too, shown at the end.
   # Every elementary type at the ends of its range, a real's
   # integer and float, an array's list and a located global, each held to the spec; and
   # the values no global's type holds, which `new!/3` kept until then, its struct outside
@@ -589,6 +589,10 @@ defmodule Logex.TypespecTest do
         assert %Global{type: ^type, initial: ^initial} =
                  held(Global, :new!, ["g", type, [initial: initial, retain: true]])
       end
+
+      # Decision 576: located, with no initial value.
+      assert %Global{type: ^type, at: "panel.q.0", initial: nil} =
+               held(Global, :new!, ["g", type, [at: "panel.q.0", non_retain: true]])
     end
 
     assert %Global{at: "panel.q.0"} = held(Global, :new!, ["y", :bool, [at: "panel.q.0"]])
@@ -607,16 +611,21 @@ defmodule Logex.TypespecTest do
       assert_raise ArgumentError, fn -> Global.new!("g", type, initial: initial) end
     end
 
-    # RV-30's review (F7): what `new!/2,3` keeps as given, check/1's to refuse, is
-    # outside `t()`: a type that is none, a name that is no text and a location that is
-    # none (provisional: question 3).
-    for kept <- [
-          Global.new!("g", :float),
-          Global.new!(:g, :bool),
-          Global.new!("g", :bool, at: 5),
-          Global.new!("g", {:array, :ton, [2]}, initial: [1, 2])
+    # RV-30's review (F7): what `new!/2,3` kept as given, check/1's to refuse, is outside
+    # `t()`: a type that is none, a name that is no text and a location that is none.
+    # Since decision 577 (RV-31) `new!/3` refuses each at once, so none is given.
+    for {name, type, options, message} <- [
+          {"g", :float, [], "global `g` has type :float: "},
+          {:g, :bool, [], ":g cannot name a global: "},
+          {"g", :bool, [at: 5], "global `g` is at 5, which is not a location: "},
+          {"g", {:array, :ton, [2]}, [initial: [1, 2]],
+           "global `g` has type {:array, :ton, [2]}: "}
         ] do
+      kept = %Global{name: name, type: type, initial: options[:initial], at: options[:at]}
       refute Held.held?(kept, t, Global), inspect(kept)
+
+      assert %ArgumentError{message: ^message <> _} =
+               catch_error(Global.new!(name, type, options))
     end
 
     reaches!(@reach)

@@ -15828,8 +15828,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      suite passed it too. `test/logex/dropped_answers_test.exs` reads every mark from
      `lib/`'s syntax trees and holds it to a list, its file, function and call beside
      why the answer may be dropped there, 26 with the two that stood before the flag: a
-     mark added, moved or taken away is red until the list says so. Provisional:
-     `PLAN.md`'s "RV-30's review", question 7.)*
+     mark added, moved or taken away is red until the list says so. Taken as built,
+     decision 581.)*
 
 551. **A Dialyzer warning that is no defect (RV-24),** RV-24's question 3: twelve of the
      first warnings were no defect, ten of them a refusal raised through a call that
@@ -15910,8 +15910,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and `check/1`'s own where they differ. The value is judged against the type alone:
      a located global's initial value its type holds is kept and refused by `check/1`
      for its location, as it was, and the type and the name stay `check/1`'s; the
-     options' mistakes come first; `new!/2` is as it was. Both readings are provisional,
-     `PLAN.md`'s "RV-30 as built", questions 1 and 2.)*
+     options' mistakes come first; `new!/2` is as it was. The words taken as built,
+     decision 575; the value judged against the type alone overturned by decisions 576
+     and 577, built with RV-31.)*
      *(RV-30's review, 2026-11-16: nothing but an `ArgumentError` comes out of `new!/3`
      whatever it is given, where a name that is no text raised a
      `Protocol.UndefinedError` out of the value's line and an array of no elementary
@@ -15923,7 +15924,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `new!/3` refuses for its type is refused again by `check/1` for its location once
      the number is mended. And the struct `new!/3` gives is a `Global.t()` where its
      name, type and location are a global's, which it keeps as given. The documents say
-     so; questions 2 and 3 stand.)*
+     so; decisions 576 and 577 settle questions 2 and 3, built with RV-31.)*
 
 556. **Where a reader finds the older documents (DOC-1),** step 1's question 1: the site
      is the pages ExDoc builds; `CONTRIBUTING.md`, `CHANGELOG.md`, `PLAN.md`, `CLAUDE.md`
@@ -16094,6 +16095,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      words, one refusal. Not taken: as built, the value alone judged at once. In Logix an
      I/O point's tag is its module's and takes no initial value from the program; that a
      point takes none is logex's own rule. RV-31 builds it.
+     *(Landed with RV-31, 2026-11-23, `0652ccb`: any initial value on a located global, a
+     number its type holds or not and an array's list, is refused by `new!/3` in the one
+     line `check/1` gives of it, `` `eye_1` is an input point: its value comes from the
+     input image, so it takes no initial value ``, and `retain: true` on one in the line
+     a `var_global` line is refused in, from the one judge both read. RV-31's review
+     found a location not in its one spelling, `panel.I.0`, read as no point, the value
+     judged against the type and the point's line told only once the spelling was
+     mended: since its fixes such a location is the point it names for the value, the
+     list and `retain`, the point's line beside the spelling's in one refusal, in
+     `new!/3` and `check/1` alike; one that is none, `panel.x.0`, names no point.
+     Provisional: `PLAN.md`'s RV-31, question 5.)*
 
 577. **What `Global.new!/3` refuses at the line that declares a global (RV-30),** RV-30's
      question 3: `Global.new!("conveyor speed", :dint)`, `Global.new!("speed", :float,
@@ -16107,6 +16119,16 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      a device to judge stays `check/1`'s. Not taken: as built, the value alone. IEC checks
      a declaration whole; Logix's tag editor refuses a bad name or an unknown type as it
      is typed. RV-31 builds it.
+     *(Landed with RV-31, 2026-11-23, `0652ccb`: decision 555's judge grown into
+     `Logex.Configuration.Judge`, internal, every rule of the one global, which `check/1`
+     reads for each global and `new!/2,3` for the one it builds: the host's lines, name,
+     type, value and location, raised alone where there are any, as `check/1` raises
+     them, and otherwise its diagnostics' messages, the name's, the global's own and the
+     location's, in its order, joined. Two globals of one name or of a case twin, a point
+     two globals take and two devices whose names differ only in case stay `check/1`'s.
+     A walk over names, types, values and locations, some 39,000 draws, holds `new!/3`'s
+     lines to `check/1`'s at every draw; every struct `new!/2,3` gives is a
+     `Global.t()`.)*
 
 578. **Where the tests of a short watchdog run (RV-30),** RV-30's question 4: the plants
      of `trip_test.exs` with `idle: 50, poll: 10` give a device call 60 ms of real time,
@@ -16133,6 +16155,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      2026-11-16): a PLT is named by the toolchain's versions and its applications, so a
      copy from either cache is the right one or is not used. Not taken: the `_build`
      cache leaving the PLT out. RV-31 corrects the comment.
+     *(Landed with RV-31, 2026-11-23, with its record: the workflow's comments say the
+     `_build` cache holds the PLT too and why either copy is the right one or is not
+     used; no key, path or step changed, and no test reads the comments.)*
 
 581. **The list of marks (RV-30),** RV-30's question 7: `dropped_answers_test.exs` holds
      every `_ = ...` of `lib/` to a list of 26, each with its reason.
@@ -16158,6 +16183,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `Logex.Tag.new!/5` and of `check/1` quotes a long number cut, as a compile cuts a
      long literal it quotes, so a host's log stays short. Not taken: quoted whole. RV-31
      builds it.
+     *(Landed with RV-31, 2026-11-23, `201fd25`: a number past 10,000 characters is quoted by
+     its first 24 and how many it has, `` `100000000000000000000000…` (100001
+     characters) ``, through the one cut in `Logex.Lexer` that a compile's long literal
+     takes, its start and its count read from the number's size and its leading digits,
+     never its whole text; the same in a value that is no number, a list's. A number of
+     10,000 characters or fewer is quoted whole, as a compile quotes one; a long text or
+     list is shown as `inspect/1` shows it. Provisional: `PLAN.md`'s "RV-31 as built",
+     questions 1 to 3.)*
 
 ---
 

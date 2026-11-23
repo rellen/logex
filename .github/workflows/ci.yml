@@ -28,7 +28,13 @@ jobs:
 
       # No gate reads mix.lock: logex has no dependency but ExDoc, in the docs environment
       # alone, which docs.yml builds in. So the cache is keyed on the versions setup-beam
-      # resolved and on mix.exs. Dialyzer's PLT is cached apart, below.
+      # resolved and on mix.exs. It holds Dialyzer's PLT too: actions/cache saves _build
+      # whole, its `!_build/dialyzer` taking nothing out, so a run whose key here missed
+      # saves the PLT it ends with in this cache, as one whose key below missed saves it
+      # in the PLT's own; a run that restored its exact key saves nothing to that cache
+      # (decision 580). Either copy is the right one or is not used: scripts/dialyzer.sh
+      # names a PLT by the toolchain's versions and the applications it holds, and checks
+      # the one it finds against the toolchain.
       - name: Cache deps and _build
         uses: actions/cache@v5
         with:
@@ -72,10 +78,11 @@ jobs:
       # as scripts/gate.sh runs it after the suite (decision 549), scripts/dialyzer.sh,
       # which names its flags, builds or checks its PLT of
       # the toolchain's applications and exits with Dialyzer's code, red on any warning
-      # its flags give. The PLT, the toolchain's alone, is cached by the versions
+      # its flags give. The PLT, the toolchain's alone, is cached here by the versions
       # setup-beam resolved and by the script, which names its applications (RV-24's
-      # review, F5), so that a toolchain or a list changed builds its own, a saved one only
-      # once a run passes, and no other key restored.
+      # review, F5), a saved one only once a run passes, and no other key restored; the
+      # _build cache above holds it too, so this one matters where that one misses
+      # (decision 580). A toolchain or a list changed names another PLT, built anew.
       - name: Cache the Dialyzer PLT
         uses: actions/cache@v5
         with:
