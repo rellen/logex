@@ -22914,14 +22914,15 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   "do", or "run" for a program or a task; a heading that holds a name as code; and the
   first page not ending with "See also" (question 13).
 
-  **DOC-1's step 2 as built** (2026-11-23, branch `doc2-close` over `263fc95`, pushed to
-  `backup/doc2-close`). The pages are written: 141 new pages, 105 in place of the
+  **DOC-1's step 2 as built** (2026-11-23, branch `doc2-close` over `263fc95`, `main`
+  merged into it at `d468065`, pushed to `backup/doc2-close`). The pages are written: 141 new pages, 105 in place of the
   skeleton's stubs and 36 split off from them, each claim checked against the code by a
   run, each page read by two reviewers, one for what is true and one for the reader, and
   mended after them; the 23 decision records and
   their index; README a short first page; and a test that no page is a stub. No test was
-  deleted or weakened, and `lib/` is changed only in the text of six moduledocs that the
-  pages found wrong (D1 to D6 below). No decision was recorded: what the pages had to
+  deleted or weakened, and `lib/` is changed only in the documentation of six modules
+  that the pages found wrong (D1 to D6 below), and in two moduledocs' words for README's
+  motor after it (the review, below). No decision was recorded: what the pages had to
   choose is a question below, kept as built until answered.
 
   - *The skeleton* (`08cb82e` on `d45e68a`, branch `doc2-skel`). The 23 records chosen
@@ -22973,9 +22974,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   - *The reconcile* (`df46058` to `dac930c`). R1 to R25 mended, among them the pages of
     `Global.new!/3` written once to RV-31's behaviour after RV-31 landed on `main` and was
     merged (`7135a7a`, then `f19fd37`), and the five gates with Dialyzer the fifth on every
-    page that counts them (`999f0d0`). D1 to D15 each a commit of its own: the moduledocs
-    of `runner.ex` (D1, D2), `runner/clock.ex` (D3), `program.ex` and `runtime.ex` (D4),
-    `edit.ex` (D5) and `logex.ex` (D6), `CONTRIBUTING.md` (D7 to D10), `CLAUDE.md` (D11),
+    page that counts them (`999f0d0`). D1 to D15 each a commit of its own: the documentation
+    of `runner.ex` (D1, D2), `runtime.ex` (D2, D4), `runner/clock.ex` (D3), `program.ex`
+    (D4, a function's doc), `edit.ex` (D5) and `logex.ex` (D6), `CONTRIBUTING.md` (D7 to D10), `CLAUDE.md` (D11),
     `docs/naming.md` (D12, D13) and `docs/organisation.md` §4.11 and §4.9 (D14, D15).
     D16 to D18 are texts of decisions 463, 137 and 264: left for the maintainer, below.
     Of the close's items: C1 to C4, C7, C10, C12, C15, C16, C18 and C19 done, among them
@@ -22986,8 +22987,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     README's rewrite; C20 waits for question 5. `main`'s records of decisions 584 to
     588 merged (`8ed0300`).
   - *README a short first page* (`13a293d`). 5,812 lines before (5,803 at `263fc95`), 129
-    after: what logex is, the safety Warning at README's full strength, `motor.ld` drawn
-    and `scan.exs` run, how to install and run, "What logex is not" in nine lines linking
+    after, 145 after the review: what logex is, the safety Warning at README's full
+    strength, `motor.ld` drawn and `scan.exs` run, how to install and run, "What logex is
+    not" in nine items linking
     the pages that give each limit in full, where to go next, the status and the licence.
     Its kind is `:readme`, so the writing rules read it. The 32 examples that README alone
     showed went first to the page of their subject, each run by the suite, and
@@ -23015,13 +23017,15 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     written byte for byte as before; no test was given more time. `CHANGELOG.md` is
     unchanged: its rules give an entry to a decision, and this step records none.
   - *The ledger.* Each of the 636 units of README's inventory at `0793a86` (A 120, B 119,
-    C 65, D 112, E 68, F 107, G 45) has a row: 611 here, on the page its inventory
-    planned or a page split off from it; 16 elsewhere, on another page of the list; and
-    9 dropped, 7 of them history that §7 and this file keep, one a lead-in that became a
-    page's title (A018) and one an example's helper file (F005). Its three gaps are
-    closed: no unit is on no page, README's own examples among them since `13a293d`; the
-    two summaries of a limit weaker than README's are at its strength (`616dfb8`); and
-    both drops of another reason have it in their row. The full table is below the
+    C 65, D 112, E 68, F 107, G 45) has a row: 616 here, on the page its inventory
+    planned or a page split off from it, README among them; 12 elsewhere, on another page
+    of the list; and 8 dropped, 7 of them history that §7 and this file keep and one a
+    lead-in that became a page's title (A018). Its three gaps are closed: no unit is on no
+    page, README's own examples among them since `13a293d`; the two summaries of a limit
+    weaker than README's are at its strength (`616dfb8`); and the drop of another reason
+    has it in its row. The review set five rows to here: B036, B037, B043 and B119, which
+    the short README holds, and F005, `debounce.ld`, which `howto/use-an-event-task.md`
+    shows and runs. The full table is below the
     questions.
   - *The checks* on this record's tree, each by its exit code, on the loaded machine:
     `scripts/gate.sh` `GATE-OK`, its five gates, 4,242 tests (11 doctests) in 400 s and
@@ -23032,26 +23036,63 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
     1,139 of 1,140, the stage test timed out; and `mix format --check-formatted`. CI and
     Docs on the branch's tip are the integrator's to read.
 
+  **DOC-1's step 2 close reviewed** (2026-11-23, on `7a8dbaa`, by three reviewers: what
+  is true and the built site; README and the ledger; the project's own files; each ran
+  `scripts/gate.sh` or `scripts/docs.sh` and probes of its own, and changed nothing). No
+  defect blocked the close; each finding is mended or run, `main` unmoved past
+  `d468065`. Mended: runner.md's fragment of an owed round, which had lost the state its
+  test builds, says again how a round comes to be owed, a slow drive's write of 2 ms, and
+  `readme_test.exs`'s `@fragments` holds the page to that sentence again, the one test
+  change of the close that had held less (`804765f`); `faults.md`, `runner.md` and record
+  0014 said a trip writes nothing more after its 0, where since decision 262 a 0 the
+  adapter refuses is written again at each poll (`804765f`, `trip_test.exs`'s test of it
+  run); pages and records that named README for the motor, the plant, the real-clock
+  example or `wired.logex` name their files or pages, with two moduledocs' words and
+  `ceiling_test.exs`'s and `end_to_end_test.exs`'s comments and test names, what each
+  test runs unchanged (`79697f9`); eight link texts that were not their page's title are
+  (`31a76d2`); `Global.new!/3`'s pages say its two steps, which a run showed: each
+  argument no line can give first, what a line can give wrong only with none of those,
+  and record 0008 cites decisions 584 to 588 (`c41ad74`); README's Warning names the
+  examples of a safety function and its retained-value item says not to keep a value of
+  a safety function in logex, both at the strength README had at `263fc95`, its install
+  steps clone first, and its first terms link the glossary (`b649ff3`);
+  `CONTRIBUTING.md` names the contributor pages and records in the site (`59cf82a`); and
+  this record: question 8 lists the findings that are not questions 9 to 32, question 1
+  gives today's counts, question 4 quotes decisions 484 and 134, question 11 says what
+  "single" means, the `lib/` account names the documentation of six modules, and the
+  ledger sets B036, B037, B043, B119 (on the short README, their planned page) and F005
+  (`debounce.ld`, shown on `howto/use-an-event-task.md`) to here, 616, 12 and 8. Run and
+  found as said: the stub test's catch of a stub (three red runs), the built site's
+  links, the hidden names, CLAUDE.md, `docs/pages.exs`, the ledger's counts, 49 of its
+  units against the pages, and questions 9, 12, 14, 17 and 27 on the merged tree. Not
+  mended, a nit: README is 145 lines where its template says about 120. The checks on
+  this tree, each by its exit code: `scripts/gate.sh` `GATE-OK`, 4,242 tests (11
+  doctests) in 354 s and `DIALYZER-OK`; `scripts/docs.sh` `DOCS-OK`, 184 pages, 17,601
+  links and the 13 that `docs/site-warnings.txt` lists; the documentation's five test
+  files together, 1,181 passed; no stub, and no hidden function in a code span of a page
+  of the site.
+
   Left for step 3, beside its review of the whole: the reviews of six pages split off
   after their reviews (C6); the rest of C11, one table in one place (the ranges of the
   types in two references, the store's events, the "checked messages" sentence on three
   pages, the one-shots' row for a periodic task); runs under load of the examples on the
   real clock, `scripts/load.sh -n 50` (C13); the links from about ten how-to guides to
   the headings of the references, which lead to the page today (C5); the how-to failure
-  tables, after question 5 (C20); and `docs/check-a-page.md`'s "What a writer gives
-  back", which still names "each part of the README". `retained-values-and-store.md`
+  tables, after question 5 (C20). `retained-values-and-store.md`
   keeps its name, which its example and its picture carry.
 
   **The questions for the maintainer, each kept as built until answered.** Questions 1 to
   8 are the writers' and menders' (the triage's M1 to M8), the recommendation first;
   questions 9 to 32 are behaviours of the code the pages state as they are (the triage's
   Q1 to Q24), none of them DOC-1's to change, each found by a writer's run or the
-  triage's against `263fc95` and not run again after RV-31's merge.
+  triage's against `263fc95`; the close's review ran 9, 12, 14, 17 and 27 again on the
+  tree merged with RV-31 and `d468065`, and each is still so.
 
   1. *How long may a page be, and a decision record?* The style guide says a page that is
      not a reference splits above about 1,500 words, the record template "1 page". By the
-     checker, 25 of 44 how-to guides pass 1,650 and 4 pass 2,000; 6 contributor pages
-     pass 2,000; 20 records pass 2,000 (record 0017 has 5,362 words). Options: (a) the
+     checker on the reviewed tree, 29 of 44 how-to guides pass 1,650 and 5 pass 2,000; 6
+     of 23 contributor pages pass 2,000; 20 of 23 records pass 2,000 (record 0017 has
+     5,382 words). Options: (a) the
      rule as written now, about 50 pages more; (b), recommended, about 1,500 a target with
      a ceiling near 2,000, the pages over it cut or split, and each record's runs and long
      tables moved to a contributor page it links; (c) the rule changed to the pages as
@@ -23072,9 +23113,13 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
      illustration with its Caution on an explanation page.
   4. *A statement about Logix that no manual in the record supports.* Four rows of
      `differences-from-logix.md` say "Not recorded"; record 0013 says a major fault sends
-     outputs to their fault state from this file's text; decisions 484 and 134 disagree on
-     when a Logix connection faults (D1's sentence, mended in `runner.ex`, repeats in
-     decisions 484, 489 and 491). Options: (a) every claim with its source or "Not
+     outputs to their fault state from `PLAN.md`'s text, not from a manual; decisions 484
+     and 134 disagree on when a Logix connection faults: 484 says it "faults after four
+     missed packets at its RPI", where 134 quotes the manual (1756-UM001Q p.158): "The
+     minimum timeout period ... is 100 ms. The timeout period can be greater, depending on
+     the RPI", 160 ms at an RPI of 20 ms, eight RPIs. The close mended `runner.ex`'s
+     sentence, which followed 484, to 134's (D1); 484's words repeat in decisions 489 and
+     491. Options: (a) every claim with its source or "Not
      recorded"; (b) only sourced claims on user pages; (c) the sources on a contributor
      page. Recommended: (a) on `differences-from-logix.md`, (b) on every other page, and
      the conflict between 484 and 134 settled.
@@ -23097,11 +23142,37 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
      (a) in place, always; (b) a record fixed once accepted, a new one replacing it; (c),
      recommended, in place while its choice holds, a new record when the choice changes;
      and "Withdrawn" kept or dropped.
-  8. *The behaviours the writers found that read as defects or gaps*, about 70 questions,
-     most of them questions 9 to 32. Options: (a) one review item for all; (b),
-     recommended, an item for the store, forcing and host-contract findings, the messages
-     and warnings with DOC-2, the tests and tools in the item; (c) nothing opened, the
-     pages stating the behaviour.
+  8. *The behaviours the writers found that read as defects or gaps*, about 70 questions;
+     24 of them are questions 9 to 32, and the others are these, by group, each a run of a
+     writer's that its page states as it is:
+     - *the store and forcing*, which an operator meets: one element out of its type's
+       range drops the whole array to its initial values; no status key names the copy
+       that an earlier start made; no public function prints the digests of the files
+       (and questions 19, 20, 22, 23);
+     - *the host contract*: `child_spec/1` of the runner, of `Logex.IO.Sim` and of the
+       manual clock takes any value, the error coming only at the supervisor's start; a
+       state with no timer or counter in it is taken, and the scan runs a preset of 0;
+       `Logex.IO.Point` has no sentence that puts it inside or outside the contract (and
+       question 30);
+     - *warnings missing or lost*: none for a `cal` and an `ote` on one tag, or for 2
+       `cal`; none for a `move` and an `ote` on one bool; the rules for a bool array and
+       for a word disagree; none for a real literal in a long timer's `pre`, in ns;
+       `Logex.Configuration.compile_file/1` drops a program's warnings (and questions 15
+       and 32);
+     - *messages*: `mov`'s "(renamed to its IEC name)"; "whose subscript `slot` holds";
+       the unforce message speaks of a crash; "keyword" in the messages where the pages say
+       "reserved word"; `Dnt` gets no "did you mean", where `dnt` gets `dint`; a program
+       type gets none (and questions 10, 13, 14, 16 and 27);
+     - *tests and tools*: no test holds "the core reads no clock"; a 4-leg branch with an
+       empty third leg changes its rung, and no source of the golden record holds it; the
+       parser's 3 `case` expressions have no recorded reason; `with` and `&&` pass the
+       clauses check; `instance_array_test.exs` finds a line by a search; `scripts/page.exs`
+       does not read a picture whose alternative text holds `[` (and questions 24 to 26
+       and 31).
+     Options: (a) one review item for all; (b), recommended, one review item for the
+     store, forcing and host-contract findings, the messages and warnings given to DOC-2,
+     which rewrites the modules' text, and the tests and tools in that review item; (c)
+     nothing opened, the pages stating the behaviour.
   9. *`not` and the shifts told they compute in the destination's type.* `var_input w
      word / var_output d byte / not w d` is refused "`not` computes in `d`'s type, a byte",
      where they compute in the source's type (decision 214); `shl w 1 d` the same.
@@ -23112,7 +23183,8 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   11. *An event task with an interval.* The one-shot, counter and `tp` warnings still say
       the trigger "is true at every run and never pulses" under `task trip single estop
       interval 30 priority 0`, where a run at its due time reads the trigger as 0, so it
-      pulses and counts. Known for `single` alone.
+      pulses and counts. The warnings are given to every task with a `single`, with an
+      interval or without one.
   12. *No limit-compare warning for a real*: `ge speed -3.4028235e38 ote lamp` compiles
       with none, where an `int`'s `ge speed -32768` warns.
   13. *A `var_output` nothing writes is told at its spelling*: `var_output sp real
@@ -23318,7 +23390,7 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | A119 | 338-341 | Two deliberate behaviours of branches: no short-circuit; the environment threads through the legs in order | here | `reference/instructions-contacts-and-coils.md` (The place of an instruction on a rung, row 'A coil in a leg of a branch'; also Execution…); `reference/execution-model.md` (Power flow in a rung; Example: a scan of belt.ld (scans 2, 4 and 5)); `reference/cheatsheet.cheatmd` (Rungs and operands / Series and branches) |  |
   | A120 | 343-348 | `xic` and `xio` are complementary; only a bool reaches them; a state's value outside its tag's type or of no integer kind is refu… | here | `reference/instructions-contacts-and-coils.md` (Contacts (case table); The operand (paragraph on the host). The exact message is Host con…); `reference/host-contract.md` (The fields of a state (env rules); Values of each type; Example: values of each type); `reference/cheatsheet.cheatmd` (Rungs and operands / Operands (a tag with no value in the state reads as 0); the Argument…) |  |
 
-  **Inventory B (README 350-480 and 5674-5824: what has landed, what logex is not, running it, documents, licence): 119 units, 112 here, 7 elsewhere, 0 dropped.**
+  **Inventory B (README 350-480 and 5674-5824: what has landed, what logex is not, running it, documents, licence): 119 units, 116 here, 3 elsewhere, 0 dropped.**
 
   | Unit | README lines | Gist | State | Page (section) | Note |
   |---|---|---|---|---|---|
@@ -23357,14 +23429,14 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | B033 | 467-470 | Each type word and mnemonic reserved in any case; what Milestone 5 deferred (TIME, LTIME, strings, structures) points to "What lo… | here | `reference/source-syntax.md` (Reserved words (the table of groups)); `docs/contributing/project-history.md` (Changes table row 5 (decision 144); deferred types as Milestones 7, 8, 11 in The work tha…) |  |
   | B034 | 471-476 | Milestone 3 landed (decisions 67-107): counters, the other timers, integer arithmetic, pulse coils, forward jump; IEC names where… | here | `explanation/the-dialect-and-iec.md` ('The source of each word': 28 of 40 from IEC 61131-3, the 12 of the conventional set by n…); `docs/contributing/project-history.md` (Milestones table row M3; changes table row 3 (its mnemonics reserved). The naming note go…); `docs/adr/0002-own-dialect-and-names.md` (Decision rule 2 examples; The decisions that apply the rule (80)) |  |
   | B035 | 476-479 | No `res`: a counter resets through its own `r` input, as IEC's does, and so does a retentive timer, `xic greased ote lube.r` (dec… | here | `reference/instructions-contacts-and-coils.md` (The operand, bullet (the rule, with a link to Instructions: timers and counters); the rec…); `reference/instructions-timers-and-counters.md` (`rto`; A run of a counter instruction; What the timers and the counters do not have; wron…); `howto/use-timers.md` (Steps 4; If it does not work (unknown instruction `res`). The master-control part is for…); and 4 more |  |
-  | B036 | 5676 | L1 "Not a safety controller. It must not implement a safety function" | elsewhere | `explanation/safety-and-limits.md` ("logex is not a safety controller", with the Mermaid diagram); `reference/not-supported.md` (Warning callout and What logex is not; full text on explanation/safety-and-limits) | Planned: README (landing page), first screen. **Close (2026-11-23):** explanation/what-logex-is.md's Warning, the first page a reader meets, now says safety-rated controller, designed and validated to the functional-safety standards that apply, logex making no claim against any (commit 616dfb8). **README short (2026-11-23):** README's Warning, first screen. |
-  | B037 | 5676-5680 | L2 "an emergency stop, a guard interlock, a light curtain, two-hand control, burner or pressure protection belong in hardwired ci… | elsewhere | `explanation/safety-and-limits.md` ("logex is not a safety controller", with the Mermaid diagram) | Planned: README (landing page). **Close (2026-11-23):** what-logex-is.md's Warning at full strength, as B036 (616dfb8). **README short (2026-11-23):** README's Warning, at full strength (hardwired circuits or a safety-rated controller, designed and validated to the standards, no claim). |
+  | B036 | 5676 | L1 "Not a safety controller. It must not implement a safety function" | here | `README.md` (the Warning); `explanation/safety-and-limits.md` ("logex is not a safety controller", with the Mermaid diagram); `reference/not-supported.md` (Warning callout and What logex is not; full text on explanation/safety-and-limits) | Planned: README (landing page), first screen. **Close (2026-11-23):** explanation/what-logex-is.md's Warning, the first page a reader meets, now says safety-rated controller, designed and validated to the functional-safety standards that apply, logex making no claim against any (commit 616dfb8). **README short (2026-11-23):** README's Warning, first screen. **Review (2026-11-23):** README, the planned page, holds it since `13a293d`: the state is here. |
+  | B037 | 5676-5680 | L2 "an emergency stop, a guard interlock, a light curtain, two-hand control, burner or pressure protection belong in hardwired ci… | here | `README.md` (the Warning, with the examples of a safety function); `explanation/safety-and-limits.md` ("logex is not a safety controller", with the Mermaid diagram) | Planned: README (landing page). **Close (2026-11-23):** what-logex-is.md's Warning at full strength, as B036 (616dfb8). **README short (2026-11-23):** README's Warning, at full strength (hardwired circuits or a safety-rated controller, designed and validated to the standards, no claim). **Review (2026-11-23):** README's Warning now names the examples of a safety function too, at full strength: the state is here. |
   | B038 | 5680-5682 | L3 "The e-stop in the examples above is a signal a program reads and records; the e-stop that cuts a machine's power must be wire… | elsewhere | `explanation/safety-and-limits.md` ("logex is not a safety controller", with the Mermaid diagram); `reference/not-supported.md` (Warning callout and What logex is not; full text on explanation/safety-and-limits) | Planned: `tutorials/first-program` (a one-line caution where the e-stop first…. **README short (2026-11-23):** README's Warning: the e-stop that cuts a machine's power works with logex stopped, crashed or never started. |
   | B039 | 5683-5684 | L4 "Not hard real-time. It runs on the BEAM, on a general-purpose operating system, with no bound on a round's lateness or jitter" | here | `explanation/scan-cycle-and-time.md` (The Warning at the top, at full strength; a short form in the Warning of how-a-timer-coun…); `reference/runner.md` (Caution at the top); `explanation/what-logex-is.md` ("Who logex is for" (the adapter) and "How it compares with IEC 61131-3 and Logix" (no lim…); and 2 more |  |
   | B040 | 5684-5686 | L5 "A watchdog is a backstop that trips the plant when a task runs long, not a guarantee that it never does." | here | `explanation/trips-and-watchdogs.md` (A watchdog is a limit of time; What a trip cannot do); `howto/set-watchdogs.md` (The Warning callout at the top, at full strength); `explanation/safety-and-limits.md` ("logex is not hard real-time") |  |
   | B041 | 5686-5687 | L6 "An input pulse shorter than the gap between two of its device's reads is missed unless the device reports it" | here | `reference/execution-model.md` (The second Warning; When a round runs (row: a device that the runner reads at each poll);…); `reference/io-adapters.md` (Caution at the top (a pulse between 2 reads, the report condition, the round condition, t…) | **Close (2026-11-23):** explanation/safety-and-limits.md ("logex can miss a short pulse on an input point") now says it at full strength: a pulse shorter than the gap between 2 reads of its device is missed unless the device reports it (616dfb8). |
   | B042 | 5687-5689 | L7 "a reported pulse is missed too unless it is an event task's trigger or a round runs while it holds: the runner keeps only eac… | here | `reference/execution-model.md` (The second Warning; Inputs between rounds; When a round runs (row: a device that reports…); `howto/use-an-event-task.md` (Caution in Before you start (poll period, report/2) and the short-pulse row. The full lim…); `reference/not-supported.md` (What logex is not and the paragraph after it) | **Close (2026-11-23):** safety-and-limits.md now also says a reported pulse is missed unless it is an event task's trigger or a round runs while it holds (616dfb8). |
-  | B043 | 5690 | L8 "Not certified for any industrial use." | elsewhere | `explanation/safety-and-limits.md` (The table of limits and "logex is not a safety controller"); `reference/not-supported.md` (Warning callout and What logex is not; full text on explanation/safety-and-limits) | Planned: README (landing page). **README short (2026-11-23):** README's Warning and first item of "What logex is not". |
+  | B043 | 5690 | L8 "Not certified for any industrial use." | here | `README.md` (the Warning and "What logex is not"); `explanation/safety-and-limits.md` (The table of limits and "logex is not a safety controller"); `reference/not-supported.md` (Warning callout and What logex is not; full text on explanation/safety-and-limits) | Planned: README (landing page). **README short (2026-11-23):** README's Warning and first item of "What logex is not". **Review (2026-11-23):** README, the planned page, holds it since `13a293d`: the state is here. |
   | B044 | 5691-5693 | L9 "Not a full guarantee of outputs off. A trip, a stop, a crash or a kill of the runner, a stuck runner and a device fault each… | here | `explanation/trips-and-watchdogs.md` (What a trip does; 3 failures and who writes the 0; What a trip cannot do. The full table…); `reference/runner.md` (Second Warning at the top; Warning in The trip; What each device keeps); `explanation/safety-and-limits.md` ("Output points after a trip, a stop or a crash", a table of 7 rows and what the plant mus…); and 1 more |  |
   | B045 | 5693-5694 | L10 "A device that hangs is killed, and its outputs are left to what the hardware does on losing its master" | here | `howto/write-a-device-adapter.md` (The second Warning and the Caution of "The time limit of a callback"; the :timeout row an…); `reference/io-adapters.md` (Warning at the top; The process of a device (the row 'while the process hangs in a callba…); `explanation/trips-and-watchdogs.md` (Warning callout; What a trip cannot do) |  |
   | B046 | 5694-5695 | L11 "if the VM itself stops, nothing of logex runs to switch anything off" | here | `explanation/trips-and-watchdogs.md` (Warning callout; What a trip cannot do); `explanation/safety-and-limits.md` ("Output points after a trip, a stop or a crash", a table of 7 rows and what the plant mus…); `howto/write-a-device-adapter.md` (The second Warning and the Caution of "The time limit of a callback"; the :timeout row an…); and 1 more |  |
@@ -23440,7 +23512,7 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | B116 | 5818 | `docs/review-2026-11-01.md`: the adversarial review of the whole codebase after Milestone 6, every finding with its repro, and it… | here | `docs/contributing/project-history.md` (The table of the 3 documents at the top; first lines of project-history-review.md); `docs/README.md` (The older documents (review row)) |  |
   | B117 | 5819 | `docs/organisation.md`: program organisation and how a running controller is changed; then a 140-word parenthesis listing which i… | here | `docs/architecture/overview.md` ('Why it is built this way' (§7 is the full log, linked) and 'How to change it' (a table o…); `docs/README.md` (The older documents (organisation.md row) and the tip 'Read §4 before a design') |  |
   | B118 | 5820 | `docs/defladder.md`: a study of an Elixir-embedded `defladder` DSL, an executed spike, a recommendation (proposed, not adopted) | here | `explanation/programs-as-data.md` ("Why logex does it this way", the paragraph before the decision records: the link, with t…); `docs/README.md` (The older documents (defladder row: the DSL is a proposal in PLAN.md's backlog, logex doe…); `docs/adr/0001-a-program-is-data.md` (Context (5,708 of 20,000, == against =:=, speed with its reason) and Alternatives conside…) |  |
-  | B119 | 5822-5824 | "Apache-2.0. See `LICENSE`." | elsewhere | `docs/README.md` (the table of files, row `LICENSE`) | Planned: README (landing page), kept as is; ExDoc picks the licence up from `m…. The landing README keeps "Apache-2.0. See LICENSE." when it is rewritten (C9). **README short (2026-11-23):** README's Licence section keeps "Apache-2.0. See `LICENSE`." (linked). |
+  | B119 | 5822-5824 | "Apache-2.0. See `LICENSE`." | here | `README.md` (Licence); `docs/README.md` (the table of files, row `LICENSE`) | Planned: README (landing page), kept as is; ExDoc picks the licence up from `m…. The landing README keeps "Apache-2.0. See LICENSE." when it is rewritten (C9). **README short (2026-11-23):** README's Licence section keeps "Apache-2.0. See `LICENSE`." (linked). **Review (2026-11-23):** README, the planned page, holds it since `13a293d`: the state is here. |
 
   **Inventory C (README 481-1245: an example, timers, counters, long timers, arithmetic, integer widths): 65 units, 65 here, 0 elsewhere, 0 dropped.**
 
@@ -23702,7 +23774,7 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | E067 | 3728-3746 | The numbered copies `tally.retain.dropped.<n>`: when one is made; how to take a mistaken deploy back (`cp`) | here | `reference/store.md` (The numbered copies; Example: a mistaken deploy and its copy. The steps are in howto/reco…); `howto/take-back-a-deploy.md` (How the copy keeps the values of release 1 (figure); Steps 1, 2, 4, 5; An example; If it…); `howto/edit-the-store-by-hand.md` (the text before the 'The start drops a value' table) |  |
   | E068 | 3746-3772 | Copy mechanics: the old unnumbered copy; `.tmp`; `:eexist`; the compare with the highest copy; a failed copy is owed; `status/1`'… | here | `reference/store.md` (The numbered copies; How the runner writes a copy; The status of the store [moved: on sto…) |  |
 
-  **Inventory F (README 3774-4731: event tasks, watchdogs, the runner on the clock, forcing): 107 units, 101 here, 0 elsewhere, 6 dropped.**
+  **Inventory F (README 3774-4731: event tasks, watchdogs, the runner on the clock, forcing): 107 units, 102 here, 0 elsewhere, 5 dropped.**
 
   | Unit | README lines | Gist | State | Page (section) | Note |
   |---|---|---|---|---|---|
@@ -23710,7 +23782,7 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | F002 | 3779-3785 | `snapshot.ld`: one rung that copies an input to an output | here | `howto/use-an-event-task.md` (Steps, step 1 (file mark and rung drawing)) |  |
   | F003 | 3787-3808 | `trip.logex`: `task trip single estop priority 0`, five globals, two `program` lines with their connections | here | `reference/configuration-file.md` (The kinds of task; line_1.logex's on_stop task); `howto/use-an-event-task.md` (Steps, step 2 (file mark, table of the task line, priority). The full grammar goes to ref…) |  |
   | F004 | 3810-3813 | What `trip.exs` does (seven steps), and what `timed.logex` and `wrong_trip.logex` are for | here | `howto/use-an-event-task.md` (Steps 3-4 with the new use-an-event-task.exs. The messages of the error files are rows of…) | **README short (2026-11-23):** README's example now shown: `trip.exs` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`; `timed.logex` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`; `wrong_trip.logex` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. |
-  | F005 | 3815-3823 | `debounce.ld`: a `ton` behind an input, used to provoke the warning | dropped | — | An example's helper file: only README's trip.exs reads debounce.ld, to provoke the event-task timer warning; that warning is on howto/use-an-event-task.md ("Keep timers, counters and one-shots out of… **Close (2026-11-23):** the reason recorded: an example's input file that only README's trip.exs reads; the warning it provokes is shown and run on howto/use-an-event-task.md and reference/warnings.md, so the file goes with README's example when README is short (C9). **README short (2026-11-23):** README's example now shown: `debounce.ld` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. |
+  | F005 | 3815-3823 | `debounce.ld`: a `ton` behind an input, used to provoke the warning | here | `howto/use-an-event-task.md` (Another example: 7 cycles, a warning and 3 wrong task lines) | An example's helper file: only README's trip.exs reads debounce.ld, to provoke the event-task timer warning; that warning is on howto/use-an-event-task.md ("Keep timers, counters and one-shots out of… **Close (2026-11-23):** the reason recorded: an example's input file that only README's trip.exs reads; the warning it provokes is shown and run on howto/use-an-event-task.md and reference/warnings.md, so the file goes with README's example when README is short (C9). **README short (2026-11-23):** README's example now shown: `debounce.ld` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. **Review (2026-11-23):** the page shows and runs `debounce.ld` with its `<!-- file: -->` mark since `13a293d`: the state is here. |
   | F006 | 3825-3831 | `timed.logex`: a program with a timer under an event task | here | `reference/warnings.md` (event-task item (case 55); how-to on howto/use-an-event-task) | **README short (2026-11-23):** README's example now shown: `timed.logex` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. |
   | F007 | 3833-3842 | `wrong_trip.logex`: one mistake on each of three task lines | here | `reference/configuration-file.md` (Wrong texts 16-19, 25-29); `howto/use-an-event-task.md` (If it does not work, The configuration does not compile (dint, needs an interval or a sin…) | **README short (2026-11-23):** README's example now shown: `wrong_trip.logex` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. |
   | F008 | 3844-3885 | `trip.exs` and its output: seven cycles with which task ran which instance, one warning, three diagnostics | here | `howto/use-an-event-task.md` (Steps 3-4 and The result (new script, no reset, second rise with the motor off)) | **README short (2026-11-23):** README's example now shown: `trip.exs` on `howto/use-an-event-task.md (Another example: 7 cycles, a warning and 3 wrong task lines)`. |
