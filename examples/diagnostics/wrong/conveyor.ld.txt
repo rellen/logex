@@ -1,0 +1,14 @@
+// The conveyor: a seal-in, a lamp, a jam counter and a speed.
+var_input start bool
+var_input stop bool
+var_input jam bool
+var_output motor bool
+var_output Lamp bool
+var_output speed dint
+var jams dint
+
+( xic start | xic motor ) xio stop ote motor
+xic motor ote lamp
+xic jam ctu jams 3
+xic jams.dn mov 0 speed
+xic motor move speed
