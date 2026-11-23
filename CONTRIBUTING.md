@@ -16,8 +16,11 @@ requirement; recent history is direct-to-main. Do not invent process here.
 
 | Question | File |
 |---|---|
-| What is logex, what works, how do I run it? | `README.md` |
-| How do I build and test it? | `CLAUDE.md` |
+| What is logex, and how do I run it? | `README.md`, the short first page, then the site's user pages under `guides/`: `tutorials/`, `howto/`, `reference/` and `explanation/` |
+| Where is every document, and who reads it? | `docs/README.md`, the map |
+| How is it built inside? | `docs/architecture/` and `docs/implementation/` |
+| How do I build and test it? | `CLAUDE.md`, and `docs/contributing/toolchain.md` |
+| Why is it built this way? | the decision records under `docs/adr/`, indexed by `docs/adr/README.md`, each a curated summary of one large choice; `docs/organisation.md` §7 stays the full log of every numbered decision with its options, which the records cite (decision 547) |
 | What is broken, what is next, in what order, and why? | `PLAN.md` |
 | What should this instruction be called? | `docs/naming.md` |
 | How do I work on it? | this file |
@@ -264,10 +267,9 @@ happen. A plan that disagrees with the code is worse than no plan, because it is
 Any language change stales the pages: a new instruction adds a row to the cheatsheet and
 its reference, a syntax change touches `guides/reference/source-syntax.md`, the
 instruction references *and* the worked examples. The examples' output is real, and
-`test/logex/readme_test.exs` keeps it so (decision 359), in README and, since decision
-546 (e), in every page `docs/pages.exs` lists that is not a document from before that
-decision ("Writing a page of the documentation", below, for what a page
-adds to this): each `elixir`
+`test/logex/readme_test.exs` keeps it so (decision 359), in every page `docs/pages.exs`
+lists that is not `:legacy`, README among them (decision 546 (e); "Writing a page of the
+documentation", below, for what a page adds to this): each `elixir`
 block followed at once by a block beginning `$ mix run x.exs` is an example, run in a
 fresh VM in a directory of its own, `tmp/readme/<page>/x.exs/`, its output compared
 exactly with the rest of that block. A block a script reads from the disk is marked by
@@ -360,9 +362,8 @@ under `docs/templates/`. What it rests on, each held by a test:
 
 The rule below holds in the pages too: the glossary gives a term's word in "the
 conventional set" beside IEC 61131-3's, and names no vendor for it; a page names Logix
-only where it compares what a controller does, as the explanation pages do. Whether a user's page may
-name the product a reader comes from is a question `PLAN.md` puts to the maintainer under
-DOC-1's step 1.
+only where it compares what a controller does, as the explanation pages do; no user's
+page names the product a reader comes from beside each word (decision 561).
 
 ### Do not restore vendor names
 
