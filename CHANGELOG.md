@@ -193,7 +193,11 @@ changed after its last item was written, under "The host's API".
   than the instance's `now`, a scan's time that went backwards, an input or a held value
   outside its type, a clock's time out of range, an edit's generation and the line of a
   program or configuration edited by hand. A value of 10,000 characters or fewer is
-  quoted as before. Look for: code that reads a number back out of such a message.
+  quoted as before. A line of a program edited by hand that is no integer is quoted as
+  `inspect/1` shows it, `"7"` with its quotes where it was written bare, and a tuple is
+  told in the refusal where `Logex.Runtime.put_inputs/3`, `call/4` and `instance/1`
+  raised `Protocol.UndefinedError`. Look for: code that reads a number back out of such
+  a message.
 
 ### What it carries, by the work that built it
 

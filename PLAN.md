@@ -24998,6 +24998,185 @@ step, RV-23, RV-25 alone, and DOC-2 last.
   one of a small one by more than the cut's own bound (586). `scripts_test.exs`'s test of
   the PLT's cache named for what it checks, its body unchanged (587).
 
+  **RV-32 as built** (2026-11-23, branch `rv32` over `d468065`). Decisions 586 and 587
+  built, each change of `lib/` with a test that fails when it is reverted, judged by the
+  full suite (the mutation table below); the marks decisions 584–588 settle made their
+  numbers. No test, walk or oracle was deleted or weakened; the test lines taken out are
+  listed below, each with the decision that changed them. `mix.exs` is untouched, no
+  version is set and no tag made. The working files are under `scratchpad/rv/w32/`.
+
+  - *Every refusal through the one cut* (decision 586, `b6c4600`). The census, every
+    `raise ArgumentError` of `lib/` and every message built for one with `inspect/1` or
+    an interpolation: 241 calls of `inspect/1` in 19 modules, and 16 integers a refusal
+    wrote out itself with `"#{n}"`. Each call of `inspect/1` now goes through
+    `Logex.Lexer.inspected/2`, the cut of decisions 583–585, a long number in the value
+    cut and everything else as `inspect/1` shows it, its own call the one `inspect/1`
+    left in `lib/`; each integer through `shown_number/1`, or `inspected/2` where a
+    struct built by hand may hold anything there: a timer's `last` later than the
+    instance's `now` and that `now`, a held value outside its type, a scan's time gone
+    backwards and the instance's, an input's misfit, a tag's declared line and a
+    global's line in an input's refusal, an edited op's line in `Logex.Runtime`'s three
+    refusals of a scan and in `Logex.Program.edited_by_hand/1`, a clock's time out of
+    range, an edit's generations, and `initial/1`'s misfit through `quoted_number/1` as
+    the judge's. With `7139745` a tag's declared line too goes through `inspected/2`
+    whatever it holds: a program edited by hand whose tag's or op's line is a tuple is
+    told so, where `"#{line}"` raised `Protocol.UndefinedError` out of `put_inputs/3`,
+    `call/4` and `instance/1` (provisional, question 3). Of the 241, the ones a host's
+    long number can reach are the census's rows; the rest quote a pid, a module that is an atom, a key that is an atom, a
+    path or a name that is text (decision 585: quoted whole, as before), or logex's own
+    value, an address it made, and go through the cut all the same, outside the host
+    contract too, `Logex.Parser`'s, `Logex.Printer`'s, `Logex.Diagnostic`'s,
+    `Logex.Configuration.Text`'s and the compiler's checks of a tree (provisional,
+    question 2 below).
+
+    | the host contract's module | refusals reached | quoted before, `10 ** 100_000` | quoted now |
+    |---|---|---|---|
+    | `Logex`: `compile/2`'s source, name, options, types and a type, `compile_file/1`, `compile_files/1` | 7 | 100,036–100,151 bytes | 82–197 bytes |
+    | `Logex.Configuration`: `new!/1` of no keyword list, of a list that is none, an element's line, programs that are no list and a program that is none, `compile/3`, `compile_file/1`, `initial/1` of no global, a misfit, a list of no size and a list's misfit, `watchdog/1` | 12 | 100,062–100,210 | 108–256 |
+    | `Logex.Runtime` of a lone instance: `instance/1,2` and an image's program, paths, entry, type and kind; `call/4`'s state, its six fields, held values of a dint, a bool, a real, an array, an instance and a timer's `last`; the scan, its six fields and time gone backwards; `scan/3`'s time; `put_inputs/3`'s inputs, a key, misfits of a dint, a bool and a real, values that are no number, an array's shape and a var_output's declared line; `restart/3`'s mode and retained paths | 45 | 100,032–200,083 | 78–182 |
+    | `Logex.Runtime` of a program edited by hand: its blocks, an op's line, a tag's type, units, a unit, retained paths, reals, a real, arrays and an array where it is handed in, and an op's line and the units where a scan reaches them | 12 | 100,106–100,196 | 152–242 |
+    | `Logex.Runtime` of a resource: `start/1,2`, an image's configuration, globals and trigger, `cycle/3`'s resource, time, inputs, a key, a misfit, a global held outside its type and a global's line, `restart/2`, `get/2` | 14 | 100,036–100,141 | 82–187 |
+    | `Logex.Edit` and `Logex.Configuration.Edit`: a program, an edit, a time, a generation | 5 | 100,056–100,128 | 102–174 |
+    | `Logex.IO`: `points/1`, `bind!/2`'s io, a device's name, an adapter, its check's answer, its options | 6 | 100,063–100,170 | 109–216 |
+    | `Logex.Runner`: `start_link/1`'s options, clock, poll, overhead, forces, retain, start, retain_period, open, steps, a clock's time and answer and a wall clock's time; `status/1`, `restart/2`, `subscribe/2`, `force/3`'s name, misfit and an array's shape, a request of no kind | 20 | 100,040–100,216 | 86–262 |
+    | `Logex.IO.Sim`, `Logex.Runner.Clock`, `Logex.Runner.Clock.Manual` | 22 | 100,037–100,159 | 83–205 |
+    | `Logex.Tag.new!/5`'s options, cut since RV-31 | 1 | 130 | 130 |
+
+    `test/logex/quoted_test.exs`, new: the 144 refusals, each reached with `10 **
+    100_000` or a value that holds it and its message pinned whole, the cut written
+    `@cut`, every message under 400 bytes, a test a module or two; a growth test, a
+    sample of fourteen across the modules, each refusal of `10 ** 1_000_000` and of a
+    list of a million elements held to the cost of a refusal of -7 and twice the cut's
+    own of the same value, counted in reductions in the same run, its message under
+    1,200 bytes, `inspect/1`'s 200 elements of a list; and a walk of `lib/`'s syntax
+    trees, every call and capture of `inspect/1` outside `Logex.Lexer.inspected/2`
+    found, none, the walk shown to find a planted one; and, with `7139745`, a line that
+    is no integer, a tuple or a text, in an op and in a tag, pinned. Every test of the
+    file is red against the parent's `lib/`; each tip message is the parent's with the number's
+    hundred thousand digits replaced by the cut, compared for all 144 by
+    `w32/compare.exs`. No pin quoted a long number whole before, so none changed.
+  - *The test's name* (decision 587, `8eefab6`): `scripts_test.exs`'s test of the PLT's
+    cache is "the step runs scripts/dialyzer.sh, its PLT cached under a key of the
+    toolchain's versions and the script alone, and _build's cache's paths end in
+    !_build/dialyzer", where it said "after the suite" and "apart from _build's cache",
+    neither of which it checks; its body is as it was. A name is no behaviour: no test
+    reads it, and no mutant is made of it.
+  - *The marks* (with `b6c4600` and this record). Made: `Logex.Lexer`'s comment on the
+    cut, RV-31's questions 1 to 3, decisions 584 to 586; `Logex.Configuration.Global`'s
+    moduledoc and the judge's two comments on a misspelled location, question 5,
+    decision 588; `configuration_test.exs`'s comments, question 5, decision 588, and
+    question 2, decision 585; `docs/organisation.md`'s notes under decisions 576 and
+    583. Left as they stand, none of 584–588 settling them: none of RV-31's. New, with
+    `7139745`, the marks of this record's questions: `Logex.Runtime`'s moduledoc, a line
+    a mistake (question 1); `Logex.Lexer`'s comment and `quoted_test.exs`'s walk, the
+    cut outside the host contract (question 2); `Logex.Runtime`'s two comments on the
+    lines of a program edited by hand and `quoted_test.exs`'s test of them (question
+    3).
+  - *The documents*: `Logex`'s moduledoc, "What a refusal quotes"; `Logex.Configuration`'s
+    and `Logex.Tag`'s where they say what a refusal quotes; `Logex.Runtime`'s host
+    contract, a line a mistake (question 1); CHANGELOG.md's item under "The host's
+    API", and decision 583's item made true; decisions 586 and 587 each with a landed
+    note. README's two passages, changed at `b6c4600`, left with README's long form at
+    the merge. README's "What logex is not", as `main` has it now, read claim by claim:
+    none says what a refusal quotes, and none is changed by this work.
+  - *The cost against the parent* (`d468065`; `w32/cost32.exs`, each count in a process
+    of its own whose heap no collection visits, the least of seven, the time of one):
+
+    | the call | parent | tip |
+    |---|---|---|
+    | `Configuration.new!(10 ** 100_000)` | 365,390 reductions, 91 ms, 100,122 bytes | 20,756, 2 ms, 168 bytes |
+    | `new!/1` of a global brought with `line: 10 ** 1_000_000` | 32,508,673, 8,974 ms, 1,000,105 bytes | 37,428, 76 ms, 152 bytes |
+    | `compile/3`, `initial/1`, `watchdog/1`, `Logex.compile/2`, `Runtime.instance/1`, `put_inputs/3`, `cycle/3`, `Logex.Edit.test/2`, `Sim.start_link/1` of `10 ** 100_000` | 324,331–375,943, 81–102 ms | 20,710–21,057, 1–3 ms |
+    | `IO.bind!/2` and `Runner.start_link/1`'s clock of `10 ** 100_000`, the examples' plant checked first | 308,286 and 375,943 | 40,557 and 40,540 |
+    | a small refusal, `new!(:x)`, `Logex.compile(:x, …)`, a bool's `2 ** 40` | 102, 192, 204 | 109, 199, 211 |
+    | success: `Logex.compile/2` of the examples' motor, `new!/1` and `check/1` of the examples' plant, `initial/1`, `watchdog/1`, `put_inputs/3`, `scan/3`, `cycle/3`, `Global.new!/3`, `Logex.Tag.new!/5`, `IO.points/1` | 8,717, 19,123, 19,244, 19, 16, 118, 376, 1,223, 287, 139, 20,327 | the same |
+
+    A refusal of a small value pays 7 reductions for the cut's look at each part of the
+    value; nothing that succeeds pays anything.
+  - *The mutation table* (`scripts/mutate.sh -t test/logex/quoted_test.exs`, each patch
+    judged by the full suite, `m01` to `m26` at `8eefab6` and `m27` at `7139745`'s tree;
+    patches and logs under `w32/m32/` and `w32/m32b/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `m01_runtime_whole` | `Logex.Runtime` quotes with `inspect/1` again | red: `quoted_test.exs` 5 |
+    | `m02_runner_whole` | `Logex.Runner` quotes with `inspect/1` again | red: `quoted_test.exs` 3 |
+    | `m03_sim_whole` | `Logex.IO.Sim` quotes with `inspect/1` again | red: `quoted_test.exs` 3 |
+    | `m04_new_takes_whole` | `new!/1`'s refusal of what is no keyword list quotes whole | red: `quoted_test.exs` 3 |
+    | `m05_new_line_whole` | `new!/1`'s line of an element brought with a line quotes whole | red: `quoted_test.exs` 3 |
+    | `m06_compile3_whole` | `compile/3` and `compile_file/1` quote an argument that is no text whole | red: `quoted_test.exs` 3 |
+    | `m07_initial_whole` | `initial/1` quotes a global and its misfit whole | red: `quoted_test.exs` 3 |
+    | `m08_watchdog_whole` | `watchdog/1` quotes the task whole | red: `quoted_test.exs` 3 |
+    | `m09_compile_whole` | `Logex.compile/2` and its loaders quote whole | red: `quoted_test.exs` 3 |
+    | `m10_edits_whole` | `Logex.Edit` and `Logex.Configuration.Edit` quote whole | red: `quoted_test.exs` 3 |
+    | `m11_io_whole` | `Logex.IO` quotes whole | red: `quoted_test.exs` 3 |
+    | `m12_clocks_whole` | `Logex.Runner.Clock` and the manual clock quote whole | red: `quoted_test.exs` 2 |
+    | `m13_image_whole` | a retained image's refusals quote whole | red: `quoted_test.exs` 3 |
+    | `m14_program_whole` | `Logex.Program.edited_by_hand/1` quotes whole | red: `quoted_test.exs` 2 |
+    | `m15_parser_whole` | `Logex.Parser`, outside the contract, calls `inspect/1` | red: `quoted_test.exs` 1 |
+    | `m16_later_whole` | a timer's `last` later than `now` written whole | red: `quoted_test.exs` 1 |
+    | `m17_held_misfit_whole` | a held integer outside its type written whole | red: `quoted_test.exs` 2 |
+    | `m18_backwards_whole` | a scan's time gone backwards written whole | red: `quoted_test.exs` 1 |
+    | `m19_input_misfit_whole` | an input's integer misfit written whole | red: `quoted_test.exs` 1 |
+    | `m20_tag_line_whole` | a tag's declared line written whole | red: `quoted_test.exs` 1 |
+    | `m21_global_line_whole` | a global's line written whole | red: `quoted_test.exs` 1 |
+    | `m22_op_line_whole` | an op's line in a scan's refusal written whole | red: `quoted_test.exs` 1 |
+    | `m23_program_line_whole` | an op's line in `edited_by_hand/1` written whole | red: `quoted_test.exs` 1 |
+    | `m24_clock_ms_whole` | a clock's time out of range written whole | red: `quoted_test.exs` 1 |
+    | `m25_generation_whole` | an edit's expected generation written whole | red: `quoted_test.exs` 1 |
+    | `m26_cut_off` | `inspected/2` cuts nothing, `inspect/1` alone | red: `configuration_test.exs` 2, `quoted_test.exs` 9, `readme_test.exs` 1 |
+    | `m27_tag_line_raw` | a tag's line that is no integer interpolated, as before `7139745` | red: `quoted_test.exs` 1 |
+
+    None survives. Each changes `lib/` and each is red by the suite, so Dialyzer was
+    not run on them; it is green at each commit, in its gate. `m26`'s `readme_test.exs`
+    line is the examples' project rebuilding the changed `lib/`, as RV-31's `a05`.
+  - *The gate*: `GATE-OK` at each commit, five steps, Dialyzer the fifth: `b6c4600` 3,286
+    (3,275 tests and 11 doctests), `8eefab6` 3,286, `7139745` 3,287, the merge of
+    `main` at `4ce7465`, DOC-1's step 2 close, `dc90813`, 4,252 (4,241 tests and 11
+    doctests), and this record, 4,252;
+    `scripts/docs.sh` `DOCS-OK` before each. CI and Docs green on `b6c4600`
+    (45239814371, 45239814293), `8eefab6` (45241022245, 45241022268) and `7139745`
+    (45268157571, 45268157302); the merge's and this record's runs are read as they
+    land. The merge took README.md as `main` has it, short: the two passages this work had
+    changed, the work that waits and `Global.new!/3`'s long number, are no longer in it;
+    `guides/reference/host-contract.md`'s "The form of a message", DOC-1's, names
+    decision 583's three refusals as the ones that cut, which stays true but is no longer
+    the whole, left for DOC-1's next step to say every refusal.
+  - *The test lines taken out*, 5 in all against the parent, each replaced: in
+    `scripts_test.exs` (+2 −2) the test's name (decision 587); in
+    `configuration_test.exs` (+2 −3) two comments' provisional marks, now decisions 588
+    and 585. `quoted_test.exs` is new (+899). No pin of a value quoted whole changed:
+    none quoted one past 10,000 characters.
+  - *CLAUDE.md*: a line for `test/logex/quoted_test.exs`.
+  - *Provisional readings, and questions for the maintainer*, each the closest reading of
+    the record, marked where it stands.
+    1. *A refusal that tells a line a mistake, of a great many mistakes* (decision 586: "so
+       that no refusal takes seconds to build or runs to megabytes"). A box counter's
+       bridge keys its inputs by register number by mistake and sends 100,000 of them at
+       once. (a) As built: one line a mistake, as the host contract has always told every
+       input problem in one call, each line's value cut: `put_inputs/3` refuses in some
+       0.4 s with 100,000 lines and 9.6 MB, `Logex.IO.bind!/2` of 100,000 devices keyed by
+       number with 4.5 MB; the host's log gets every key. (b) The first hundred lines and
+       how many more, as the did-you-mean is bounded (decision 520) and an array's
+       misfits are told ten and a count: the log gets a few kilobytes, the rest of the
+       keys found by fixing the first. The decision speaks of the value a refusal
+       quotes, not of how many it tells; neither IEC nor Logix has a host API to compare.
+    2. *Where the cut is used* (decision 586: "every refusal of the host contract"). A
+       test harness hands `Logex.Parser.parse/1`, outside the host contract, a list that
+       holds a long number. (a) As built: every call of `inspect/1` in `lib/` goes through
+       the cut, outside the contract too, and `quoted_test.exs` holds `lib/` to it, so a
+       refusal written later cuts without being found by a census: the harness is told
+       the number's first 24 characters. (b) The contract's modules alone, the walk
+       held to them: the harness is told the number whole, as Elixir would.
+    3. *A struct built or edited by hand* (decision 586: "a value the host gave"). A fan
+       controller's program is edited by hand after it compiled, an op's line set to
+       `10 ** 100_000`, or a configuration edit's `generation` changed. (a) As built: the
+       struct is the host's, so its fields are a value the host gave, quoted through the
+       cut, `inspected/2`; an op's line that is no integer, `"7"`, is quoted as Elixir
+       shows it, `"7"` with its quotes, where it was written bare, and a line that is a
+       tuple is told, where it raised `Protocol.UndefinedError` out of the refusal. (b)
+       Only what a host passes as an argument is cut, a struct's fields as they were.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
