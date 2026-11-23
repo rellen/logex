@@ -1,0 +1,9 @@
+// keypad.logex -- a keypad of 2 rows of 3 keys, and a lamp, on 1 rack
+task main continuous
+
+var_global keys bool[2,3] at rack.i.2.4
+var_global lamp bool      at rack.q.0
+
+program k1 keypad
+  k1.keys keys
+  k1.lamp lamp

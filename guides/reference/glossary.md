@@ -518,6 +518,11 @@ for an input point, and the letter `q` is for an output point.
 
 IEC 61131-3: a direct representation, such as `%IX1.1`.
 
+### address
+
+The integers of a location after `i` or `q`, with the highest level first. An adapter
+gets the address as a list: the location `rack.i.2.4` has the address `[2, 4]`.
+
 ### device
 
 The hardware, or a simulated device, that holds the points of a configuration.
