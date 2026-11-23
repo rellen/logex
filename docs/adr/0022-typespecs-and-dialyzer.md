@@ -45,18 +45,14 @@ of Elixir.
 
 Accepted. No later record replaces this record.
 
-Decisions 549, 550 and 555 ask for 3 changes, and the item RV-30 of
-[`PLAN.md`](../../PLAN.md) makes them. The runs of this record are of 2026-11-23, on
-the code before RV-30:
+The item RV-30 of [`PLAN.md`](../../PLAN.md) made the 3 changes that decisions 549, 550
+and 555 ask for (565f057):
 
-- **Decision 549** asks that `scripts/gate.sh` run `scripts/dialyzer.sh` as its fifth
-  step. Before RV-30, `scripts/gate.sh` ran 4 gates, and only CI ran Dialyzer after them.
-- **Decision 550** asks for the flag `-Wunmatched_returns`, with each answer that the
-  code drops on purpose written as `_ = ...`. Before RV-30, the flag was off.
-- **Decision 555** asks that `Logex.Configuration.Global.new!/3` refuse a wrong
+- **Decision 549**: `scripts/gate.sh` runs `scripts/dialyzer.sh` as its fifth step.
+- **Decision 550**: the flag `-Wunmatched_returns` is on, and each answer that the code
+  drops on purpose is written as `_ = ...`.
+- **Decision 555**: `Logex.Configuration.Global.new!/3` refuses a wrong
   [initial value](../../guides/reference/glossary.md#initial-value) when it gets it.
-  Before RV-30, `new!/3` kept the value, and `Logex.Configuration.new!/1` and `check/1`
-  refused it.
 
 ## Date
 
@@ -334,7 +330,7 @@ the version of Elixir and the applications.
 The script sets `DIALYZER_CONFIG=/dev/null`. Thus Dialyzer reads no file of settings, and
 the settings of a contributor change nothing.
 
-Dialyzer gives its default warnings. The script also turns on these 5 flags:
+Dialyzer gives its default warnings. The script also turns on these 6 flags:
 
 | Flag | The warning |
 |---|---|
@@ -343,11 +339,12 @@ Dialyzer gives its default warnings. The script also turns on these 5 flags:
 | `-Wunderspecs` | A spec lets in more values than its function takes or gives |
 | `-Woverlapping_contract` | 2 specs of 1 function take the same arguments |
 | `-Wopaque_union` | A function returns an opaque value or another value |
+| `-Wunmatched_returns` | A call whose structured value the code drops (decision 550) |
 
-Decision 550 also asks for `-Wunmatched_returns`. It warns at a call whose structured
-value the code drops. Before RV-30 the flag was off, and turned on it gave 24 warnings,
-none a defect. Each was a call whose value the code dropped on purpose. With the flag on,
-these calls start with `_ =`.
+When the flag `-Wunmatched_returns` was first turned on, it gave 24 warnings, none a
+defect. Each was a call whose value the code dropped on purpose. These calls start with
+`_ =`. `test/logex/dropped_answers_test.exs` reads each `_ =` of `lib/` and compares the
+list with its own list. Its list gives the reason why the code can drop each answer.
 
 These flags stay off, each for its reason:
 
@@ -447,17 +444,17 @@ value.
 `Logex.Configuration.Global.new!/3` makes a
 [global](../../guides/reference/glossary.md#global) from Elixir. `Global.t()` takes a
 number as the initial value. A global of the type `:bool` takes 0 or 1, not `true`.
-Before RV-30, `Global.new!("fan_on", :bool, initial: true)` returned the struct, and
-`Logex.Configuration.new!/1` refused the configuration later, with this message:
+`Global.new!("fan_on", :bool, initial: true)` raises an `ArgumentError` when it gets the
+value (decision 555), as `Logex.Tag.new!/5` does for a
+[tag](../../guides/reference/glossary.md#tag). Its message has the words of `check/1`
+(decision 575):
 
-<!-- unchecked: the message of Logex.Configuration.new!/1 for a global made with initial: true, a run of 2026-11-23 on the code before RV-30 -->
+<!-- unchecked: the message of Logex.Configuration.Global.new!/3 for initial: true, a run of 2026-11-23 on main 263fc95 -->
 ```text
 the initial value of global `fan_on` must be an integer, found true
 ```
 
-Decision 555 makes `new!/3` raise this `ArgumentError` when it gets the value, as
-`Logex.Tag.new!/5` does for a [tag](../../guides/reference/glossary.md#tag). `check/1` keeps its refusal for a struct that a host
-builds by hand.
+`check/1` keeps its refusal for a struct that a host builds by hand.
 
 ## Consequences
 
@@ -497,17 +494,17 @@ The costs:
 | The 8 modules of decision 514 alone as the contract (decision 523) | The examples call the simulated device, the clocks and the parts of a configuration with arguments that a host makes |
 | Specs on the modules of decision 514 alone (decision 552) | `Logex.IO.Sim`, the clocks and the parts of a configuration then have no spec |
 | Specs on the documented functions alone (decision 552) | The internal functions then have no spec, and Dialyzer does not check them. Examples are `cycle_steps/3`, which the runner calls, and `fields/1`, which a configuration edit calls |
-| Dialyzer by hand and in CI only, the form before RV-30 (decision 549) | A contributor learns of a broken spec from CI, minutes after the push |
+| Dialyzer by hand and in CI only (decision 549) | A contributor learns of a broken spec from CI, minutes after the push |
 | Dialyzer as a test of the suite (decision 549) | Each run of `mix test` takes 20 s to 35 s longer, with the PLT kept |
 | Silence a warning with `@dialyzer {:nowarn_function, ...}` (decision 551) | The mark stays when the code changes, and it hides the next defect |
 | Turn a class of warnings off (decision 551) | A class off hides each defect of that class |
-| `-Wunmatched_returns` off, the form before RV-30 (decision 550) | A change that drops an `{:error, _}`, for example of a write of the store, passes |
+| `-Wunmatched_returns` off (decision 550) | A change that drops an `{:error, _}`, for example of a write of the store, passes |
 | `-Werror_handling` on (decision 550) | Only a `no_return()` spec passes its 18 warnings, and that spec silences a warning |
 | `-Wno_opaque`, with the rule of opacity in the documents only (decision 553) | Dialyzer then gives no warning when a module reads an opaque value |
 | A plain type for the resource (decision 553) | The same: no check of the opacity |
 | A test that reaches each value of the return type of each spec (decision 554) | The tests must then cause each error value in a run. The file gets much longer. The maintainer kept the limit |
 | No `typespec_test.exs` (decision 554) | 33 specs then have no check |
-| Keep the wrong initial value of a global until `new!/1`, the form before RV-30 (decision 555) | The struct is outside `Global.t()`, and the refusal comes far from its cause |
+| Keep the wrong initial value of a global until `new!/1` (decision 555) | The struct is outside `Global.t()`, and the refusal comes far from its cause |
 
 ## Decisions in section 7
 
@@ -525,6 +522,7 @@ This record sums up these decisions of
 | 553 | Outside `Logex.Runtime`, only `fields/1` reads the fields of the resource |
 | 554 | `typespec_test.exs` compares each value with its spec. A spec wider than its values passes |
 | 555 | `Global.new!/3` refuses a wrong initial value when it gets it |
+| 575 | `Global.new!/3` refuses a value in the words of `check/1` |
 
 Decision 515 asks for the specs and Dialyzer in CI.
 [0021. A pinned toolchain and the gates](0021-pinned-toolchain-and-gates.md) gives that

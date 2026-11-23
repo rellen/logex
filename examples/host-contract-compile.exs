@@ -48,7 +48,7 @@ refused.("new!/1 with 5 problems", fn ->
       %Task{name: "fast", priority: 1.5, interval: 10},
       %Task{name: "slow", priority: -1, interval: 10}
     ],
-    globals: [Global.new!("estop", :bool, initial: 5)],
+    globals: [%Global{name: "estop", type: :bool, initial: 5}],
     instances: [%Instance{name: "m1", type: "motor", task: "fsat"}]
   )
 end)

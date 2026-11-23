@@ -833,7 +833,7 @@ The functions of `Logex.Configuration`:
 
 | Function | What it does |
 |---|---|
-| `Global.new!/3` | Takes the name, the type and the options `initial:`, `at:`, `retain: true` and `non_retain: true`. It checks the options only. `new!/1` checks the type, the initial value, the location and the name. |
+| `Global.new!/3` | Takes the name, the type and the options `initial:`, `at:`, `retain: true` and `non_retain: true`. It checks the options, and refuses an initial value that the type does not hold. `new!/1` checks the type, the location and the name. |
 | `Text.print/1` | Returns the text of a configuration. |
 
 ### Rules of the data

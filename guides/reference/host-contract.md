@@ -110,8 +110,8 @@ otherwise.
 - `Logex.Configuration.Task`: a struct, 1 [task](glossary.md#task).
   `Logex.Configuration.new!/1` and `check/1` check it.
 - `Logex.Configuration.Global`: a struct, 1 [global](glossary.md#global). Its function
-  `new!/3` makes one and checks the options. `new!/1` and `check/1` check its name, its
-  type and its initial value.
+  `new!/3` makes one. It refuses a wrong option and an initial value that the type does
+  not hold. `new!/1` and `check/1` check its name, its type and its location.
 - `Logex.Configuration.Instance`: a struct, 1 program instance of a configuration.
   `new!/1` and `check/1` check it.
 - `Logex.Configuration.Connection`: a struct, 1 [connection](glossary.md#connection).
@@ -310,9 +310,10 @@ argument. `new!/1` raises both kinds in 1 message, the wrong arguments first.
 
 > #### Note {: .info}
 >
-> `Logex.Configuration.Global.new!/3` checks its options only. It does not check the
-> initial value against the type. `new!/1` and `check/1` refuse a wrong initial value
-> later. [Example: wrong calls to compile and declare](#example-wrong-calls-to-compile-and-declare)
+> `Logex.Configuration.Global.new!/3` refuses an initial value that the type does not
+> hold when you call it. It does not check the name, the type or the location:
+> `new!/1` and `check/1` refuse those.
+> [Example: wrong calls to compile and declare](#example-wrong-calls-to-compile-and-declare)
 > shows a global of the type `bool` with the initial value 5.
 
 ### `Logex.Configuration.Edit`
@@ -1205,7 +1206,7 @@ refused.("new!/1 with 5 problems", fn ->
       %Task{name: "fast", priority: 1.5, interval: 10},
       %Task{name: "slow", priority: -1, interval: 10}
     ],
-    globals: [Global.new!("estop", :bool, initial: 5)],
+    globals: [%Global{name: "estop", type: :bool, initial: 5}],
     instances: [%Instance{name: "m1", type: "motor", task: "fsat"}]
   )
 end)
@@ -1273,7 +1274,8 @@ new!/5 with retain: 1:
 Logex.Configuration:
 new!/1 with a map:
   Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:, globals:, instances: and connections:, got: %{name: "p"}
-Global.new!/3 with a bool at 5: no error
+Global.new!/3 with a bool at 5:
+  `estop` is a bool: its initial value must be 0 or 1, found `5`
 Global.new!/3 with the option start:
   unknown option :start for `estop`: Logex.Configuration.Global.new!/3 takes `initial:`, `at:`, `retain:` and `non_retain:`
 new!/1 with 5 problems:
@@ -1292,8 +1294,9 @@ check/1 of a priority of 1.5:
 ```
 
 The file `motor.txt` is not a wrong argument: `compile_file/1` returns a diagnostic.
-`Logex.Configuration.Global.new!/3` returns a global of the type `bool` with the initial
-value 5, and raises no error. `Logex.Configuration.new!/1` refuses that global. The
+`Logex.Configuration.Global.new!/3` refuses the initial value 5 for a `bool` when it is
+called. The script gives `Logex.Configuration.new!/1` that global as a struct, so
+`new!/1` refuses it beside its 4 other problems. The
 configuration of `check/1` has no instance, so `check/1` also gives a second diagnostic.
 
 ### Example: wrong calls to the edits, the I/O, the runner and its clocks

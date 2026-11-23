@@ -1121,8 +1121,10 @@ $ mix run configuration-file-wrong-files.exs
 
 ## Elixir data: cases 135 to 153
 
-The script prints the call of each case and the message of the `ArgumentError`. Cases
-142 and 144 show that `Global.new!/3` takes a global, and that `new!/1` refuses it.
+The script prints the call of each case and the message of the `ArgumentError`. Case
+142 shows that `Global.new!/3` takes a global of a type that no global has, and that
+`new!/1` refuses it. In case 144, `Global.new!/3` itself refuses the initial value, in
+the words of `new!/1`.
 
 ```elixir
 # Each case calls a function with wrong data. calls.exs prints the number of the case,
