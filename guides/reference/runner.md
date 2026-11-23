@@ -453,7 +453,7 @@ The runner refreshes each device before each step of a round and before its own 
 | Before the work of the runner, or while it waits for a round | `idle + poll` ms. The runner refreshes each device 1 time in each poll period or more often. |
 
 - A device that gets no refresh before its deadline writes 0 to each output point, 1
-  time. Then it writes nothing more until a restart, and tells the runner.
+  time, and tells the runner. Then it writes nothing more except that 0 until a restart.
 - The runner trips the plant when it next runs, before any round. The reason is
   `{:watchdog, {:device, device, ms}}`. `ms` is the time from the last refresh to the
   deadline.
@@ -591,9 +591,15 @@ closed: true
 | 11 | `stop/2` writes 0 to each output 1 time. |
 | 12 | `stop/2` closes each device before it returns. |
 
-A call that comes while a round is owed waits for its slot. Thus a script that moves the
-clock makes the call from a different process. Then it moves the clock until the call
-gets its answer. This fragment continues `on_the_clock.exs` in that state:
+If a write of a device moves the manual clock, the next round is owed immediately. A slow
+drive's write does so: `Sim.fail(panel, :write, {:delay, 2})` makes the next write of the
+panel move the clock by 2 ms. A call that comes while a round is owed waits for its slot.
+Thus a script that moves the clock makes the call from a different process. Then it moves
+the clock until the call gets its answer.
+
+This fragment needs that state. It continues the start of `on_the_clock.exs`, before the
+script presses the start button, with `Sim.fail(panel, :write, {:delay, 2})` after the
+start of the panel:
 
 ```elixir
 task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
@@ -634,7 +640,7 @@ answered.(answered, Task.yield(task, 10))
 
 The `watchdog` of each task and `idle:` must be more than the values of `runs` and
 `latest_wake` on the target computer.
-[Set the watchdogs](../howto/set-watchdogs.md) gives the steps.
+[Set watchdogs](../howto/set-watchdogs.md) gives the steps.
 
 ### Example: status and events
 
@@ -857,7 +863,7 @@ A trip has 1 sequence of actions, for each cause.
 |---|---|
 | 1 | It stops the schedule of the rounds. |
 | 2 | It writes 0 to each output point, 1 time, through each device that answers, in name order. |
-| 3 | Each device then writes nothing more until a restart. It does not write again at its polls. |
+| 3 | Each device then writes nothing more except that 0 until a restart. It does not write the outputs again at its polls. If its adapter refuses the 0, it writes the 0 again at each poll until the adapter takes it, as [What each device keeps](#what-each-device-keeps) gives. |
 | 4 | It sends `{:trip, reason}` to the subscribers. `status/1` gives `:tripped` and the reason. |
 | 5 | It answers each call that waited. It serves each later call immediately. |
 | 6 | It keeps the resource as the last round computed it, for `get/2`. This includes outputs that the devices did not get. |
@@ -917,7 +923,7 @@ A [minor fault](glossary.md#minor-fault) does not trip the plant.
   adapter gave an address that is not a list of whole numbers, the cause gives it as the
   adapter gave it.
 - A device whose read, report or poll write fails tells the runner. It writes 0 if the
-  adapter can still write, and then writes nothing more until a restart.
+  adapter can still write, and then writes nothing more except that 0 until a restart.
 
 ### A bad time from the clock
 
@@ -1269,7 +1275,7 @@ the runner's retain: "./p7.retain" names the store of another runner of this VM,
 - [Watch a runner](../howto/watch-a-runner.md): subscribe to the events and read the
   status.
 - [Restart after a trip](../howto/restart-after-a-trip.md): the steps after a trip.
-- [Set the watchdogs](../howto/set-watchdogs.md): how to choose `watchdog` and `idle:`.
+- [Set watchdogs](../howto/set-watchdogs.md): how to choose `watchdog` and `idle:`.
 - [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
   to move the time of a runner in a test.
 - [Trips and watchdogs](../explanation/trips-and-watchdogs.md): why the runner trips, and

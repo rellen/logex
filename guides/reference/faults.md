@@ -18,8 +18,9 @@ compiler finds a diagnostic in the source text, and that program does not run.
 > Do not use a fault or a [trip](glossary.md#trip) as a
 > [safety function](glossary.md#safety-function). logex is not a safety controller, and it
 > can stop at any time. A trip writes the value 0 to each [output](glossary.md#output)
-> 1 time, if the device of the output can still take a write. If a device hangs, or if
-> the Erlang VM stops, no part of logex writes the outputs.
+> 1 time, if the device of the output can still take a write. If the adapter of a device
+> refuses the 0, the runner writes the 0 again at each poll until the adapter takes it.
+> If a device hangs, or if the Erlang VM stops, no part of logex writes the outputs.
 
 [Trips and watchdogs](../explanation/trips-and-watchdogs.md) tells why a major fault trips
 the plant.
@@ -755,7 +756,7 @@ actions, in sequence:
 | 2 | The runner runs no later task of the [round](glossary.md#round). For a tag of a later task, `get/2` gives the value of the round before. |
 | 3 | The runner does not write the outputs of the round to the devices. |
 | 4 | It sends each event of the round to the subscribers. Each `{:fault, ...}` event is among them. |
-| 5 | It writes the value 0 to each output 1 time, if the device of the output can still take a write. Then the runner writes nothing more to the devices until a restart. |
+| 5 | It writes the value 0 to each output 1 time, if the device of the output can still take a write. If the adapter of a device refuses the 0, the runner writes the 0 again at each poll until the adapter takes it. The runner writes nothing else to the devices until a restart. |
 | 6 | It sends `{:trip, {:fault, task, instance, fault}}` to each subscriber of the event kind `:trip`. The reason names the first major fault of the round. It names `task` as an event does. If the run of the task also took longer than its [watchdog](glossary.md#watchdog), the reason still names the fault. |
 | 7 | `Logex.Runner.status/1` gives the status `:tripped` and the reason in `trip`. `rounds` does not count the round that tripped. |
 | 8 | The runner runs no round until `Logex.Runner.restart/2`. |

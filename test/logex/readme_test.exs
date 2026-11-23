@@ -114,7 +114,7 @@ defmodule Logex.ReadmeTest.Examples do
      ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|,
      {"on_the_clock.exs", @owed, @answered,
       "b1.count waited, then answered 0 after 1 to 4 owed rounds\n",
-      "A call that comes while a round is owed waits for its slot"}}
+      "panel move the clock by 2 ms. A call that comes while a round is owed waits for its slot"}}
   ]
 
   # The lines of a script's output that its page says are this run's alone, compared by

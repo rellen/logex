@@ -221,8 +221,8 @@ refresh gives the deadline for the step that follows. By default the idle watchd
 | Before the writes, before other work, and at each poll while the runner waits | The [idle watchdog](../../guides/reference/glossary.md#idle-watchdog) + 1 poll period, from the refresh |
 | At the start of a write, if the clock moved | The idle watchdog + 1 poll period, from the start of the write |
 
-If a device gets no refresh by its deadline, it writes 0 to each output 1 time. Then it
-writes nothing more until a restart, and tells the runner. A runner that is well never
+If a device gets no refresh by its deadline, it writes 0 to each output 1 time, and tells
+the runner. Then it writes nothing more except that 0 until a restart. A runner that is well never
 misses a deadline. Each step ends within its watchdog or trips, and the next refresh
 comes before the next step. The poll period is the margin.
 
