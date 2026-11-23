@@ -1,0 +1,16 @@
+// sorter.logex -- a conveyor with 4 lanes
+task fast interval 10 priority 1
+
+var_global pb_start bool at panel.i.0
+var_global pb_stop  bool at panel.i.1
+var_global k1       bool at panel.q.0
+
+var_global lane_eye  bool[4] at card.i.0
+var_global lane_lamp bool[4] at card.q.0
+
+program s1 sorter with fast
+  s1.start pb_start
+  s1.stop  pb_stop
+  s1.eye   lane_eye
+  s1.motor k1
+  s1.lamp  lane_lamp

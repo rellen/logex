@@ -255,7 +255,11 @@ IEC 61131-3: an implicit type conversion.
 
 An instruction that reads a value and writes it in the type that its mnemonic names last.
 The mnemonic names 2 types, for example `dint_to_sint` or `real_trunc_int`. logex has 182
-conversions. Use a conversion where the first type does not widen into the second.
+conversions. Use a conversion where the first type does not widen into the second. If the
+value does not fit an integer type, the conversion keeps the low bits and passes no power.
+If the value is past the limit of a real type, the conversion writes the largest value of
+that sign. It passes no power. A conversion to or from a bit string keeps the low bits and
+passes power.
 
 IEC 61131-3: a typed conversion function, for example DINT_TO_SINT.
 
@@ -269,7 +273,9 @@ keeps the low bits and passes power.
 
 ### reserved word
 
-A word that cannot be the name of a tag, for example a mnemonic or a type word.
+A word that a kind of file keeps for its own lines, so it cannot be a name in that kind
+of file. For example, a mnemonic or a type word cannot be the name of a tag. A message
+calls a reserved word a keyword.
 
 ## Function blocks
 
@@ -409,6 +415,14 @@ A report of a possible error in a source text. A program with warnings compiles.
 
 The modules that a host calls. Each of these modules refuses a wrong argument with an
 `ArgumentError`.
+
+### reduction
+
+A unit of work that the Erlang VM counts for each process. A function call costs about 1
+reduction. `Process.info(pid, :reductions)` gives the count of a process. The tests of
+logex measure the cost of a compile, a scan, a cycle and a round in reductions. A busy
+computer changes the time of a scan a lot. It changes the count of reductions only
+through the work of garbage collection.
 
 ## Configurations
 
@@ -589,7 +603,8 @@ runner sends it the events of the kinds that it gave, or of the default kinds of
 
 ### clock
 
-The source of the time for the runner. The manual clock moves only when a test moves it.
+The source of the time for the runner. An ExUnit test moves the manual clock with
+`advance/2`. A slow simulated device moves it with `pass/2` during a round.
 
 ### ExUnit test
 
