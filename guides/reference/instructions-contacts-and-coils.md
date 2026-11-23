@@ -668,6 +668,76 @@ This timing diagram shows the same 8 scans.
 After each scan, each storage bit has the value of `eye`, because `eye` is the power in
 of each one-shot.
 
+### The program `step.ld`: `osr` and `osf`
+
+A start button moves a sequence 1 step for each push. A lamp shows the button while it
+is held. A pulse comes when a box leaves a photo eye. The program is the file
+`examples/step.ld` of the repository.
+
+<!-- file: step.ld -->
+```text
+var_input start_pb bool
+var_input eye bool
+var_output step bool
+var_output held_lamp bool
+var_output box_left bool
+var_output step_no dint
+var s1 bool
+var s2 bool
+
+xic start_pb osr s1 step ote held_lamp
+xic step add step_no 1 step_no
+xic eye osf s2 box_left
+```
+
+The script `step.exs` runs 9 scans, 10 ms apart. Then it compiles an `osr` whose
+storage bit and pulse bit are the same tag, and prints the diagnostic.
+
+```elixir
+{:ok, step} = Logex.compile_file("step.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(step, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(step, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+Logex.Runtime.instance(step)
+|> scan.("start held at start", %{"start_pb" => 1})
+|> scan.("start released     ", %{"start_pb" => 0})
+|> scan.("start pressed      ", %{"start_pb" => 1})
+|> scan.("still held         ", %{})
+|> scan.("box on the eye     ", %{"eye" => 1})
+|> scan.("start released     ", %{"start_pb" => 0})
+|> scan.("box left the eye   ", %{"eye" => 0})
+|> scan.("start pressed      ", %{"start_pb" => 1})
+|> scan.("nothing new        ", %{})
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input start_pb bool\nvar s1 bool\nxic start_pb osr s1 s1", name: "same")
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run step.exs
+start held at start  %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 0}
+start released       %{"box_left" => 0, "held_lamp" => 0, "step" => 0, "step_no" => 0}
+start pressed        %{"box_left" => 0, "held_lamp" => 1, "step" => 1, "step_no" => 1}
+still held           %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 1}
+box on the eye       %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 1}
+start released       %{"box_left" => 0, "held_lamp" => 0, "step" => 0, "step_no" => 1}
+box left the eye     %{"box_left" => 1, "held_lamp" => 0, "step" => 0, "step_no" => 1}
+start pressed        %{"box_left" => 0, "held_lamp" => 1, "step" => 1, "step_no" => 2}
+nothing new          %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 2}
+line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse bit is another tag, which it sets for one scan on an edge
+```
+
+`osr` gives no pulse in the first scan, with the button already held. `held_lamp` follows
+the button, because `osr` passes on the power that it gets. `osf` sets `box_left` for
+the scan in which the eye goes off.
+
 ## Wrong rungs and their diagnostics
 
 This part shows 39 wrong rungs in 6 groups. For each group, a script compiles each

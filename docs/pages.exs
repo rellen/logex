@@ -16,14 +16,14 @@
 #     :howto         a recipe for one task, under guides/howto/
 #     :reference     the exact rules, under guides/reference/
 #     :explanation   the model and the reasons, under guides/explanation/
-#     :readme        the first page, README.md, once it is written again: a user's page
+#     :readme        the first page, README.md: a user's page, its examples run as a page's
 #     :contributor   how logex is built and how to work on it, under docs/
 #     :adr           a decision record, under docs/adr/
 #     :legacy        a document from before decision 546, in its own manner: the writing
-#                    rules are not applied to it. README's examples are run; no other
-#                    legacy document's blocks are read. The ten below and no other: a
-#                    new page is never one (test/logex/docs_test.exs), and a legacy
-#                    document written again takes its kind
+#                    rules are not applied to it, and no legacy document's blocks are
+#                    read. The nine below and no other, of the ten the test names: a new
+#                    page is never one (test/logex/docs_test.exs), and a legacy document
+#                    written again takes its kind, as README did
 #
 # group: where the page stands in the site:
 #
@@ -42,7 +42,7 @@
 # A template, under docs/templates/, has the kind it is the template of, so that it is
 # checked by that kind's rules, and the group :github.
 [
-  {"README.md", :legacy, :first},
+  {"README.md", :readme, :first},
   {"guides/tutorials/first-program.md", :tutorial, "Tutorials"},
   {"guides/tutorials/timers-and-counters.md", :tutorial, "Tutorials"},
   {"guides/tutorials/first-plant.md", :tutorial, "Tutorials"},

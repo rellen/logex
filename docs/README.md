@@ -76,7 +76,7 @@ The readers of the user pages are the Elixir developer and the controls engineer
 its group. 3 more documents are for users:
 
 - `README.md` is the first page of the site and of the repository. It says what logex
-  is. [The older documents](#the-older-documents) gives what it holds.
+  is and what it is not, and shows 1 small program. It links to each kind of page.
 - The module documentation is the text of each module in `lib/`. The site shows the
   modules of the [host contract](../guides/reference/glossary.md#host-contract) first. A
   module with `@moduledoc false` is not in the site. The comment at the start of its file
@@ -141,13 +141,11 @@ To write a page of the documentation:
 
 ## The older documents
 
-These 10 documents are older than the writing rules, and the rules do not apply to them.
-`README.md` is in the site. The other 9 are not in the site. A link to one of them from
-the site goes to GitHub.
+These 9 documents are older than the writing rules, and the rules do not apply to them.
+They are not in the site. A link to one of them from the site goes to GitHub.
 
 | Document | For | What it holds |
 |---|---|---|
-| `README.md` | Any reader | What logex is, and each part of the [dialect](../guides/reference/glossary.md#dialect) and of the runtime, with examples |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | A contributor | How to work on logex: the rules of a run and of a fix, what you must not change, the release and the scripts |
 | [`CLAUDE.md`](../CLAUDE.md) | A contributor, and a tool that changes the code | An index: the commands, the conventions, and 1 line for each module and each test file |
 | [`CHANGELOG.md`](../CHANGELOG.md) | A developer who moves to a new version of logex | What each release changes for a running program, with its decision numbers. `Unreleased` is the next release |
@@ -185,7 +183,7 @@ the site goes to GitHub.
   §7, so each decision number that the code and the suite cite stays correct.
 - Decision 548 publishes the site on GitHub Pages. CI builds the site on each push and
   each pull request, and publishes it from each push to `main`.
-- Decision 556 keeps the 9 older documents other than `README.md` out of the site.
+- Decision 556 keeps the 9 older documents out of the site. `README.md` is the first page.
 - Decision 557 lets a page show a file of `examples/` or link to the page that shows it.
 
 ## Add a page to this map

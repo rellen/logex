@@ -237,8 +237,8 @@ and an online edit that changes the type of a tag or the size of an array.
 - `PLAN.md` keeps the history of each item: its design, its review and its fixes.
 - `CHANGELOG.md` names each decision of §7 at each commit, for a host who upgrades
   (decision 542).
-- This page and [The review after Milestone 6](project-history-review.md) take this
-  history from README, which DOC-1 makes short (decision 546).
+- This page and [The review after Milestone 6](project-history-review.md) took this
+  history from README before DOC-1 made README short (decision 546).
 
 ## How to change it
 

@@ -299,6 +299,110 @@ a force names an input point by its name, a string, as in "eye_1", got: :eye
 | 8 | With no force, the forces file is empty. |
 | 9 to 13 | Wrong arguments. Each raises an `ArgumentError` in the caller. |
 
+## Example: a force, a fresh start and an online edit
+
+The script `forced_and_edited.exs` runs [the plant of the examples](#the-plant-of-the-examples)
+with the forces file `packing.forces`. It forces the photo eye, and starts a fresh runner
+from the same file. Then it does an online edit through the runner. The edit loads
+`faster/packing.logex`, which is `packing.logex` with `interval 5`. Put that file in the
+directory `faster`, with copies of `conveyor.ld` and `boxes.ld`.
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+File.rm("packing.forces")
+
+start = fn ->
+  {:ok, clock} = Manual.start_link()
+  {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+  {:ok, runner} =
+    Runner.start_link(
+      configuration: plant,
+      io: %{"panel" => {Sim, sim: panel}},
+      clock: {Manual, clock},
+      forces: "packing.forces"                # where the forces are kept, across a crash
+    )
+
+  {runner, clock, panel}
+end
+
+{runner, clock, panel} = start.()
+
+show = fn runner, label ->
+  %{now: now, forces: forces} = Runner.status(runner)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  eye=#{Runner.get!(runner, "eye")} boxes=#{Runner.get!(runner, "b1.count")}  forces=#{inspect(forces)}")
+end
+
+:ok = Runner.force(runner, "eye", 1)           # the photo-eye forced blocked
+Manual.advance(clock, 2)
+show.(runner, "eye forced     ")
+Sim.set(panel, "panel.i.8", 1)                 # the real eye: blocked, then clear
+Sim.set(panel, "panel.i.8", 0)
+Manual.advance(clock, 2)
+show.(runner, "eye moved      ")
+IO.inspect(File.read!("packing.forces"), label: "packing.forces")
+
+:ok = Runner.stop(runner)                      # a fresh runner from the same file
+{runner, clock, _panel} = start.()
+show.(runner, "a fresh start  ")
+
+:ok = Runner.unforce(runner, "eye")            # the device's last value, 0, read again
+Manual.advance(clock, 1)
+show.(runner, "eye unforced   ")
+
+try do
+  Runner.force(runner, "k1", 1)
+rescue
+  error in ArgumentError -> IO.puts("force k1: " <> error.message)
+end
+
+# An edit, stepped through the runner between rounds: the conveyor's task cut to 5 ms.
+{:ok, faster} = Logex.Configuration.compile_file("faster/packing.logex")
+:ok = Runner.subscribe(runner, [:edit])
+{:ok, forecast} = Runner.accept(runner, faster)
+IO.inspect(forecast, label: "forecast")
+{:ok, report} = Runner.test(runner)
+IO.inspect(report, label: "test")
+IO.inspect(Runner.status(runner).edit, label: "stage")
+:ok = Runner.subscribe(runner, [:ran])
+Manual.advance(clock, 12)
+IO.inspect(for({Runner, ^runner, {:ran, "fast", _, at}} <- Process.info(self(), :messages) |> elem(1), do: at), label: "the conveyor ran at")
+{:ok, report} = Runner.assemble(runner)
+IO.inspect(report, label: "assemble")
+IO.inspect(Runner.status(runner).edit, label: "stage")
+:ok = Runner.stop(runner)
+File.rm("packing.forces")
+```
+
+```console
+$ mix run forced_and_edited.exs
+t= 2  eye forced       eye=1 boxes=1  forces=%{"eye" => 1}
+t= 4  eye moved        eye=1 boxes=1  forces=%{"eye" => 1}
+packing.forces: "eye 1\n"
+t= 0  a fresh start    eye=1 boxes=0  forces=%{"eye" => 1}
+t= 1  eye unforced     eye=0 boxes=0  forces=%{}
+force k1: `k1` is an output point, at `panel.q.0`: only an input point is forced
+forecast: [{:interval, "fast", {10, 5}}, {:next_due, "fast", {10, 6}}]
+test: [{:interval, "fast", {10, 5}}, {:next_due, "fast", {10, 6}}]
+stage: :testing
+the conveyor ran at: [6, 11]
+assemble: []
+stage: nil
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 and 2 | The force holds `eye` at 1. The real eye goes on and off, and the counter counts no box. |
+| 3 | The forces file holds the force. |
+| 4 | A fresh runner reads the force from the file. |
+| 5 | After `unforce/2`, the runner reads the last value of the device, 0. |
+| 6 | logex forces input points only. |
+| 7 to 12 | The steps of the edit. The conveyor runs at 6 ms and at 11 ms, each 5 ms. |
+
 ## Points and values
 
 ### The point
@@ -493,6 +597,156 @@ oven.forces: line 2: `zone_hot[0]` is an output point, at `card.q.0`: only an in
 | 12 | Other spellings of a number in the file. `1.0e-40` is too near 0.0 for a `real`, and the runner keeps `0.0`. |
 | 13 to 18 | The next write gives the file in the text of the runner, with 1 element on each line. |
 | 19 and 20 | A start refuses a file with wrong lines. |
+
+### Example: the oven on the manual clock
+
+The script `oven.exs` lists the points of the oven card. Then it runs the oven on the
+manual clock, with a simulated card of 8 inputs and 8 outputs. It forces zone 3 and kills
+the runner. A fresh runner reads the force from the file. The script then removes the
+force, and forces and unforces the array whole. Last, it binds a card of 6 inputs, and
+compiles 2 points on the points of the array.
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("oven.logex")
+
+for point <- Logex.IO.points(plant)["card"],
+    do:
+      IO.puts(
+        "#{point.name} #{point.type} #{point.direction} at #{inspect(point.address, charlists: :as_lists)}"
+      )
+
+{:ok, clock} = Manual.start_link()
+{:ok, card} = Sim.start_link(reports: true, inputs: 8, outputs: 8)
+File.rm("oven.forces")
+
+start = fn ->
+  Runner.start_link(
+    configuration: plant,
+    io: %{"card" => {Sim, sim: card}},
+    clock: {Manual, clock},
+    forces: "oven.forces"
+  )
+end
+
+{:ok, runner} = start.()
+
+lamps = fn -> Enum.map(0..7, &Sim.outputs(card)["card.q.#{&1}"]) end
+
+Sim.set(card, %{"card.i.0" => 175.5, "card.i.1" => 182, "card.i.2" => 179.9, "card.i.3" => 201.25, "card.i.5" => 190})
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t"), label: "zone_t  ")
+IO.inspect(lamps.(), label: "lamps   ")
+
+:ok = Runner.force(runner, "zone_t[3]", 150)
+Sim.set(card, "card.i.3", 205.0)
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "forced  ")
+IO.inspect(lamps.(), label: "lamps   ")
+IO.write("oven.forces: " <> File.read!("oven.forces"))
+
+for {name, value} <- [{"zone_t", 1.0}, {"zone_hot[3]", 1}, {"zone_t[8]", 1.0}] do
+  try do
+    Runner.force(runner, name, value)
+  rescue
+    error in ArgumentError -> IO.puts(Exception.message(error))
+  end
+end
+
+# Killed: a fresh runner reads its forces file.
+Logger.configure(level: :none)
+Process.flag(:trap_exit, true)
+Process.exit(runner, :kill)
+
+receive do
+  {:EXIT, ^runner, :killed} -> :ok
+end
+
+{:ok, runner} = start.()
+IO.inspect(Runner.status(runner).forces, label: "forces  ")
+:ok = Runner.unforce(runner, "zone_t[3]")
+Manual.advance(clock, 10)
+IO.inspect(Runner.get!(runner, "zone_t[3]"), label: "unforced")
+
+:ok = Runner.force(runner, "zone_t", [170, 170, 170, 170, 190, 190, 190, 190])
+Manual.advance(clock, 10)
+IO.inspect(lamps.(), label: "whole   ")
+IO.write("oven.forces:\n" <> File.read!("oven.forces"))
+:ok = Runner.unforce(runner, "zone_t")
+Manual.advance(clock, 10)
+IO.inspect(lamps.(), label: "unforced")
+:ok = Runner.stop(runner)
+
+{:ok, short} = Sim.start_link(inputs: 6)
+
+try do
+  Runner.start_link(
+    configuration: plant,
+    io: %{"card" => {Sim, sim: short}},
+    clock: {Manual, clock}
+  )
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, diagnostics} =
+  Logex.Configuration.compile(
+    "oven",
+    File.read!("oven.logex") <>
+      "var_global door bool at card.i.5\nvar_global extra real[4] at card.i.6\n",
+    plant.programs
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run oven.exs
+zone_t[0] real input at [0]
+zone_t[1] real input at [1]
+zone_t[2] real input at [2]
+zone_t[3] real input at [3]
+zone_t[4] real input at [4]
+zone_t[5] real input at [5]
+zone_t[6] real input at [6]
+zone_t[7] real input at [7]
+zone_hot[0] bool output at [0]
+zone_hot[1] bool output at [1]
+zone_hot[2] bool output at [2]
+zone_hot[3] bool output at [3]
+zone_hot[4] bool output at [4]
+zone_hot[5] bool output at [5]
+zone_hot[6] bool output at [6]
+zone_hot[7] bool output at [7]
+zone_t  : [175.5, 182.0, 179.89999389648438, 201.25, 0.0, 190.0, 0.0, 0.0]
+lamps   : [0, 1, 0, 1, 0, 1, 0, 0]
+forced  : 150.0
+lamps   : [0, 1, 0, 0, 0, 1, 0, 0]
+oven.forces: zone_t[3] 150.0
+`zone_t` is an array of 8 reals, forced to a list of 8 elements in the elements' order, got: 1.0
+`zone_hot[3]` is an output point, at `card.q.3`: only an input point is forced
+`zone_t[8]` is no input point of `oven`: its array is one of input points, each element forced by its name as its subscripts' values, `zone_t[0]` to `zone_t[7]`
+forces  : %{"zone_t[3]" => 150.0}
+unforced: 205.0
+whole   : [0, 0, 0, 0, 1, 1, 1, 1]
+oven.forces:
+zone_t[0] 170.0
+zone_t[1] 170.0
+zone_t[2] 170.0
+zone_t[3] 170.0
+zone_t[4] 190.0
+zone_t[5] 190.0
+zone_t[6] 190.0
+zone_t[7] 190.0
+unforced: [0, 1, 0, 1, 0, 1, 0, 0]
+the device `card`'s adapter options: `zone_t[6]` is at `card.i.6`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
+the device `card`'s adapter options: `zone_t[7]` is at `card.i.7`, past the sim's 6 inputs, `card.i.0` to `card.i.5`
+line 12: `door` is at `card.i.5`, where `zone_t[5]` already is (line 4): a location holds one global
+line 13: `extra[0]` is at `card.i.6`, where `zone_t[6]` already is (line 4): a location holds one global, and `extra` is an array of input points, `card.i.6` to `card.i.9`
+```
 
 ## The forces file
 

@@ -239,7 +239,7 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/typespec_test.exs` — every spec of the host contract reached, each value a
   function gives and each argument it is given held to its spec as `Code.Typespec` reads
   it, what Dialyzer cannot type among them.
-- `test/logex/ceiling_test.exs` — each stage on README's motor and plant, the compile, a
+- `test/logex/ceiling_test.exs` — each stage on the examples' motor and plant, the compile, a
   scan, a cycle and a round, whole and a rung, under twice a figure recorded with it.
 - `test/logex/walk_test.exs` — each fact of `Logex.Walk`, at depth, with its growth.
 - `test/logex/counter_test.exs` — the counters `ctu`, `ctd` and `ctud`.
@@ -429,15 +429,16 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - **A new syntax form** goes into `printer_test.exs`'s generator and `@required_shapes`
   before it lands, and the golden record stays green; nothing checks the grammar for
   ambiguity but those.
-- **The pages are checked.** A language change stales README's syntax list and instruction
-  table and the pages' examples; each example's output is compared by `readme_test.exs`,
+- **The pages are checked.** A language change stales the syntax reference, the cheatsheet
+  and the pages' examples; each example's output is compared by `readme_test.exs`,
   on whichever page shows it, a file an example reads is marked `<!-- file: path -->`
   above its block or linked to the page that shows it, each block is its file under
   `examples/`, changed with it, and an `elixir` block shown with no output is a fragment
-  its page marks or the test names (`CONTRIBUTING.md`). README's prose has no test: its
-  "What logex is not" says plainly what logex does not do, a safety function first, each
-  claim checked against the code, so a change that adds what it says logex lacks, an
-  adapter, output forcing, a backward jump or a type among them, stales it.
+  its page marks or the test names (`CONTRIBUTING.md`). No test reads a page's claims:
+  README's "What logex is not", `guides/explanation/safety-and-limits.md` and
+  `guides/reference/not-supported.md` say what logex does not do, a safety function first,
+  each claim checked against the code, so a change that adds what they say logex lacks, an
+  adapter, output forcing, a backward jump or a type among them, stales them.
 - **Cite decisions and fixes by `docs/organisation.md` §7's numbers alone**, never a label
   only a design pass's notes define (`edit_test.exs`, "the labels this work cites").
 - **Keep this file an index.** A module's rules go in its moduledoc, the reasons in

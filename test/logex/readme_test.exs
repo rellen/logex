@@ -39,26 +39,17 @@ defmodule Logex.ReadmeTest.Examples do
   # that describe it, which the test finds there: the page a row names is given the file
   # made, and is held to the words. A passage that moves to another page takes its rows
   # with it: the row's page is changed in the same commit.
-  # Since decision 363 `wired.logex` is no longer one: README shows it, its warning citing
-  # a line README shows.
+  # Since decision 363 `wired.logex` is no longer one: a page shows it, its warning citing
+  # a line the page shows. The files of `warm/`, `moved/` and `boxes_v2.ld` are none since
+  # README was made short: the pages that run them show each.
   @derived [
-    {"README.md", "faster/packing.logex", "packing.logex", :as_is,
+    {"guides/reference/forcing.md", "faster/packing.logex", "packing.logex", :as_is,
      [{"interval 10", "interval 5"}],
-     "`faster/packing.logex`\nbeing `packing.logex` with `interval 5`"},
-    {"README.md", "faster/conveyor.ld", "conveyor.ld", :as_is, [], "`faster/packing.logex`"},
-    {"README.md", "faster/boxes.ld", "boxes.ld", :as_is, [], "`faster/packing.logex`"},
-    {"README.md", "warm/packing.logex", "packing.logex", :as_is, [],
-     "runs the same plant from `warm/packing.logex`"},
-    {"README.md", "warm/conveyor.ld", "conveyor.ld", :as_is, [], "`warm/packing.logex`"},
-    {"README.md", "warm/boxes.ld", "boxes.ld", :as_is,
-     [{"var boxes ctu", "var retain boxes ctu"}],
-     "beside `warm/boxes.ld`,\nwhich is `boxes.ld` with its counter declared `var retain boxes ctu`"},
-    {"README.md", "boxes_v2.ld", "boxes.ld", :as_is, [{"ctu boxes 3", "ctu boxes 5"}],
-     "boxes_v2.ld is boxes.ld with `ctu boxes 5`"},
-    {"README.md", "moved/trip.logex", "v2/trip.logex", :as_is,
-     [{"program c1 conveyor with fast", "program c1 conveyor with trip"}],
-     "`moved/trip.logex`, that is `v2/trip.logex` with `c1` moved to `trip`"},
-    {"README.md", "moved/conveyor.ld", "v2/conveyor.ld", :as_is, [], "`moved/trip.logex`"}
+     "`faster/packing.logex`, which is `packing.logex` with `interval 5`"},
+    {"guides/reference/forcing.md", "faster/conveyor.ld", "conveyor.ld", :as_is, [],
+     "`faster/packing.logex`"},
+    {"guides/reference/forcing.md", "faster/boxes.ld", "boxes.ld", :as_is, [],
+     "`faster/packing.logex`"}
   ]
 
   # A script a page shows as the continuation of another of the same page, its setup up
@@ -67,7 +58,7 @@ defmodule Logex.ReadmeTest.Examples do
     "a_trip.exs" => {"on_the_clock.exs", "show = fn label", "`a_trip.exs` runs the same plant"}
   }
 
-  # "Running a plant on the clock": the state its fragment's prose describes, a runner on
+  # The runner's reference, "Example: a plant on the manual clock": the state its fragment's prose describes, a runner on
   # the manual clock with a round owed after a slow drive's write, the first round's, and
   # a count, kept by a process of its own, of the fragment's advances of the clock.
   @owed ~S"""
@@ -119,11 +110,11 @@ defmodule Logex.ReadmeTest.Examples do
   # the page still says, `words`. A fragment the test gives no setup is named in its page,
   # by a `fragment` mark, and parsed. Every other `elixir` block is an example's script.
   @fragments [
-    {"README.md", ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|,
+    {"guides/reference/runner.md",
+     ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|,
      {"on_the_clock.exs", @owed, @answered,
       "b1.count waited, then answered 0 after 1 to 4 owed rounds\n",
-      "One made while a round is owed, after a round\n  that passed time, a slow drive's " <>
-        "write, waits for its slot"}}
+      "A call that comes while a round is owed waits for its slot"}}
   ]
 
   # The lines of a script's output that its page says are this run's alone, compared by
@@ -194,7 +185,8 @@ defmodule Logex.ReadmeTest.Examples do
   def slug(path), do: String.replace(path, ~r/[^A-Za-z0-9.]+/, "_")
 
   # An example's or a fragment's test module under `Logex.ReadmeTest`, its page's name
-  # and its own: `Readme.OnTheClock`, `Readme.OnTheClockFragment3790`.
+  # and its own: `GuidesReferenceRunner.OnTheClock`,
+  # `GuidesReferenceRunner.OnTheClockFragment598`.
   def named(%{page: page, name: name}),
     do: module(page) <> "." <> Macro.camelize(String.replace(Path.rootname(name), ".", "_"))
 
@@ -600,8 +592,8 @@ defmodule Logex.ReadmeTest do
   says are this run's alone, compared by their beginning, and it must exit 0; where it
   does not, the failure shows what it printed on standard error too, the exception that
   stopped it. Each example
-  is a test module of its own, `Logex.ReadmeTest.Readme.OnTheClock` for README's
-  `on_the_clock.exs`, so that the examples run side by side, a script two pages run is run
+  is a test module of its own, `Logex.ReadmeTest.GuidesReferenceRunner.OnTheClock` for the
+  runner's reference's `on_the_clock.exs`, so that the examples run side by side, a script two pages run is run
   for each, and a failure is named by its page and its example, and shows what the script
   printed beside what the page shows; the one on the machine's clock,
   `on_the_real_clock.exs`, runs alone, after the suite's async modules
@@ -717,7 +709,7 @@ for example <- examples, Logex.ReadmeTest.Examples.wanted?(wanted, example.page)
 end
 
 # Decision 365: each fragment the suite runs, in the setup its test makes, a module of its
-# own, `Logex.ReadmeTest.Readme.OnTheClockFragment3790`.
+# own, `Logex.ReadmeTest.GuidesReferenceRunner.OnTheClockFragment598`.
 for fragment <- fragments, Logex.ReadmeTest.Examples.wanted?(wanted, fragment.page) do
   defmodule Module.concat(Logex.ReadmeTest, Logex.ReadmeTest.Examples.named(fragment)) do
     @moduledoc false
@@ -911,8 +903,14 @@ defmodule Logex.ReadmeTest.Extraction do
   end
 
   # Decision 365: every fragment `@fragments` gives a setup is found in its page and run.
-  test "README's fragment of a call that waits for an owed round is run, not parsed alone" do
-    assert [%{page: "README.md", name: "on_the_clock.fragment_" <> _, script: script}] =
+  test "the runner's fragment of a call that waits for an owed round is run, not parsed alone" do
+    assert [
+             %{
+               page: "guides/reference/runner.md",
+               name: "on_the_clock.fragment_" <> _,
+               script: script
+             }
+           ] =
              Examples.run_fragments()
 
     assert script =~ ~S|task = Task.async(fn -> Runner.get!(runner, "b1.count") end)|

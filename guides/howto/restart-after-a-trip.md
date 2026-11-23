@@ -338,6 +338,71 @@ failed. While the status is `:tripped`, the time of the resource stays at 29. Th
 restart fails, because the read of the panel fails again. The warm restart keeps the
 count 3, and `case_full` comes on. The cold restart sets the count to 0.
 
+## A second example: 2 trips, a warm restart and a cold restart
+
+The script `a_warm_trip.exs` runs the plant of `warm/packing.logex`. It starts the
+conveyor and passes 3 boxes. Then it trips the plant and does a warm restart. Then it
+trips the plant again and does a cold restart.
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("warm/packing.logex")
+{:ok, clock} = Manual.start_link()
+{:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+{:ok, runner} =
+  Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Sim, sim: panel}},
+    clock: {Manual, clock}
+  )
+
+show = fn label ->
+  %{status: status, now: now} = Runner.status(runner)
+  out = Sim.outputs(panel)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  #{status}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.boxes.cv")}")
+end
+
+Sim.set(panel, "panel.i.0", 1)              # start pressed
+Manual.advance(clock, 10)
+Sim.set(panel, "panel.i.0", 0)
+
+for _box <- 1..3 do
+  Sim.set(panel, "panel.i.8", 1)
+  Manual.advance(clock, 2)
+  Sim.set(panel, "panel.i.8", 0)
+  Manual.advance(clock, 2)
+end
+
+show.("three boxes  ")
+Sim.fail(panel, :read, {:error, :eio})      # the panel's next read fails
+Manual.advance(clock, 10)
+show.("tripped      ")
+:ok = Runner.restart(runner, :warm)         # the count kept, the conveyor off
+show.("warm restart ")
+
+Sim.fail(panel, :read, {:error, :eio})
+Manual.advance(clock, 10)
+:ok = Runner.restart(runner, :cold)         # every value back to its initial one
+show.("cold restart ")
+:ok = Runner.stop(runner)
+```
+
+```console
+$ mix run a_warm_trip.exs
+t=22  three boxes    running  k1=1 case_full=1  boxes=3
+t=29  tripped        tripped  k1=0 case_full=0  boxes=3
+t=29  warm restart   running  k1=0 case_full=1  boxes=3
+t=36  cold restart   running  k1=0 case_full=0  boxes=0
+```
+
+The warm restart keeps the count of 3. The conveyor stays off, because `conveyor.ld`
+retains nothing. The lamp `case_full` comes on in the first round after the warm restart,
+because the retained counter writes it. The cold restart sets the count to 0.
+
 ## See also
 
 - [Find why a plant tripped](find-why-a-plant-tripped.md): the reason of a trip, and the

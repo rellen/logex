@@ -235,6 +235,91 @@ the task. Then `tp`, a counter, `ons`, `osr` and `osf` on that rung never see a 
 For example, the rung `xic estop osr s1 pressed` never sets `pressed` under the task of
 `estop`.
 
+## Another example: 7 cycles, a warning and 3 wrong task lines
+
+The script `trip.exs` presses the start button and raises the e-stop. It holds the
+e-stop, then releases it and resets the fault. Then it starts the conveyor again and
+raises the e-stop again. Last, it loads 2 more files. `timed.logex` runs the program
+`debounce.ld`, which has a timer, under an event task:
+
+<!-- file: debounce.ld -->
+```text
+var_input in bool
+var_output out bool
+var t1 ton
+
+xic in ton t1 20
+xic t1.dn ote out
+```
+
+<!-- file: timed.logex -->
+```text
+task trip single pb priority 0
+var_global pb bool at panel.i.0
+program d debounce with trip
+  d.in pb
+```
+
+`wrong_trip.logex` has an error on each of its task lines:
+
+<!-- file: wrong_trip.logex -->
+```text
+task trip single sp priority 0
+task tick priority 1
+task late single pb interval 0 priority 2
+var_global sp dint
+var_global pb bool at panel.i.0
+program d debounce with late
+  d.in pb
+```
+
+```elixir
+{:ok, line} = Logex.Configuration.compile_file("trip.logex")
+
+steps = [
+  {"started             ", 0, %{"pb_start_1" => 1}},
+  {"released            ", 10, %{"pb_start_1" => 0}},
+  {"e-stop rises        ", 10, %{"estop" => 1}},
+  {"held                ", 10, %{}},
+  {"released, reset     ", 10, %{"estop" => 0, "pb_reset" => 1}},
+  {"restarted           ", 10, %{"pb_reset" => 0, "pb_start_1" => 1}},
+  {"e-stop rises again  ", 10, %{"estop" => 1, "pb_start_1" => 0}}
+]
+
+Enum.reduce(steps, {Logex.Runtime.start(line), 0}, fn {label, elapsed, inputs}, {rt, now} ->
+  {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
+  at_trip = Logex.Runtime.get!(rt, "k1_at_trip")
+  IO.puts("t=#{String.pad_leading("#{now + elapsed}", 2)}  #{label}k1=#{out["k1"]} k1_at_trip=#{at_trip}  ran #{Enum.join(ran, ", ")}")
+  {rt, now + elapsed}
+end)
+
+{:ok, timed} = Logex.Configuration.compile_file("timed.logex")
+Enum.each(timed.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong_trip.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```console
+$ mix run trip.exs
+t= 0  started             k1=1 k1_at_trip=0  ran fast:c1
+t=10  released            k1=1 k1_at_trip=0  ran fast:c1
+t=20  e-stop rises        k1=0 k1_at_trip=1  ran trip:snap, fast:c1
+t=30  held                k1=0 k1_at_trip=1  ran fast:c1
+t=40  released, reset     k1=0 k1_at_trip=1  ran fast:c1
+t=50  restarted           k1=1 k1_at_trip=1  ran fast:c1
+t=60  e-stop rises again  k1=0 k1_at_trip=1  ran trip:snap, fast:c1
+timed.logex: line 3: warning: `d` runs under the event task `trip`, and `debounce` runs the timer `t1` on line 5 of `debounce.ld`: a ton times across the task's runs, and one whose rung is true on two runs in a row counts the whole time between them
+wrong_trip.logex: line 1: the single of `trip`, `sp`, is a dint (line 4): a single is a bool global
+wrong_trip.logex: line 2: task `tick` needs an interval or a single, as in `task tick interval 10 priority 1` or `task tick single estop priority 0`
+wrong_trip.logex: line 3: the interval of `late` is 0: an interval is at least 1 ms, and a task that runs only on the rising edges of its single is declared without one
+```
+
+The task `trip` runs at 20 ms and at 60 ms, at each rising edge of the e-stop. It does
+not run while the e-stop is held. At priority 0, it runs before `c1`. Thus the snapshot
+keeps the value of `k1` from the cycle before.
+
 ## If it does not work
 
 Each row gives a part of the diagnostic or of the warning. The full message also gives

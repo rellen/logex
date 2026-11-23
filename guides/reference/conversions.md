@@ -613,6 +613,188 @@ The script prints the `word` tag `status` as a number, and the `real` value 3600
 | 3 | The speed -37.5 gives -38, and the truncation writes -37. The status word `16#8000` is -32768. -129 wraps to 127. |
 | 4 | The speed 36000.0 does not fit an `int`. The 2 conversions write -29536, and `rpm_ok` is 0. 200 wraps to -56 in an `sint`. |
 
+### The program `drive.ld`
+
+A drive card gives its speed in a `uint` register. The program moves the speed into a
+`dint`, and doubles it in a `uint`. It converts a `dint` level into an `sint`. The
+program is the file `examples/drive.ld` of the repository.
+
+<!-- file: drive.ld -->
+```text
+var_input  hz       uint
+var_input  level    dint
+var_output speed    dint
+var_output twice    uint
+var_output twice_ok bool
+var_output trim     sint
+var_output trim_ok  bool
+
+move hz speed
+add hz hz twice ote twice_ok
+dint_to_sint level trim ote trim_ok
+```
+
+The script `drive.exs` runs 3 scans. Then it gives `hz` a value that a `uint` cannot
+hold. Last, it compiles 6 wrong rungs and prints each diagnostic.
+
+```elixir
+{:ok, drive} = Logex.compile_file("drive.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(drive, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(drive, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(drive)
+  |> scan.("a register of 1200, a level of 100", %{"hz" => 1200, "level" => 100})
+  |> scan.("the register's top, a level of 129 ", %{"hz" => 65_535, "level" => 129})
+  |> scan.("a level of -1                      ", %{"level" => -1})
+
+try do
+  Logex.Runtime.put_inputs(drive, state, %{"hz" => 65_536})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var speed dint\nvar_output hz uint\nvar_output flag bool\n" <>
+      "move speed hz\nmove 70000 hz\nmove flag speed\nadd speed 1 hz\nneg speed hz\n" <>
+      "lt hz 70000 ote flag",
+    name: "back"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run drive.exs
+a register of 1200, a level of 100  %{"speed" => 1200, "trim" => 100, "trim_ok" => 1, "twice" => 2400, "twice_ok" => 1}
+the register's top, a level of 129   %{"speed" => 65535, "trim" => -127, "trim_ok" => 0, "twice" => 65534, "twice_ok" => 0}
+a level of -1                        %{"speed" => 65535, "trim" => -1, "trim_ok" => 1, "twice" => 65534, "twice_ok" => 0}
+input `hz` is a uint: 65536 is outside 0 to 65535
+line 4: `move` writes `speed`, a dint, into `hz`, a uint: a dint does not widen into a uint, so convert it with `dint_to_uint`
+line 5: `move` writes `70000` into `hz`, a uint: it is outside 0 to 65535
+line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not widen into a dint, and logex has no conversion between them
+line 7: `add` computes in `hz`'s type, a uint, but `speed` is a dint (declared on line 1): a dint does not widen into a uint, so convert it first, with `dint_to_uint`
+line 8: `neg` writes `hz`, a uint (declared on line 2), which holds no negative value: `neg` writes a signed type, so declare `hz` a dint
+line 9: `lt` compares `70000` with `hz`, a uint (declared on line 2), which never holds it: `70000` is outside 0 to 65535
+```
+
+| Line | What the line shows |
+|---|---|
+| 2 | The double of 65535 wraps to 65534, and `twice_ok` is 0. 129 does not fit in an `sint`. `dint_to_sint` keeps the low 8 bits, -127, and `trim_ok` is 0. |
+| 3 | -1 fits in an `sint`, and `trim_ok` is 1. |
+| 4 | The host gives `hz` a value out of its range, and logex raises an `ArgumentError`. |
+| 5 to 10 | The diagnostics of the 6 wrong rungs. |
+
+### The program `fan.ld`
+
+A fan drive gives its speed in Hz, in a `real`. The program calculates the speed in
+revolutions a minute in a `real` and in an `lreal`. It rounds and truncates the speed into
+`int` tags. It also calculates the square root of the frequency. The program is the file
+`examples/fan.ld` of the repository.
+
+<!-- file: fan.ld -->
+```text
+var_input  hz      real
+var_output speed   real
+var_output precise lreal
+var_output rpm     int
+var_output whole   int
+var_output root    real
+var_output root_ok bool
+
+// the fan's speed in revolutions a minute, in a real and in an lreal
+mul hz 60.0 speed
+mul hz 60.0 precise
+real_to_int speed rpm
+real_trunc_int speed whole
+sqrt hz root ote root_ok
+```
+
+The script `fan.exs` runs 5 scans. Then it gives `hz` a value that a `real` cannot hold.
+Then it compiles a wrong literal and 12 wrong rungs, and prints each diagnostic. Last, it
+compiles a program whose literals a `real` rounds, and prints the warnings.
+
+```elixir
+{:ok, fan} = Logex.compile_file("fan.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(fan, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(fan, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(fan)
+  |> scan.("0.1 Hz      ", %{"hz" => 0.1})
+  |> scan.("12.5 Hz     ", %{"hz" => 12.5})
+  |> scan.("-0.25 Hz    ", %{"hz" => -0.25})
+  |> scan.("600 Hz      ", %{"hz" => 600})
+  |> scan.("16777217 Hz ", %{"hz" => 16_777_217})
+
+try do
+  Logex.Runtime.put_inputs(fan, state, %{"hz" => Integer.pow(2, 128)})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, [lexed]} = Logex.compile("var x real\nmove 1.5e+3 x", name: "lexed")
+IO.puts(Logex.Diagnostic.format(lexed))
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var speed real\nvar count dint\nvar rpm int\nvar on bool\nvar big lreal\n" <>
+      "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
+      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed\n" <>
+      "move 1.0e-310 big\nmove 1.0e-400 big\ngt 1.0e-310 0.0 ote on",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:ok, rounded} =
+  Logex.compile(
+    "var_output speed real\nvar_output set_point real 16777217.0\nmove 16777217.0 speed\n" <>
+      "move 37.1 speed\nmove 37.1 set_point",
+    name: "rounded"
+  )
+
+for warning <- rounded.warnings, do: IO.puts(Logex.Diagnostic.format(warning))
+```
+
+```console
+$ mix run fan.exs
+0.1 Hz        %{"precise" => 6.000000089406967, "root" => 0.3162277638912201, "root_ok" => 1, "rpm" => 6, "speed" => 6.0, "whole" => 6}
+12.5 Hz       %{"precise" => 750.0, "root" => 3.535533905029297, "root_ok" => 1, "rpm" => 750, "speed" => 750.0, "whole" => 750}
+-0.25 Hz      %{"precise" => -15.0, "root" => 0.0, "root_ok" => 0, "rpm" => -15, "speed" => -15.0, "whole" => -15}
+    %Logex.Fault{severity: :minor, kind: :negative_sqrt, instruction: :sqrt, path: nil, file: "fan.ld", line: 14, read: -0.25}
+600 Hz        %{"precise" => 36000.0, "root" => 24.494897842407227, "root_ok" => 1, "rpm" => -29536, "speed" => 36000.0, "whole" => -29536}
+16777217 Hz   %{"precise" => 1006632960.0, "root" => 4096.0, "root_ok" => 1, "rpm" => 0, "speed" => 1006632960.0, "whole" => 0}
+input `hz` is a real: 340282366920938463463374607431768211456 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38
+line 2, column 6: "1.5e+3" is no number: logex takes no `+`, so an exponent is `e3` or `e-3`
+line 6: `move` writes `16777217` into `speed`, a real: it is no value of a real, which holds integers exactly only to 2^24: the nearest it holds is 16777216.0
+line 7: `move` writes `speed`, a real, into `rpm`, an int: a real does not widen into an int, so convert it with `real_to_int`
+line 8: `gt` compares `speed`, a real (declared on line 1), with `count`, a dint (declared on line 2): a dint does not widen into a real, so convert it first, with `dint_to_real`
+line 9: `div` divides by the literal `0.0`: a zero divisor gives 0.0 and passes no power on every scan, so a literal one is refused
+line 10: `mod` reads an integer, but `speed` is a real (declared on line 1)
+line 11: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.0, passes no power and raises a minor fault on every scan, so a literal one is refused
+line 12: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
+line 13: `speed.3` names a bit of `speed`, a real, which has no bits
+line 14: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
+line 15: `move` writes `1.0e-310` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
+line 16: `move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0
+line 17: `gt` reads a number or a bit string, and compares two literals as lreals: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would be read as 0.0
+line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
+line 3: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
+```
+
 ### The 182 conversions
 
 The script tries the 2 forms of a mnemonic for each pair of type words. It prints each

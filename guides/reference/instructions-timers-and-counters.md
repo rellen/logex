@@ -1257,6 +1257,80 @@ scan  infeed  outfeed  clear_pb  stock.cv  stock.qu  stock.qd  buffer_full
 | 9 and 11 | 2 more boxes in. In scan 11, `cv` is equal to `pv`, and `qu` is 1. |
 | 12 | Rung 1 writes 1 to `stock.r`: `cv` is 0, `qu` is 0 and `qd` is 1. |
 
+### The program `stock.ld`: typed counters
+
+A buffer table counts its boxes in an `int`. `stock` is a `ctud_int`, and `cases` is a
+`ctu_dint`, which is the type `ctu`. The program is the file `examples/stock.ld` of the
+repository.
+
+<!-- file: stock.ld -->
+```text
+var_input infeed bool
+var_input outfeed bool
+var_output full bool
+var_output over bool
+var stock ctud_int
+var cases ctu_dint
+
+xic infeed ctu stock 32767
+xic outfeed ctd stock 32767
+xic stock.qu ote full
+xic stock.ov ote over
+xic infeed ctu cases 12
+```
+
+The script `stock.exs` sets the count of `stock` to 32766, 1 less than the top of an
+`int`. Then it runs 5 scans, 10 ms apart. It also compiles a preset that an `int` cannot
+hold, and prints the diagnostic.
+
+```elixir
+{:ok, stock} = Logex.compile_file("stock.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(stock, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(stock, state, 10)
+  IO.puts("#{label}  cv #{state.env["stock"]["cv"]}  #{inspect(outputs)}")
+  state
+end
+
+state = Logex.Runtime.instance(stock)
+{_, state} = Logex.Runtime.scan(stock, state, 10)
+# A stock of 32766, one short of an int's top, as a run of boxes leaves it.
+state = put_in(state.env["stock"]["cv"], 32_766)
+
+state
+|> scan.("box in          ", %{"infeed" => 1})
+|> scan.("eye clear       ", %{"infeed" => 0})
+|> scan.("box in, at 32767", %{"infeed" => 1})
+|> scan.("eye clear       ", %{"infeed" => 0})
+|> scan.("box out         ", %{"outfeed" => 1})
+
+IO.puts(inspect(stock.tags["cases"].type == Logex.FbType.ctu()))
+
+{:error, [mistake]} =
+  Logex.compile("var e bool\nvar stock ctud_int\nxic e ctu stock 40000\n", name: "m")
+
+IO.puts(Logex.Diagnostic.format(mistake))
+```
+
+```console
+$ mix run stock.exs
+box in            cv 32767  %{"full" => 1, "over" => 0}
+eye clear         cv 32767  %{"full" => 1, "over" => 0}
+box in, at 32767  cv 32767  %{"full" => 1, "over" => 1}
+eye clear         cv 32767  %{"full" => 1, "over" => 1}
+box out           cv 32766  %{"full" => 0, "over" => 1}
+true
+line 3: `ctu` takes a preset of -32768 to 32767 for a counter of ints, found `40000`
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 to 4 | The count stops at 32767. The second box sets `ov`, and `ov` stays on. |
+| 5 | A count down takes 1 away. `ov` stays on until a reset or a load. |
+| 6 | `cases` has the type `ctu`. |
+| 7 | logex refuses the preset 40000 for a counter of `int` values. |
+
 ## Wrong rungs and their diagnostics
 
 This part shows 62 wrong rungs in 7 groups. For each group, a script compiles each wrong

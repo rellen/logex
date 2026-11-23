@@ -614,6 +614,10 @@ These rules give the form of each message of an `ArgumentError`:
   `expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: %{}`.
 - The message gives the value that it refuses. For example:
   ``input `level` is a usint: 256 is outside 0 to 255``.
+- A number of more than 10,000 characters shows as its first 24 characters and its
+  length. `Logex.Configuration.Global.new!/3` and `Logex.Tag.new!/5` do this, and so
+  does a diagnostic of `Logex.Configuration.check/1`. For example:
+  ``…`100000000000000000000000…` (10001 characters) is outside -128 to 127``.
 - A check of a list gives 1 line for each problem. Each other check stops at the first
   problem. [Example: wrong calls on 1 instance](#example-wrong-calls-on-1-instance)
   shows both.

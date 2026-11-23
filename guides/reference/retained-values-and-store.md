@@ -507,6 +507,121 @@ not correct. Some messages, copied from runs:
 | `last` of the timer `t1` in `values` | `` `values` holds `t1.last`, a timer's clock, which no image holds: each retained timer starts at the start's `now` `` |
 | The path `a b` in `values` | `` `values` holds "a b", which is no path `` |
 
+### Example: a retained global, 2 restarts and an image
+
+This example uses [`tally.ld`](store.md#the-files-of-the-examples) and
+[`tally.logex`](store.md#the-files-of-the-examples). `tally.logex` declares the global
+`total_boxes` with `retain`.
+
+The script `retained.exs` counts 4 boxes and does a warm restart. It counts 2 more boxes,
+the first under the eye at the restart. Then it takes the retained image and does a cold
+restart. It starts a new resource from the image, and a different one whose program
+counts in a `ctu_int`. Last, it loads 2 more files. `wired.logex` wires `full` to an
+output point:
+
+<!-- file: wired.logex -->
+```text
+var_global eye_1              bool at panel.i.0
+var_global retain total_boxes dint 0
+var_global case_lamp          bool at panel.q.0
+
+program t1 tally
+  t1.eye  eye_1
+  t1.full case_lamp
+```
+
+`broken_retain.logex` has an error on each of its last 5 lines:
+
+<!-- file: broken_retain.logex -->
+```text
+var_global eye_1              bool at panel.i.0
+var_global retain case_lamp   bool at panel.q.0
+var_global total_boxes retain dint
+var_global retain non_retain total dint
+var_global eye_2              bool at program.i.1
+program retain tally
+```
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("tally.logex")
+
+show = fn rt, label ->
+  IO.puts("#{label}  total_boxes=#{Logex.Runtime.get!(rt, "total_boxes")} " <>
+            "t1.boxes.cv=#{Logex.Runtime.get!(rt, "t1.boxes.cv")} " <>
+            "case_full=#{Logex.Runtime.get!(rt, "case_full")}")
+  rt
+end
+
+boxes = fn rt, n ->
+  Enum.reduce(1..n, rt, fn _, rt ->
+    {rt, _, _} = Logex.Runtime.cycle(rt, 10, %{"eye_1" => 1})
+    {rt, _, _} = Logex.Runtime.cycle(rt, 10, %{"eye_1" => 0})
+    rt
+  end)
+end
+
+{rt, _, _} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, %{})
+
+rt =
+  rt
+  |> boxes.(4)
+  |> show.("four boxes   ")
+  |> Logex.Runtime.restart(:warm)
+  |> show.("warm restart ")
+  |> boxes.(1)
+  |> show.("first box    ")
+  |> boxes.(1)
+  |> show.("one more     ")
+
+image = Logex.Runtime.retained(rt)
+rt |> Logex.Runtime.restart(:cold) |> show.("cold restart ")
+
+{fresh, []} = Logex.Runtime.start(plant, image)
+show.(fresh, "from image   ")
+
+{:ok, ld} = File.read("tally.ld")
+{:ok, recounted} = Logex.compile(String.replace(ld, "boxes ctu", "boxes ctu_int"), name: "tally")
+{:ok, text} = File.read("tally.logex")
+{:ok, recounting} = Logex.Configuration.compile("tally", text, %{"tally" => recounted})
+{fresh, dropped} = Logex.Runtime.start(recounting, image)
+show.(fresh, "a ctu_int    ")
+IO.inspect(dropped)
+
+{:ok, wired} = Logex.Configuration.compile_file("wired.logex")
+Enum.each(wired.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+
+{:error, diagnostics} = Logex.Configuration.compile_file("broken_retain.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```console
+$ mix run retained.exs
+four boxes     total_boxes=4 t1.boxes.cv=4 case_full=1
+warm restart   total_boxes=4 t1.boxes.cv=4 case_full=0
+first box      total_boxes=4 t1.boxes.cv=4 case_full=1
+one more       total_boxes=5 t1.boxes.cv=5 case_full=1
+cold restart   total_boxes=0 t1.boxes.cv=0 case_full=0
+from image     total_boxes=5 t1.boxes.cv=5 case_full=0
+a ctu_int      total_boxes=5 t1.boxes.cv=0 case_full=0
+[{"t1.boxes", {:retyped, "ctu", "ctu_int"}}]
+wired.logex: line 7: warning: `t1.full` is retained and drives the output `case_lamp`: after a warm start it is written in the first round
+broken_retain.logex: line 2: `case_lamp` is an output point, and a located global takes no `retain`: an input point is read again at every start, and an output point starts at 0 until logic writes it
+broken_retain.logex: line 3, column 24: `retain` comes straight after `var_global`, as in `var_global retain total_boxes dint`
+broken_retain.logex: line 4, column 19: a global takes `retain` or `non_retain`, not both: found `retain` and `non_retain`
+broken_retain.logex: line 5: `program` is a keyword and cannot name a device
+broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
+```
+
+| Line | What the line shows |
+|---|---|
+| 2 | The warm restart keeps the retained count and the retained total. `case_full` is not retained, and goes to 0. |
+| 3 | The first scan after a start counts no edge. Thus the box under the eye at the restart is not counted. |
+| 5 | A cold restart puts each value back to its initial value. |
+| 6 | A new resource gets the values of the image. |
+| 7 and 8 | The type of `t1.boxes` is different, and the start drops its value. |
+| 9 | A retained value that drives an output point gives a warning. |
+| 10 to 14 | The diagnostics of `broken_retain.logex`. |
+
 ## What logex does not retain
 
 - No `persistent` values. A cold restart discards each retained value.

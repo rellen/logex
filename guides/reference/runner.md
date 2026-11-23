@@ -512,6 +512,104 @@ trigger.
   [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md) gives
   the steps.
 
+### Example: a plant on the manual clock
+
+The script `on_the_clock.exs` runs [the plant of the examples](#the-plant-of-the-examples)
+on a manual clock. A simulated panel tells the runner of each change. The script starts
+the conveyor, passes 3 boxes and presses the e-stop. Then it prints the status, the last
+2 writes of the panel and the state of the panel after `stop/2`.
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+{:ok, clock} = Manual.start_link()
+{:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+{:ok, runner} =
+  Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Sim, sim: panel}},
+    clock: {Manual, clock}
+  )
+
+show = fn label ->
+  %{now: now, rounds: rounds} = Runner.status(runner)
+  out = Sim.outputs(panel)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out["panel.q.0"]} case_full=#{out["panel.q.4"]}  boxes=#{Runner.get!(runner, "b1.count")}")
+end
+
+show.("started        ")
+Sim.set(panel, "panel.i.0", 1)              # pb_start_1, reported and merged at once
+Manual.advance(clock, 10)                   # a round each millisecond, the conveyor's at 10
+show.("start pressed  ")
+Sim.set(panel, "panel.i.0", 0)
+
+for _box <- 1..3 do
+  Sim.set(panel, "panel.i.8", 1)            # a box on the eye...
+  Manual.advance(clock, 2)
+  Sim.set(panel, "panel.i.8", 0)            # ...and past it
+  Manual.advance(clock, 2)
+end
+
+show.("three boxes    ")
+:ok = Runner.subscribe(runner, [:ran])
+Sim.set(panel, "panel.i.7", 1)              # the e-stop, which the conveyor reads at 30
+Manual.advance(clock, 10)
+show.("e-stop at 22   ")
+IO.inspect(for({Runner, ^runner, {:ran, "fast", i, at}} <- Process.info(self(), :messages) |> elem(1), do: {i, at}), label: "the conveyor ran")
+IO.inspect(for(key <- [:runs, :overlaps, :latest_wake], do: {key, Map.fetch!(Runner.status(runner), key)}))
+
+:ok = Runner.stop(runner)
+IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the last two writes")
+IO.inspect(Sim.closed?(panel), label: "closed")
+```
+
+```console
+$ mix run on_the_clock.exs
+t= 0  started          rounds= 1  k1=0 case_full=0  boxes=0
+t=10  start pressed    rounds=11  k1=1 case_full=0  boxes=0
+t=22  three boxes      rounds=23  k1=1 case_full=1  boxes=3
+t=32  e-stop at 22     rounds=33  k1=0 case_full=1  boxes=3
+the conveyor ran: [{"c1", 30}]
+[
+  runs: %{"fast" => {0, 50}, "main" => {0, 200}},
+  overlaps: %{"fast" => 0, "main" => 0},
+  latest_wake: 0
+]
+the last two writes: [%{"panel.q.0" => 0, "panel.q.4" => 1}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
+closed: true
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 and 2 | The box counter is untimed. Thus a round runs each ms of the clock. `advance(clock, 10)` runs 10 rounds. |
+| 4 and 5 | The e-stop is not a trigger. The runner merges it at 22 ms, and the conveyor reads it in its next run, at 30 ms. |
+| 6 to 10 | The status. On the manual clock, a round takes 0 ms. |
+| 11 | `stop/2` writes 0 to each output 1 time. |
+| 12 | `stop/2` closes each device before it returns. |
+
+A call that comes while a round is owed waits for its slot. Thus a script that moves the
+clock makes the call from a different process. Then it moves the clock until the call
+gets its answer. This fragment continues `on_the_clock.exs` in that state:
+
+```elixir
+task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
+
+answered = fn
+  _answered, {:ok, value} ->
+    value
+
+  answered, nil ->
+    Manual.advance(clock, 0)                # one owed round; at most 4 bring the slot
+    answered.(answered, Task.yield(task, 10))
+end
+
+answered.(answered, Task.yield(task, 10))
+```
+
 ## Status
 
 `status/1` gives a map. Each key is in the map at all times.
@@ -1002,6 +1100,58 @@ event {:restart, :warm}
 | 31 to 39 | The second restart succeeds. `now` stays 19, because the time while tripped does not count. The warm restart sets `k1` to its initial value, 0, because `k1` has no qualifier `retain`. The script released the start button at 10 ms, so the first round keeps `k1` at 0. |
 | 40 | A restart of a runner that runs is a wrong argument. |
 | 41 and 42 | The subscriber got the trip and the restart that succeeded. The restart that failed sent no event. |
+
+### Example: a read that fails
+
+The script `a_trip.exs` runs the same plant as `on_the_clock.exs`, and starts it in the
+same way. The page shows the part after the start. The script starts the conveyor and
+makes the next read of the panel fail. Then it moves the clock 1000 ms and does a cold
+restart.
+
+```elixir
+:ok = Runner.subscribe(runner)
+
+status = fn keys ->                         # the fields named, in the order named
+  IO.inspect(for(key <- keys, do: {key, Map.fetch!(Runner.status(runner), key)}))
+end
+
+Sim.set(panel, "panel.i.0", 1)              # start pressed
+Manual.advance(clock, 10)
+Sim.set(panel, "panel.i.0", 0)
+
+Sim.fail(panel, :read, {:error, :eio})      # the panel's next read, at its poll at 20, fails
+Manual.advance(clock, 15)
+status.([:status, :trip, :now, :rounds])    # a call, answered once the runner has tripped
+IO.inspect(for({Runner, ^runner, event} <- Process.info(self(), :messages) |> elem(1), do: event), label: "events")
+IO.inspect(Runner.get!(runner, "k1"), label: "k1 in the resource")
+IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the panel's last two writes")
+
+Manual.advance(clock, 1000)                 # tripped: nothing runs, nothing is written
+status.([:status, :now, :rounds])
+
+:ok = Runner.restart(runner, :cold)         # the latch released, the first round at once
+status.([:status, :trip, :now, :rounds])
+IO.inspect(Sim.outputs(panel), label: "the panel's outputs")
+```
+
+```console
+$ mix run a_trip.exs
+[status: :tripped, trip: {:io, "panel", {:error, :eio}}, now: 19, rounds: 20]
+events: [trip: {:io, "panel", {:error, :eio}}]
+k1 in the resource: 1
+the panel's last two writes: [%{"panel.q.0" => 1, "panel.q.4" => 0}, %{"panel.q.0" => 0, "panel.q.4" => 0}]
+[status: :tripped, now: 19, rounds: 20]
+[status: :running, trip: nil, now: 19, rounds: 21]
+the panel's outputs: %{"panel.q.0" => 0, "panel.q.4" => 0}
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 and 2 | The read fails, and the runner trips with the reason `{:io, "panel", {:error, :eio}}`. |
+| 3 | The resource keeps the value 1 of `k1`. |
+| 4 | The runner writes 0 to each output of the panel 1 time. |
+| 5 | While the runner is tripped, no round runs. |
+| 6 and 7 | The cold restart runs its first round immediately. |
 
 ## Restart
 

@@ -43,7 +43,7 @@ The groups of the site are Tutorials, How-to guides, Reference, Explanation, Arc
 and implementation, Decision records and Project. The group `:github` keeps a page out
 of the site. A reader then reads it on GitHub.
 
-Do not give a page the kind `:legacy`. That kind is only for the 10 documents that are
+Do not give a page the kind `:legacy`. That kind is only for the 9 documents that are
 older than these rules, and a test refuses each other page.
 
 ### The name of a page in the site

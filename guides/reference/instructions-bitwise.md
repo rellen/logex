@@ -814,6 +814,62 @@ scan   status  shift  at_speed   slow_w      low    moved  moved_ok    flags
 In each scan, `move` writes all of `flags`. Then, while the motor is at speed, `otl` sets
 bit 15. `otl` is a latch, and thus logex gives no warning for it.
 
+### The script `status.exs`
+
+The script `status.exs` runs [the program `status.ld`](#the-program-statusld) for 3
+scans. Then it gives `status` a value that a `word` cannot hold, and prints the message
+of the `ArgumentError`. Last, it compiles 7 wrong rungs and prints each diagnostic.
+
+```elixir
+{:ok, status} = Logex.compile_file("status.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(status, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(status, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(status)
+  |> scan.("at speed, shifted by 4    ", %{"status" => 0x0008, "shift" => 4})
+  |> scan.("16#fff7, shifted by -1    ", %{"status" => 0xFFF7, "shift" => -1})
+  |> scan.("16#8000, shifted by 16    ", %{"status" => 0x8000, "shift" => 16})
+
+try do
+  Logex.Runtime.put_inputs(status, state, %{"status" => 65_536})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var status word\nvar code int\nvar lamp bool\n" <>
+      "add status 1 status\nand status 16#00ff code\neq status code ote lamp\n" <>
+      "xic status.16 ote lamp\nxic lamp.0 ote lamp\nshl status -1 status\n" <>
+        "and lamp code code",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run status.exs
+at speed, shifted by 4      %{"at_speed" => 1, "code" => 8, "flags" => 32776, "low" => 8, "moved" => 128, "moved_ok" => 1, "slow" => 0, "slow_w" => 0}
+16#fff7, shifted by -1      %{"at_speed" => 0, "code" => -9, "flags" => 65527, "low" => 247, "moved" => 65527, "moved_ok" => 0, "slow" => 1, "slow_w" => 1}
+16#8000, shifted by 16      %{"at_speed" => 0, "code" => -32768, "flags" => 32768, "low" => 0, "moved" => 0, "moved_ok" => 1, "slow" => 1, "slow_w" => 1}
+input `status` is a word: 65536 is outside 0 to 65535
+line 4: `add` reads a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: convert it first, with `word_to_uint`
+line 4: `add` writes a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: compute in an integer and convert the result, with `uint_to_word`
+line 5: `and` computes in `code`'s type, an int, but `status` is a word (declared on line 1): a word does not widen into an int, so convert it first, with `word_to_int`
+line 6: `eq` compares `status`, a word (declared on line 1), with `code`, an int (declared on line 2): a bit string compares only with a bit string, so convert one of them first, with `int_to_word` or `word_to_int`
+line 7: `status.16` names bit 16 of `status`, a word (declared on line 1), which has bits 0 to 15
+line 8: `lamp.0` names a bit of `lamp`, a bool, which has no bits
+line 9: `shl` shifts by the literal `-1`: a count is never negative, so a negative literal one is refused
+line 10: `and` computes in `code`'s type, an int, but `lamp` is a bool (declared on line 3): a bool does not widen into an int, and logex has no conversion between them
+```
+
 ### The program `eyes.ld`
 
 A conveyor has 8 photo eyes in the `byte` `eyes`. The program finds the eyes that
@@ -930,6 +986,106 @@ scan   faults  sel  lamp  checked
 | 3 | Bit 15 is the last bit of a `word`. |
 | 4 | 16 is out of the range. `xic` and `xio` both pass no power, and each gets the fault `:bit_out_of_range` of its line. |
 | 5 | -1 is out of the range also. |
+
+### The script `selected.exs`
+
+The script `selected.exs` runs [the program `selected.ld`](#the-program-selectedld) for
+3 scans, with the bits 4, 15 and 16. Then it runs the program in a plant on the manual
+clock. The plant trips when `sel` is 16. Last, it compiles 4 wrong bits, and it runs a
+literal bit number in brackets.
+
+```elixir
+{:ok, selected} = Logex.compile_file("selected.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(selected, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(selected, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+Logex.Runtime.instance(selected)
+|> scan.("16#0010, bit 4 ", %{"faults" => 0x0010, "sel" => 4})
+|> scan.("16#0010, bit 15", %{"sel" => 15})
+|> scan.("16#0010, bit 16", %{"sel" => 16})
+
+{:ok, plant} =
+  Logex.Configuration.compile(
+    "plant",
+    """
+    task fast interval 10 priority 1
+    var_global drive_faults word at drive.i.0
+    var_global sel          int  at panel.i.0
+    var_global fault_lamp   bool at panel.q.0
+    program lamp1 selected with fast
+      lamp1.faults drive_faults
+      lamp1.sel    sel
+      lamp1.lamp   fault_lamp
+    """,
+    %{"selected" => selected}
+  )
+
+{:ok, clock} = Logex.Runner.Clock.Manual.start_link()
+{:ok, panel} = Logex.IO.Sim.start_link(reports: true, clock: clock)
+{:ok, drive} = Logex.IO.Sim.start_link(clock: clock)
+
+{:ok, runner} =
+  Logex.Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Logex.IO.Sim, sim: panel}, "drive" => {Logex.IO.Sim, sim: drive}},
+    clock: {Logex.Runner.Clock.Manual, clock}
+  )
+
+Logex.IO.Sim.set(drive, "drive.i.0", 0x0010)
+Logex.IO.Sim.set(panel, "panel.i.0", 4)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("bit 4:  the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
+Logex.IO.Sim.set(panel, "panel.i.0", 16)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("bit 16: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
+IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
+Logex.Runner.stop(runner)
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var status word\nvar code word\nvar on bool\nvar n int\n" <>
+      "xic status.[code] ote on\nxic on.[n] ote on\nxic on ons status.[n]\nxic status.[16] ote on",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:ok, literal} =
+  Logex.compile("var_input status word\nvar_output on bool\nxic status.[16#4] ote on", name: "literal")
+
+state = Logex.Runtime.put_inputs(literal, Logex.Runtime.instance(literal), %{"status" => 0x0010})
+IO.puts("status.[16#4] of 16#0010: #{inspect(elem(Logex.Runtime.scan(literal, state), 0))}")
+```
+
+```console
+$ mix run selected.exs
+16#0010, bit 4   %{"checked" => 0, "lamp" => 1}
+16#0010, bit 15  %{"checked" => 1, "lamp" => 0}
+16#0010, bit 16  %{"checked" => 0, "lamp" => 0}
+    %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}
+    %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xio, path: nil, file: "selected.ld", line: 7, read: 16}
+bit 4:  the lamp %{"panel.q.0" => 1}
+bit 16: the lamp %{"panel.q.0" => 0}, :tripped
+    {:fault, "fast", "lamp1", %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}}
+line 5: `status.[code]` takes its bit number from `code`, a word (declared on line 2), which is no integer: a bit number is held in a tag of an integer type, so convert it first, with `word_to_uint`
+line 6: `on.[n]` names a bit of `on`, a bool, which has no bits
+line 7: `ons` keeps its storage bit in `status.[n]`, whose number `n` holds: a one-shot's storage bit is a bool or a bit with a literal number, as in `status.0`, so that it is one bit whatever the program does
+line 8: `status.[16]` names bit 16 of `status`, a word (declared on line 1), which has bits 0 to 15
+status.[16#4] of 16#0010: %{"on" => 1}
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 to 5 | Bit 16 is out of the range. Each instruction gets the major fault `:bit_out_of_range`, and the scan continues. |
+| 6 to 8 | In the plant, the major fault trips the runner. The runner writes 0 to the lamp, and the reason of the trip names the fault. |
+| 9 to 12 | The diagnostics of the 4 wrong bits. |
+| 13 | `status.[16#4]` is bit 4 of `status`. |
 
 ### `and`, `or` and `xor` cases 1 to 13
 

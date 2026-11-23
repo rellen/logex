@@ -964,6 +964,137 @@ $ mix run faults-runner.exs
 | 5 | The script sets `set` to 0 first. Thus only the retained value of `zone` can cause the fault. The restart sends `{:restart, :warm}`. A warm restart keeps the retained `zone` at 4. The first round trips again. `runs` is 0, because a restart gives `runs` its initial value and the task `fans` did not run. |
 | 6 | The restart sends `{:restart, :cold}`. A cold restart gives `zone` its initial value, 0. The plant runs. |
 
+### Example: a subscript in a tag, in a scan and in a plant
+
+A box counter weighs each box into the slot that the panel gives. The program is the
+file `examples/scales.ld` of the repository.
+
+<!-- file: scales.ld -->
+```text
+var_input  eye    bool
+var_input  weight int
+var_input  slot   int
+var_output last   int
+var_output heavy  bool
+var weights int[8]
+var edge    bool
+var p       bool
+
+xic eye ons edge ote p
+xic p move weight weights[slot]
+move weights[slot] last
+gt weights[slot] 500 ote heavy
+```
+
+The script `scales.exs` runs scans with the slots 2, 5 and 8. Then it runs the program in
+a plant on the manual clock, and moves the slot to 8. Then it reads a grid by a tag
+subscript. Last, it compiles 4 wrong rungs and prints each diagnostic.
+
+```elixir
+{:ok, scales} = Logex.compile_file("scales.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(scales, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(scales, state)
+  IO.puts("#{label}  #{inspect(outputs)}  weights #{inspect(state.env["weights"])}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+Logex.Runtime.instance(scales)
+|> scan.("slot 2          ", %{"eye" => 0, "weight" => 0, "slot" => 2})
+|> scan.("box 620, slot 2 ", %{"eye" => 1, "weight" => 620})
+|> scan.("gone            ", %{"eye" => 0})
+|> scan.("box 410, slot 5 ", %{"eye" => 1, "weight" => 410, "slot" => 5})
+|> scan.("gone, slot 2    ", %{"eye" => 0, "slot" => 2})
+|> scan.("slot 8          ", %{"slot" => 8})
+
+{:ok, plant} =
+  Logex.Configuration.compile(
+    "plant",
+    """
+    task fast interval 10 priority 1
+    var_global box_eye    bool at panel.i.0
+    var_global box_slot   int  at panel.i.1
+    var_global box_weight int  at drive.i.0
+    var_global box_heavy  bool at panel.q.0
+    program scales scales with fast
+      scales.eye    box_eye
+      scales.weight box_weight
+      scales.slot   box_slot
+      scales.heavy  box_heavy
+    """,
+    %{"scales" => scales}
+  )
+
+{:ok, clock} = Logex.Runner.Clock.Manual.start_link()
+{:ok, panel} = Logex.IO.Sim.start_link(reports: true, clock: clock)
+{:ok, drive} = Logex.IO.Sim.start_link(clock: clock)
+
+{:ok, runner} =
+  Logex.Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Logex.IO.Sim, sim: panel}, "drive" => {Logex.IO.Sim, sim: drive}},
+    clock: {Logex.Runner.Clock.Manual, clock}
+  )
+
+Logex.IO.Sim.set(drive, "drive.i.0", 730)
+Logex.IO.Sim.set(panel, %{"panel.i.0" => 1, "panel.i.1" => 4})
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("box 730 in slot 4: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
+Logex.IO.Sim.set(panel, "panel.i.1", 8)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("slot 8: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
+IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
+Logex.Runner.stop(runner)
+
+{:ok, grid} =
+  Logex.compile("var_input c int\nvar grid int[4,8]\nvar_output x int\nmove grid[1,c] x", name: "grid")
+
+{_outputs, state} =
+  Logex.Runtime.scan(grid, Logex.Runtime.put_inputs(grid, Logex.Runtime.instance(grid), %{"c" => 9}))
+
+IO.puts("grid[1,c] at c 9: #{inspect(state.faults)}")
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var weights int[8]\nvar grid int[4,8]\nvar edge bool[8]\nvar slot int\nvar code word\n" <>
+      "var x int\nvar on bool\n" <>
+      "move weights[code] x\nmove grid[slot,8] x\nxic on ons edge[slot] ote on\n" <>
+      "move weights[sloot] x",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run scales.exs
+slot 2            %{"heavy" => 0, "last" => 0}  weights {0, 0, 0, 0, 0, 0, 0, 0}
+box 620, slot 2   %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 0, 0, 0}
+gone              %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 0, 0, 0}
+box 410, slot 5   %{"heavy" => 0, "last" => 410}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+gone, slot 2      %{"heavy" => 1, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+slot 8            %{"heavy" => 0, "last" => 620}  weights {0, 0, 620, 0, 0, 410, 0, 0}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}
+    %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :gt, path: nil, file: "scales.ld", line: 13, read: {8}}
+box 730 in slot 4: the lamp %{"panel.q.0" => 1}
+slot 8: the lamp %{"panel.q.0" => 0}, :tripped
+    {:fault, "fast", "scales", %Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: "scales.ld", line: 12, read: {8}}}
+grid[1,c] at c 9: [%Logex.Fault{severity: :major, kind: :index_out_of_range, instruction: :move, path: nil, file: nil, line: 4, read: {1, 9}}]
+line 8: `weights[code]` takes a subscript from `code`, a word (declared on line 5), which is no integer: a subscript is a literal or a tag of an integer type, so convert it first, with `word_to_uint`
+line 9: `grid[slot,8]`'s subscript `8` is outside the second dimension of `grid`, 0 to 7: `grid` is an array of 4 by 8 ints (declared on line 2)
+line 10: `ons` keeps its storage bit in `edge[slot]`, whose subscript `slot` holds: a one-shot's storage bit is a bool, a bit with a literal number or an element with literal subscripts, as in `edge[0]`, so that it is one bit whatever the program does
+line 11: `sloot` is not declared — did you mean `slot`?
+```
+
+| Line | What the line shows |
+|---|---|
+| 6 to 8 | The slot 8 is out of the range of `weights`. `move` and `gt` each get the major fault `:index_out_of_range`, with the subscript that they read. The scan continues. |
+| 9 to 11 | In the plant, the major fault trips the runner. The runner writes 0 to the lamp. |
+| 12 | The fault of `grid[1,c]` holds the 2 subscripts that it read, `{1, 9}`. |
+| 13 to 16 | The diagnostics of the 4 wrong rungs. |
+
 ## What is not a fault
 
 These bad values give no `%Logex.Fault{}`.

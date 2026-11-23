@@ -71,9 +71,9 @@ Get [`conveyor.ld`](../tutorials/first-plant.md) and put it in the directory.
 - A project file that the reader writes, such as `mix.exs`, is a fragment. The suite
   does not run it. Run it and say that you did.
 
-The test file `test/logex/readme_test.exs` has 3 tables for the examples of the README:
-`@derived`, `@continues` and `@fragments`. Each row names its page and holds words of
-the page. If you move such an example to a different page, change the page of the row
+The test file `test/logex/readme_test.exs` has 3 tables for the examples that a page
+describes in its prose: `@derived`, `@continues` and `@fragments`. A row of `@derived`
+or `@fragments` names its page, and each row holds words of its page. If you move such an example to a different page, change the page of the row
 and its words in the same commit.
 
 ## Pictures

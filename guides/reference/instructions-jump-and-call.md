@@ -515,6 +515,60 @@ scan  manual  jog_pb  run_pb  auto_lamp  jog_lamp  jog_t.acc  jog_long  motor
 | 7 | The manual mode again. The timer adds the 2000 ms since its last run in scan 3: `jog_t.acc` goes from 500 to 2500. |
 | 8 | `jog_t.acc` gets to the [preset](glossary.md#preset) 3000, and `jog_long` comes on. |
 
+### The script `jog.exs`
+
+The script `jog.exs` runs [the program `jog.ld`](#the-program-jogld) for 9 scans. It
+gives each scan its time in ms, and prints the member `acc` of the timer. Then it
+compiles a jump back, which logex refuses.
+
+```elixir
+{:ok, jog} = Logex.compile_file("jog.ld")
+
+scan = fn state, elapsed, label, inputs ->
+  state = Logex.Runtime.put_inputs(jog, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(jog, state, elapsed)
+  acc = state.env["jog_t"]["acc"]
+  IO.puts("t=#{String.pad_leading("#{state.now}", 4)}  #{label}  #{inspect(outputs)}  acc=#{acc}")
+  state
+end
+
+Logex.Runtime.instance(jog)
+|> scan.(0, "auto, run on       ", %{"run_pb" => 1})
+|> scan.(100, "manual             ", %{"manual" => 1})
+|> scan.(100, "jog pressed        ", %{"jog_pb" => 1})
+|> scan.(1000, "jog held           ", %{})
+|> scan.(100, "auto, jog held     ", %{"manual" => 0})
+|> scan.(100, "jog let go in auto ", %{"jog_pb" => 0})
+|> scan.(2000, "auto               ", %{})
+|> scan.(100, "manual, jog pressed", %{"manual" => 1, "jog_pb" => 1})
+|> scan.(100, "jog let go         ", %{"jog_pb" => 0})
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input a bool\nvar_output b bool\nlbl top xic a ote b\nxic a jmp top",
+    name: "loop"
+  )
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run jog.exs
+t=   0  auto, run on         %{"auto_lamp" => 1, "jog_lamp" => 0, "jog_long" => 0, "motor" => 1}  acc=0
+t= 100  manual               %{"auto_lamp" => 0, "jog_lamp" => 0, "jog_long" => 0, "motor" => 0}  acc=0
+t= 200  jog pressed          %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=0
+t=1200  jog held             %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=1300  auto, jog held       %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=1400  jog let go in auto   %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=3400  auto                 %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=3500  manual, jog pressed  %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 1, "motor" => 1}  acc=3000
+t=3600  jog let go           %{"auto_lamp" => 0, "jog_lamp" => 0, "jog_long" => 0, "motor" => 0}  acc=0
+line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, to a label on a later rung, since one back could loop for ever
+```
+
+The timer keeps its `acc` of 1000 while the jump skips its rung, from 1300 ms to
+3400 ms. At 3500 ms the rung runs again. The timer counts the time of the skip also, and stops at
+its preset 3000.
+
 ### The program `skip.ld`
 
 `skip.ld` has a counter, a timer, a pulse coil and a `div` on

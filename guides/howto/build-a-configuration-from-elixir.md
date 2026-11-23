@@ -437,6 +437,127 @@ as a string. It reads no file, so give it the program types as a map:
 `Logex.Runtime.start/1` checks the configuration again. If the configuration has an
 error, `start/1` raises an `ArgumentError`.
 
+## Another example: the plant of 2 motors
+
+The script `plant.exs` builds the plant of `plant.logex` as Elixir data, with 2 instances
+of `motor.ld`. It runs 7 cycles. The last cycle comes 35 ms late. Then the script builds
+the same plant with 3 errors.
+
+```elixir
+{:ok, motor} = Logex.compile_file("motor.ld")
+
+alias Logex.Configuration
+alias Logex.Configuration.{Connection, Global, Instance}
+
+point = fn name, type, at -> %Global{name: name, type: type, at: at} end
+
+wire = fn instance, pairs ->
+  for {member, to} <- pairs, do: %Connection{instance: instance, member: member, to: to}
+end
+
+fields = [
+  name: "plant",
+  programs: [motor],
+  tasks: [
+    %Configuration.Task{name: "fast", interval: 10, priority: 1},
+    %Configuration.Task{name: "slow", interval: 50, priority: 2}
+  ],
+  globals: [
+    point.("pb_start_1", :bool, "panel.i.0"),
+    point.("pb_stop_1", :bool, "panel.i.1"),
+    point.("tt_1", :bool, "panel.i.2"),
+    point.("pb_start_2", :bool, "panel.i.3"),
+    point.("pb_stop_2", :bool, "panel.i.4"),
+    point.("pb_reset", :bool, "panel.i.5"),
+    point.("k1", :bool, "panel.q.0"),
+    point.("k2", :bool, "panel.q.1"),
+    point.("sp_1", :dint, "drive.q.0"),
+    point.("sp_2", :dint, "drive.q.1")
+  ],
+  instances: [
+    %Instance{name: "m1", type: "motor", task: "fast"},
+    %Instance{name: "m2", type: "motor", task: "slow"}
+  ],
+  connections:
+    wire.("m1", [{"start", "pb_start_1"}, {"stop", "pb_stop_1"}, {"overtemp", "tt_1"}]) ++
+      wire.("m1", [{"reset", "pb_reset"}, {"motor", "k1"}, {"speed_sp", "sp_1"}]) ++
+      wire.("m2", [{"start", "pb_start_2"}, {"stop", "pb_stop_2"}, {"overtemp", 0}]) ++
+      wire.("m2", [{"reset", 0}, {"motor", "k2"}, {"speed_sp", "sp_2"}])
+]
+
+print = fn
+  nil, _now, _outputs, _events -> :ok
+  label, now, out, events ->
+    points = "k1=#{out["k1"]} k2=#{out["k2"]} sp_1=#{out["sp_1"]} sp_2=#{out["sp_2"]}"
+    IO.puts("t=#{String.pad_leading("#{now}", 3)}  #{label}  #{points}  #{inspect(events)}")
+end
+
+cycle = fn {rt, now}, elapsed, inputs, label ->
+  {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  print.(label, now + elapsed, outputs, events)
+  {rt, now + elapsed}
+end
+
+{rt, _now} =
+  {Logex.Runtime.start(Configuration.new!(fields)), 0}
+  |> cycle.(0, %{}, "idle         ")
+  |> cycle.(10, %{"pb_start_1" => 1, "pb_start_2" => 1}, "both started ")
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, "held to 50 ms")
+  |> cycle.(10, %{"pb_start_1" => 0, "pb_start_2" => 0}, "released     ")
+  |> cycle.(10, %{"tt_1" => 1}, "tt_1 trips   ")
+  |> cycle.(35, %{}, "35 ms late   ")
+
+IO.inspect(Logex.Runtime.overlaps(rt), label: "overlaps")
+IO.inspect(Logex.Runtime.next_due_in(rt), label: "next due in")
+IO.inspect(Logex.Runtime.get!(rt, "m1.fault"), label: "m1.fault")
+
+bad =
+  Keyword.merge(fields,
+    tasks: [
+      %Configuration.Task{name: "fast", interval: 10, priority: 1.5},
+      %Configuration.Task{name: "slow", interval: 50, priority: 2}
+    ],
+    instances: [
+      %Instance{name: "m1", type: "motor", task: "fast"},
+      %Instance{name: "m2", type: "motor", task: "slwo"}
+    ],
+    connections: fields[:connections] ++ wire.("m2", [{"motor", "pb_stop_1"}])
+  )
+
+try do
+  Configuration.new!(bad)
+rescue
+  error in ArgumentError -> IO.puts(error.message)
+end
+```
+
+```console
+$ mix run plant.exs
+t=  0  idle           k1=0 k2=0 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 0}, {:ran, "slow", "m2", 0}]
+t= 10  both started   k1=1 k2=0 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 10}]
+t= 50  held to 50 ms  k1=1 k2=1 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 50}, {:ran, "slow", "m2", 50}]
+t= 60  released       k1=1 k2=1 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 60}]
+t= 70  tt_1 trips     k1=1 k2=1 sp_1=0 sp_2=1200  [{:ran, "fast", "m1", 70}]
+t=105  35 ms late     k1=1 k2=1 sp_1=0 sp_2=1200  [{:overlap, "fast", 2}, {:ran, "fast", "m1", 105}, {:ran, "slow", "m2", 105}]
+overlaps: %{"fast" => 2, "slow" => 0}
+next due in: 5
+m1.fault: 1
+task `fast`: a priority is 0, the highest, to 65535, found 1.5
+no task `slwo` — did you mean `slow`?
+`pb_stop_1` is an input point: `m2.motor`, a var_output, cannot drive it
+```
+
+| Line | What the line shows |
+|---|---|
+| 5 | `tt_1` latches the fault of `m1`, and `sp_1` goes to 0. `m2` does not change. |
+| 6 | The task `fast` was due at 80 ms and at 90 ms. It runs 1 time, and the event `:overlap` gives the 2 periods that it did not run. |
+| 7 to 9 | `overlaps/1`, `next_due_in/1` and `get!/2`. |
+| 10 | A priority of 1.5 is a wrong argument, and `new!/1` raises an `ArgumentError` for it first. |
+| 11 and 12 | The 2 other errors, in the words of a configuration file. |
+
 ## If it does not work
 
 If the data has 1 or more errors, `new!/1` raises 1 `ArgumentError`. Its message has 1

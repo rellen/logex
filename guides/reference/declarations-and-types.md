@@ -576,6 +576,133 @@ For each other pair of types, logex returns a diagnostic. If logex has a convers
 the pair, the diagnostic names it. [Conversions](conversions.md) gives each conversion.
 Wrong texts 53 to 58 show these [diagnostics](#the-diagnostics) for `move`.
 
+## Example: arrays in a program
+
+A checkweigher keeps the last 4 weights in an array, the newest first. At each pick, it
+moves each weight 1 place along. It copies the fourth weight into a grid. A lamp is on
+while the fourth weight is more than 500. The program is the file `examples/weigh.ld` of
+the repository.
+
+<!-- file: weigh.ld -->
+```text
+var_input  load    int
+var_input  pick    bool
+var_output heavy   bool
+var_output fourth  int
+var weights int[4]
+var grid    int[2,8]
+var edges   bool[1]
+var shift   bool
+
+// the last four weights, newest first, shifted along on each pick
+xic pick ons edges[0] ote shift
+xic shift move weights[2] weights[3]
+xic shift move weights[1] weights[2]
+xic shift move weights[0] weights[1]
+xic shift move load weights[0]
+xic shift move weights[3] grid[1,7]
+gt weights[3] 500 ote heavy
+move grid[1,7] fourth
+```
+
+The script `weigh.exs` picks 5 loads. Then it compiles 6 wrong lines and prints each
+diagnostic. Then it gives an array input in 3 wrong forms and 1 correct form. Last, it
+reads a bit of an element, by a literal number and by a tag.
+
+```elixir
+{:ok, weigh} = Logex.compile_file("weigh.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(weigh, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(weigh, state)
+  IO.puts("#{label}  #{inspect(outputs)}  weights #{inspect(Tuple.to_list(state.env["weights"]))}")
+  state
+end
+
+state =
+  Enum.reduce([620, 410, 730, 550, 90], Logex.Runtime.instance(weigh), fn load, state ->
+    state
+    |> scan.("pick #{load}", %{"load" => load, "pick" => 1})
+    |> scan.("release ", %{"pick" => 0})
+  end)
+
+IO.inspect(state.env["grid"], label: "grid")
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var weights int[8]\nvar grid int[4,8]\nvar slot bool\nvar x int\n" <>
+      "var cells int[2,2,2,2]\nvar short int[3] 1 2\n" <>
+      "move weights[8] x\nmove grid[1] x\nmove weights[slot] x\nmove weights x",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:ok, buffer} = Logex.compile("var_input w int[3]\nvar_output s int\nmove w[1] s", name: "buffer")
+
+try do
+  Logex.Runtime.put_inputs(buffer, Logex.Runtime.instance(buffer), %{"w" => [1, 2]})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+state = Logex.Runtime.put_inputs(buffer, Logex.Runtime.instance(buffer), %{"w" => [1, 2, 3]})
+state = Logex.Runtime.put_inputs(buffer, state, %{"w[1]" => 20})
+IO.inspect(state.env["w"], label: "w[1] set alone")
+
+for inputs <- [%{"w[3]" => 1}, %{"w" => [1, 2, 3], "w[1]" => 5}] do
+  try do
+    Logex.Runtime.put_inputs(buffer, state, inputs)
+  rescue
+    error in ArgumentError -> IO.puts(Exception.message(error))
+  end
+end
+
+{:ok, lamp} =
+  Logex.compile(
+    "var_input faults word[4]\nvar_input n int\nvar_output lamp bool\nvar_output any bool\n" <>
+      "xic faults[2].3 ote lamp\nxic faults[2].[n] ote any",
+    name: "lamp"
+  )
+
+{outputs, _} =
+  Logex.Runtime.call(
+    lamp,
+    Logex.Runtime.instance(lamp),
+    %{"faults" => [0, 0, 0b1000, 0], "n" => 3},
+    %Logex.Scan{now: 0, first: true}
+  )
+
+IO.inspect(outputs, label: "faults[2].3 and faults[2].[n]")
+
+```
+
+```console
+$ mix run weigh.exs
+pick 620  %{"fourth" => 0, "heavy" => 0}  weights [0, 0, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [0, 0, 0, 0]
+pick 410  %{"fourth" => 0, "heavy" => 0}  weights [410, 0, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [410, 0, 0, 0]
+pick 730  %{"fourth" => 0, "heavy" => 0}  weights [730, 410, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [730, 410, 0, 0]
+pick 550  %{"fourth" => 0, "heavy" => 0}  weights [550, 730, 410, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [550, 730, 410, 0]
+pick 90  %{"fourth" => 410, "heavy" => 0}  weights [90, 550, 730, 410]
+release   %{"fourth" => 410, "heavy" => 0}  weights [90, 550, 730, 410]
+grid: {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 410}}
+line 5: `cells` is declared with 4 dimensions, `[2,2,2,2]`: an array has one to three, as in `int[8]`, `int[4,8]` or `int[2,3,4]`
+line 6: `short` is an array of 3 ints: its initial list holds 2 values, and an array's holds one for every element, 3, in the elements' order
+line 7: `weights[8]`'s subscript `8` is outside the elements of `weights`, 0 to 7: `weights` is an array of 8 ints (declared on line 1)
+line 8: `grid[1]` names an element of `grid`, an array of 4 by 8 ints (declared on line 2), by 1 subscript, where it takes 2, one a dimension, as in `grid[0,0]`
+line 9: `weights[slot]` takes a subscript from `slot`, a bool (declared on line 3), which is no integer: a subscript is a literal or a tag of an integer type
+line 10: `move` reads one tag, but `weights` is an array of 8 ints (declared on line 1): an instruction takes one of its elements, as in `weights[0]`
+input `w` is an array of 3 ints: its value must be a list of 3 elements, found [1, 2]
+w[1] set alone: {1, 20, 3}
+input `w[3]`'s subscript 3 is outside the elements of `w`, 0 to 2: `w` is an array of 3 ints (declared on line 1)
+inputs `w` and `w[1]` each set `w`, an array of 3 ints (declared on line 1): a call sets an array whole or by its elements, not both
+faults[2].3 and faults[2].[n]: %{"any" => 1, "lamp" => 1}
+```
+
 ## Wrong declarations and their diagnostics
 
 The script `declarations-and-types-wrong.exs` compiles 58 wrong texts. It prints each

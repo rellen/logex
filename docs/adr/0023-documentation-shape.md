@@ -51,8 +51,8 @@ Accepted. No later record replaces this record.
 Plan item DOC-1 builds the decision in 3 steps. Step 1 is on `main` at `9d3d696`. Step 2
 writes the pages and the records, this record among them. Step 3 reviews the whole.
 
-Until the close of step 2, `README.md` keeps the kind `:legacy` and its long text. The
-close of step 2 writes it again as a short first page, with the kind `:readme`.
+The close of step 2 writes `README.md` again as a short first page, with the kind
+`:readme`. Each example of the long `README.md` is on a page of its subject.
 
 ## Date
 
@@ -376,8 +376,8 @@ The costs:
 - A page that names a hidden module or function in backticks fails the build of the
   site. On 2026-11-21, 5 runs of the Docs workflow on the branches of step 2 failed for
   this reason. 1 of them named a hidden function of the Erlang/OTP module erts_debug.
-- No script follows a link to a different site. Of the older documents, the stage reads
-  the links of `README.md` only.
+- No script follows a link to a different site. The stage reads no link of an older
+  document.
 - About 150 pages are more files to keep true than 1 `README.md`. A change of the
   language makes old the pages that show it, and the suite finds only their examples.
 

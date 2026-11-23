@@ -318,6 +318,56 @@ the I/O list. The last 8 lines are a table of the cycles. This table explains it
 | Keep a value across a [warm restart](../reference/glossary.md#warm-restart) | `var_global retain total dint 0` | [Keep values across a restart](keep-values-across-a-restart.md) |
 | Put an [array](../reference/glossary.md#array) at consecutive points | `var_global zone_t real[8] at card.i.0` | [Map I/O points](map-io-points.md) |
 
+## Run the plant, and load a file with errors
+
+The script `load.exs` loads `plant.logex` and runs 7 cycles. Then it loads a file with
+errors, and prints each diagnostic. Get [`broken.logex`](read-diagnostics.md), and put
+it beside `plant.logex`.
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("plant.logex")
+
+print = fn
+  nil, _now, _outputs, _events -> :ok
+  label, now, out, events -> IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  k1=#{out["k1"]} k2=#{out["k2"]}  #{inspect(events)}")
+end
+
+cycle = fn {rt, now}, elapsed, inputs, label ->
+  {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  print.(label, now + elapsed, outputs, events)
+  {rt, now + elapsed}
+end
+
+{Logex.Runtime.start(plant), 0}
+|> cycle.(0, %{}, "idle         ")
+|> cycle.(10, %{"pb_start_1" => 1, "pb_start_2" => 1}, "both started ")
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, "held to 50 ms")
+|> cycle.(10, %{"pb_start_1" => 0, "pb_start_2" => 0}, "released     ")
+
+{:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```console
+$ mix run load.exs
+t= 0  idle           k1=0 k2=0  [{:ran, "fast", "m1", 0}, {:ran, "slow", "m2", 0}]
+t=10  both started   k1=1 k2=0  [{:ran, "fast", "m1", 10}]
+t=50  held to 50 ms  k1=1 k2=1  [{:ran, "fast", "m1", 50}, {:ran, "slow", "m2", 50}]
+t=60  released       k1=1 k2=1  [{:ran, "fast", "m1", 60}]
+broken.logex: line 6: no task `fsat` — did you mean `fast`?
+broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.overtemp 0`
+broken.logex: line 9: `pb_stop_1` is an input point (line 3): `m1.motor`, a var_output, cannot drive it
+broken.logex: line 10: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
+broken.logex: line 11: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`
+```
+
+`m2` gets its start button only when its task runs, at 50 ms. The script prints no line
+for the cycles at 20, 30 and 40 ms. logex gives each error of `broken.logex` as a
+diagnostic, with its file and its line.
+
 ## If it does not work
 
 The column **What you see** shows part of a diagnostic or a warning. The full message

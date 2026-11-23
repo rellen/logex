@@ -699,6 +699,87 @@ scan        flow  minutes        total  total_ok  overflow  full  valve   per_mi
 | 5 | -2147483096 + 2147483000 = -96, which fits. `total_ok` is 1 again, but `overflow` stays 1. |
 | 6 | A flow of -5 makes the total less. `div` writes -101 / 2 = -50, because the quotient goes toward 0. |
 
+### The script `fill.exs`: faults, a cycle and 2 refusals
+
+The script `fill.exs` runs [the program `fill.ld`](#the-program-fillld) for 6 scans,
+100 ms apart. After each scan, it prints the faults of the scan. Then it runs the
+program in a configuration for 1 cycle and prints the events. Last, it compiles 2
+programs that logex refuses, and prints each diagnostic.
+
+```elixir
+{:ok, fill} = Logex.compile_file("fill.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(fill, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(fill, state, 100)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+Logex.Runtime.instance(fill)
+|> scan.("400 in, no minutes yet", %{"flow" => 400, "setpoint" => 1000})
+|> scan.("a minute in           ", %{"minutes" => 1})
+|> scan.("past the setpoint     ", %{"minutes" => 2})
+|> scan.("a meter gone wild     ", %{"flow" => 2_147_483_000})
+|> scan.("still wild            ", %{})
+|> scan.("a backflow of 5       ", %{"flow" => -5})
+
+config =
+  Logex.Configuration.new!(
+    name: "plant",
+    programs: [fill],
+    tasks: [%Logex.Configuration.Task{name: "fill", interval: 100, priority: 1}],
+    globals: [
+      %Logex.Configuration.Global{name: "flow", type: :dint, at: "meter.i.0"},
+      %Logex.Configuration.Global{name: "valve", type: :bool, at: "panel.q.0"}
+    ],
+    instances: [%Logex.Configuration.Instance{name: "f1", type: "fill", task: "fill"}],
+    connections: [
+      %Logex.Configuration.Connection{instance: "f1", member: "flow", to: "flow"},
+      %Logex.Configuration.Connection{instance: "f1", member: "setpoint", to: 1000},
+      %Logex.Configuration.Connection{instance: "f1", member: "minutes", to: 0},
+      %Logex.Configuration.Connection{instance: "f1", member: "valve", to: "valve"}
+    ]
+  )
+
+{_rt, outputs, events} = Logex.Runtime.cycle(Logex.Runtime.start(config), 0, %{"flow" => 400})
+IO.puts("a cycle: #{inspect(outputs)}")
+for event <- events, do: IO.puts("    #{inspect(event)}")
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input total dint\nvar_output rate dint\ndiv total 0 rate", name: "rate")
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:error, [diagnostic]} = Logex.compile("var_output x dint\nmove 5-3 x", name: "minus")
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```console
+$ mix run fill.exs
+400 in, no minutes yet  %{"overflow" => 0, "per_minute" => 0, "total" => 400, "total_ok" => 1, "valve" => 1}
+    %Logex.Fault{severity: :minor, kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15, read: nil}
+a minute in             %{"overflow" => 0, "per_minute" => 800, "total" => 800, "total_ok" => 1, "valve" => 1}
+past the setpoint       %{"overflow" => 0, "per_minute" => 600, "total" => 1200, "total_ok" => 1, "valve" => 0}
+a meter gone wild       %{"overflow" => 1, "per_minute" => -1073741548, "total" => -2147483096, "total_ok" => 0, "valve" => 1}
+still wild              %{"overflow" => 1, "per_minute" => -48, "total" => -96, "total_ok" => 1, "valve" => 1}
+a backflow of 5         %{"overflow" => 1, "per_minute" => -50, "total" => -101, "total_ok" => 1, "valve" => 1}
+a cycle: %{"valve" => 1}
+    {:ran, "fill", "f1", 0}
+    {:fault, "fill", "f1", %Logex.Fault{severity: :minor, kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15, read: nil}}
+line 3: `div` divides by the literal `0`: a zero divisor gives 0 and passes no power on every scan, so a literal one is refused
+line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a number, and a sign begins a number
+```
+
+| Line | What the line shows |
+|---|---|
+| 1 and 2 | `minutes` is 0, and `div` gets the minor fault `:divide_by_zero`. The scan continues. |
+| 5 | The total goes past the top of a `dint` and wraps. `total_ok` is 0 for this scan, and `otl` latches `overflow`. |
+| 6 and 7 | The total counts on from the negative value. |
+| 8 to 10 | A cycle gives the fault as an event after the event `:ran` of its instance. |
+| 11 and 12 | logex refuses a literal divisor of 0, and the text `5-3`. |
+
 ### The program `belt_total.ld`
 
 The input `boxes` is the change of the number of boxes on a belt in 1 scan. The total

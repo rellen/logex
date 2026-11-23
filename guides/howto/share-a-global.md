@@ -266,6 +266,86 @@ a value. `estop` is then a tag of the instance, and it starts at 0.
 `Logex.Runtime.put_inputs/3` cannot set it: it raises an `ArgumentError`. To give
 `estop` a value, run the program in a configuration, as in [Steps](#steps).
 
+## Another example: an e-stop held and an e-stop pressed
+
+The script `shared.exs` runs the line 2 times. In the first run, the e-stop is held from
+50 ms. In the second run, the e-stop is pressed for 10 ms at 20 ms. Then the script loads
+`wrong.logex`. This file has a wrong name of a global, and a connection to a
+`var_external`.
+
+<!-- file: wrong.logex -->
+```text
+var_global estp       bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global k1         bool at panel.q.0
+program c1 conveyor
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset 0
+  c1.motor k1
+  c1.estop estp
+```
+
+```elixir
+{:ok, line} = Logex.Configuration.compile_file("line.logex")
+
+run = fn label, steps ->
+  IO.puts(label)
+
+  Enum.reduce(steps, Logex.Runtime.start(line), fn {now, inputs}, rt ->
+    {rt, out, events} = Logex.Runtime.cycle(rt, min(now, 10), inputs)
+    ran = for {:ran, _task, instance, _now} <- events, do: instance
+    IO.puts("  t=#{String.pad_leading("#{now}", 2)}  k1=#{out["k1"]} k2=#{out["k2"]}  ran #{Enum.join(ran, ", ")}")
+    rt
+  end)
+end
+
+start = %{"pb_start_1" => 1, "pb_start_2" => 1}
+release = %{"pb_start_1" => 0, "pb_start_2" => 0}
+
+rt =
+  run.("e-stop held from 50 ms:", [
+    {0, start}, {10, release}, {20, %{}}, {30, %{}}, {40, %{}}, {50, %{"estop" => 1}}, {60, %{}}
+  ])
+
+IO.inspect(for(path <- ~w(estop c1.estop c2.estop c2.fault), do: Logex.Runtime.get!(rt, path)),
+  label: "estop c1.estop c2.estop c2.fault"
+)
+
+run.("e-stop pressed for 10 ms at 20 ms:", [
+  {0, start}, {10, release}, {20, %{"estop" => 1}}, {30, %{"estop" => 0}}, {40, %{}}, {50, %{}}
+])
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```console
+$ mix run shared.exs
+e-stop held from 50 ms:
+  t= 0  k1=1 k2=1  ran c1, c2
+  t=10  k1=1 k2=1  ran c1
+  t=20  k1=1 k2=1  ran c1
+  t=30  k1=1 k2=1  ran c1
+  t=40  k1=1 k2=1  ran c1
+  t=50  k1=0 k2=0  ran c1, c2
+  t=60  k1=0 k2=0  ran c1
+estop c1.estop c2.estop c2.fault: [1, 1, 1, 1]
+e-stop pressed for 10 ms at 20 ms:
+  t= 0  k1=1 k2=1  ran c1, c2
+  t=10  k1=1 k2=1  ran c1
+  t=20  k1=0 k2=1  ran c1
+  t=30  k1=0 k2=1  ran c1
+  t=40  k1=0 k2=1  ran c1
+  t=50  k1=0 k2=1  ran c1, c2
+wrong.logex: line 4: `conveyor` declares `var_external estop bool` on line 5 of `conveyor.ld`, but there is no global `estop` — did you mean `estp`?
+wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches the global `estop` itself: only a var_input or var_output connects
+```
+
+The e-stop held from 50 ms stops the 2 conveyors in the same cycle. `c2` runs every
+50 ms, and thus it does not see the press of 10 ms. Hold an e-stop for at least the
+longest interval of a task that reads it.
+
 ## If it does not work
 
 Each row gives a part of the message. The full message also gives the file and the

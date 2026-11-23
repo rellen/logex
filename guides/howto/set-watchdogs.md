@@ -252,6 +252,71 @@ An online edit can change a watchdog while the plant runs. Its report gives
 `{:watchdog, "fast", {50, 30}}` for a watchdog that goes from 50 ms to 30 ms.
 [Edit a running plant](edit-a-running-plant.md) gives the steps.
 
+## Another example: 6 cycles and 4 wrong task lines
+
+The script `packing.exs` prints the watchdog of each task. Then it starts the conveyor
+and passes 3 boxes, 5 ms apart. Last, it loads `wrong_packing.logex`, which has an error
+on each of its task lines.
+
+<!-- file: wrong_packing.logex -->
+```text
+task fast interval 10 priority 1 watchdog 0
+task main continuous priority 2
+task more continuous
+task fast2 interval 10 watchdog 50 priority 1
+var_global eye bool at panel.i.8
+program b1 boxes
+  b1.eye eye
+  b1.reset_pb 0
+```
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+IO.puts(Enum.map_join(plant.tasks, ", ", &"#{&1.name} #{Logex.Configuration.watchdog(&1)} ms"))
+
+steps = [
+  {"started      ", 0, %{"pb_start_1" => 1}},
+  {"a box        ", 5, %{"pb_start_1" => 0, "eye" => 1}},
+  {"gone         ", 5, %{"eye" => 0}},
+  {"a box        ", 5, %{"eye" => 1}},
+  {"gone         ", 5, %{"eye" => 0}},
+  {"the third box", 5, %{"eye" => 1}}
+]
+
+Enum.reduce(steps, {Logex.Runtime.start(plant), 0}, fn {label, elapsed, inputs}, {rt, now} ->
+  {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
+  IO.puts("t=#{String.pad_leading("#{now + elapsed}", 2)}  #{label}  k1=#{out["k1"]} case_full=#{out["case_full"]}  ran #{Enum.join(ran, ", ")}")
+  {rt, now + elapsed}
+end)
+
+IO.inspect(Logex.Runtime.next_due_in(Logex.Runtime.start(plant)), label: "next_due_in after start")
+IO.inspect(Logex.Runtime.overlaps(Logex.Runtime.start(plant)), label: "overlaps")
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong_packing.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```console
+$ mix run packing.exs
+fast 50 ms, main 200 ms
+t= 0  started        k1=1 case_full=0  ran fast:c1, main:b1
+t= 5  a box          k1=1 case_full=0  ran main:b1
+t=10  gone           k1=1 case_full=0  ran fast:c1, main:b1
+t=15  a box          k1=1 case_full=0  ran main:b1
+t=20  gone           k1=1 case_full=0  ran fast:c1, main:b1
+t=25  the third box  k1=1 case_full=1  ran main:b1
+next_due_in after start: 0
+overlaps: %{"fast" => 0, "main" => 0}
+wrong_packing.logex: line 1: the watchdog of `fast` is 0: a watchdog is at least 1 ms, and a task that sets none has 500
+wrong_packing.logex: line 2: `main` is the continuous task, which takes no `priority`: it runs every program instance with no timed task, after the due tasks, as in `task main continuous watchdog 200`
+wrong_packing.logex: line 3: `more` is a second continuous task: a configuration has one at most, and `main` (line 2) is its continuous task
+wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in `task fast interval 10 priority 1 watchdog 50`
+```
+
+The continuous task `main` runs `b1` in each cycle, after the due tasks. It is never
+due. Thus `next_due_in/1` counts only `fast`, and `overlaps/1` gives `main` at 0.
+
 ## If it does not work
 
 Each row gives a part of the message. The full message of a
