@@ -36,7 +36,9 @@ Applied in order:
    block — **use the IEC name, lowercased.** `ton tof tp`, `ctu ctd`, `eq ne lt gt le ge`,
    `move`, `add sub mul div mod`, `abs sqrt expt`, `shl shr rol ror`.
 2. **If IEC supplies only a graphical element, use the clearest vendor mnemonic and say
-   which one.** This keeps `xic xio ote otl otu`, and gives `ons osr osf rto res`.
+   which one.** This keeps `xic xio ote otl otu`, and gives `ons osr osf rto`. The
+   conventional `res` is not added: a timer's or a counter's `r` input does its work
+   (decision 84).
 3. **Never invent a readable word for a thing that already has a standard name.**
    `on_delay`, `rising` and `equal` are new names for old things: every reader who knows
    ladder has to translate, and every manual they own uses the other word. Readability is
