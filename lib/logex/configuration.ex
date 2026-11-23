@@ -321,7 +321,12 @@ defmodule Logex.Configuration do
       array's dimensions and sizes, `` `g` is declared with a dimension of 0, `[0]`: … ``,
       its list of another length and each element its type does not hold, named by its
       element, a line each; and a location not written in its one spelling, `` `panel.I.0`
-      is not a location as written: … ``, or on a device a keyword names.
+      is not a location as written: … ``, or on a device a keyword names. A location not
+      in its one spelling is the point it names for the global's value, list and
+      `retain`, so `new!("eye_1", :bool, initial: 1, at: "panel.I.0")` is told the
+      point's line and the spelling's, both; one that is none, `panel.x.0`, names no
+      point, and a value beside it is judged against the type (provisional: `PLAN.md`'s
+      RV-31, question 5).
 
     A name that is no text is shown as Elixir shows it, `:g cannot name a global: …`. A
     number a line quotes is quoted whole up to 10,000 characters, and past that by its
@@ -744,10 +749,10 @@ defmodule Logex.Configuration do
     # 272): a located global takes no `retain`, so no output comes back on from a kept
     # value, and an input point is read again at every start.
     def lines(%Global{retain: :retain, at: at} = global) when at != nil,
-      do: retained_point(location(at), global) ++ lines(%{global | retain: nil})
+      do: retained_point(point(at), global) ++ lines(%{global | retain: nil})
 
     def lines(%Global{type: type} = global) when is_elementary(type),
-      do: initial(global, location(global.at))
+      do: initial(global, point(global.at))
 
     # M5-11 (decision 151): an array global meets every rule a declared array meets, its
     # dimensions, sizes and initial list. Since M5-13 (decision 156) it may be located,
@@ -756,7 +761,7 @@ defmodule Logex.Configuration do
     def lines(%Global{at: nil, type: type} = global) when is_array(type), do: array(global)
 
     def lines(%Global{type: type} = global) when is_array(type),
-      do: located_array(location(global.at), global)
+      do: located_array(point(global.at), global)
 
     def lines(%Global{}), do: []
 
@@ -840,8 +845,10 @@ defmodule Logex.Configuration do
       ]
 
     # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
-    # real one is no integer type's, and an integer one a real's only exactly.
-    defp initial(global, _location), do: unheld(global)
+    # real one is no integer type's, and an integer one a real's only exactly. So is one
+    # beside a location that is none, `panel.x.0`, which names no point (provisional:
+    # `PLAN.md`'s RV-31, question 5).
+    defp initial(global, :error), do: unheld(global)
 
     # A number a global of an elementary type does not hold: since M5-10 by the literal
     # rules, as a declaration's initial value (decision 147), a real one no integer
@@ -873,6 +880,22 @@ defmodule Logex.Configuration do
     # `Logex.Configuration.location/1`'s rule: a location's parts, `{:ok, {device, "i" |
     # "q", address}}`, or `:error`.
     def location(at), do: located_word(word?(at), at)
+
+    # The point a global's own rules read, `:error` for none. RV-31's review (F1),
+    # provisional (`PLAN.md`'s RV-31, question 5): a location not in its one spelling,
+    # `panel.I.0` or `panel.i.00`, is the point it names, `panel.i.0`, for the global's
+    # value, list and `retain`, so that one call is told the point's line beside the
+    # spelling's, the one refusal decision 576 asks for, where read as no point it was told
+    # the point's line only once the spelling was mended. Where a point is routed, a
+    # runner's, an edit's or a connection's, `location/1` reads it, and a location not as
+    # written is none, `check/1` refusing it at its line.
+    defp point(at), do: pointed(word?(at), at)
+
+    defp pointed(true, at), do: named_point(spelled(at))
+    defp pointed(false, _at), do: :error
+
+    defp named_point({:respell, address}), do: {:ok, address}
+    defp named_point(named), do: named
 
     defp located_word(true, at), do: one_spelling(spelled(at))
     defp located_word(false, _at), do: :error
@@ -3343,15 +3366,24 @@ defmodule Logex.Configuration do
         connection,
         "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}, and " <>
           "the constant #{Logex.Lexer.quoted_number(connection.to)} is one value: connect it to a global " <>
-          "array of its sizes, or each element to a constant, as in " <>
-          "`#{connection.instance}.#{Logex.Array.name(tag.name, Enum.map(elem(type, 2), fn _ -> 0 end))} " <>
-          "#{shown_number(connection.to)}`"
+          "array of its sizes, or each element to a constant, " <>
+          each_constant(
+            Logex.Lexer.long_number?(connection.to),
+            "#{connection.instance}.#{Logex.Array.name(tag.name, Enum.map(elem(type, 2), fn _ -> 0 end))}",
+            connection.to
+          )
       )
 
   defp source(:constant, %Connection{to: to} = connection, %Tag{type: type} = tag, acc, _world),
     do: constant(Declarations.holds?(type, to), connection, tag, acc)
 
   defp source(:junk, _connection, _tag, acc, _world), do: acc
+
+  # The line an element's connection is written in, its constant in it; RV-31's review
+  # (F5): with a long constant, which a message quotes cut, the element alone, so that no
+  # line to copy holds a cut number.
+  defp each_constant(false, element, to), do: "as in `#{element} #{shown_number(to)}`"
+  defp each_constant(true, element, _to), do: "the first `#{element}`"
 
   defp constant(true, _connection, _tag, acc), do: acc
 

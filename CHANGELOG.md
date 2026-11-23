@@ -147,23 +147,34 @@ changed after its last item was written, under "The host's API".
   initial: 1, at: "panel.i.0")` told `` `eye_1` is an input point: its value comes from
   the input image, so it takes no initial value `` where it was kept, and with
   `initial: 2` told that line where it was told the type's, a bool holding 0 or 1, and
-  then refused again by `check/1` once the number was mended. Several mistakes are one
+  then refused again by `check/1` once the number was mended. A location not in its one
+  spelling, `at: "panel.I.0"` or `"panel.i.00"`, is the point it names for these lines,
+  so the photo-eye's call is told the point's line beside the spelling's, by `new!/3`
+  and `check/1` alike, a configuration file's line among them, where it was told the
+  spelling's alone, or the type's beside it, and the point's once the spelling was
+  mended; a location that is none, `panel.x.0`, names no point, its value judged against
+  the type as before. Several mistakes are one
   `ArgumentError`, a line each, in `check/1`'s order; every struct `new!/2,3` gives is
   a `Logex.Configuration.Global.t()`. Two globals of one name, or two on one point,
   stay `check/1`'s. Look for: a `Global.new!/2,3` call whose name, type or location a
   later step corrects, or that sets an initial value or `retain: true` on a located
   global, which now raises where the global is built.
 - **A long number is quoted cut in a host's refusal** (decision 583): `Logex.Tag.new!/5`,
-  `Logex.Configuration.Global.new!/3` and `Logex.Configuration.check/1`, and so
-  `Logex.Configuration.new!/1`, quote a number past 10,000 characters by its first 24 and
-  how many it has, as a compile quotes a long literal, where they quoted it whole: a
+  `Logex.Configuration.Global.new!/3` and `Logex.Configuration.check/1`, and so the
+  lines `Logex.Configuration.new!/1` raises from `check/1`, quote a number past 10,000
+  characters by its first 24 and how many it has, as a compile quotes a long literal,
+  where they quoted it whole: a
   totaliser's `Global.new!("total_boxes", :dint, initial: 10 ** 100_000)` raises
   `` `total_boxes` is a dint: `100000000000000000000000…` (100001 characters) is outside
   -2147483648 to 2147483647 ``, some 100 bytes where it was a hundred thousand digits,
   and in milliseconds where the whole text took time growing with the square of its
   digits, a second for 320,000. A number of 10,000 characters or fewer is quoted whole,
-  as before; one inside a value that is no number, a list's, is cut the same way. Look
-  for: code that reads a number back out of such a message.
+  as before; one inside a value that is no number, a list's, is cut the same way. A
+  connection of an array var_input to a long constant is told the element to connect,
+  `` the first `m.limits[0]` ``, where its example line held the constant. `new!/1`'s own
+  lines, of a field list that is no keyword list and of an element brought with a line,
+  quote a number whole, as the host contract's other refusals do. Look for: code that
+  reads a number back out of such a message.
 
 ### What it carries, by the work that built it
 

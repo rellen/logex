@@ -1865,6 +1865,100 @@ defmodule Logex.ConfigurationTest do
                }
     end
 
+    # RV-31's review (F1), provisional (PLAN's RV-31, question 5): a location not in its
+    # one spelling, `panel.I.0` or `panel.i.00`, is the point it names for the global's
+    # value, list and `retain`, so that the photo-eye's call is told the point's line and
+    # the spelling's at once, decision 576's one refusal, where it was told the spelling's
+    # alone, or the type's beside it, and the point's only once the spelling was mended.
+    test "a location not as written is the point it names, for its value and its retain",
+         %{seal: seal} do
+      eye =
+        "`eye_1` is an input point: its value comes from the input image, so it takes no " <>
+          "initial value"
+
+      spelled =
+        "is not a location as written: a location's `i` or `q` is lowercase and its " <>
+          "address has no leading zero, so it is written"
+
+      for initial <- [1, 2, 0], at <- ["belt.I.0", "belt.i.00", "belt.I.000"] do
+        refused_as(
+          seal,
+          {"eye_1", :bool, [initial: initial, at: at]},
+          :diagnostics,
+          eye <> "\n`#{at}` " <> spelled <> " `belt.i.0`"
+        )
+      end
+
+      # An output point, a real's value its type does not hold, and `retain` beside a value.
+      refused_as(
+        seal,
+        {"lamp", :bool, [initial: 7, at: "belt.Q.3"]},
+        :diagnostics,
+        "`lamp` is an output point: it takes no initial value, and is 0 until its driver " <>
+          "writes it\n`belt.Q.3` " <> spelled <> " `belt.q.3`"
+      )
+
+      refused_as(
+        seal,
+        {"g", :bool, [initial: 2, at: "belt.I.0", retain: true]},
+        :diagnostics,
+        Enum.join(
+          [
+            "`g` is an input point, and a located global takes no `retain`: an input point " <>
+              "is read again at every start, and an output point starts at 0 until logic " <>
+              "writes it",
+            "`g` is an input point: its value comes from the input image, so it takes no " <>
+              "initial value",
+            "`belt.I.0` " <> spelled <> " `belt.i.0`"
+          ],
+          "\n"
+        )
+      )
+
+      # With no value, the spelling's line alone, as before.
+      refused_as(
+        seal,
+        {"eye_1", :bool, [at: "belt.I.0"]},
+        :diagnostics,
+        "`belt.I.0` #{spelled} `belt.i.0`"
+      )
+
+      # A location that is none names no point: a value is judged against the type, kept
+      # where the type holds it, the location's line beside it (as built, question 5).
+      refused_as(
+        seal,
+        {"eye_1", :bool, [initial: 2, at: "belt.x.0"]},
+        :diagnostics,
+        "`eye_1` is a bool: its initial value must be 0 or 1, found `2`\n`belt.x.0` is not " <>
+          "a location: a location is a device, `i` or `q`, and an address, as in `panel.i.0`"
+      )
+
+      refused_as(
+        seal,
+        {"eye_1", :bool, [initial: 1, at: "belt.x.0"]},
+        :diagnostics,
+        "`belt.x.0` is not a location: a location is a device, `i` or `q`, and an address, " <>
+          "as in `panel.i.0`"
+      )
+
+      # From a configuration file's line, the same lines at its line.
+      source = """
+      var_global eye_1 bool 1 at panel.I.0
+      var_global eye_2 bool 2 at panel.i.01
+      """
+
+      assert {:error, diagnostics} = Configuration.compile("plant", source, %{})
+
+      assert Enum.map(diagnostics, &Logex.Diagnostic.format/1) == [
+               "line 1: " <> eye,
+               "line 1: `panel.I.0` #{spelled} `panel.i.0`",
+               "line 2: `eye_2` is an input point: its value comes from the input " <>
+                 "image, so it takes no initial value",
+               "line 2: `panel.i.01` #{spelled} `panel.i.1`",
+               "this configuration declares no `program`: it would run nothing"
+             ]
+    end
+
     test "several mistakes in one call are told as check/1 tells them, in its order",
          %{seal: seal} do
       # The host's lines, raised alone: name, type, value, location, as check/1 raises them.
@@ -1884,10 +1978,31 @@ defmodule Logex.ConfigurationTest do
       )
 
       # What a line can say, each a diagnostic in check/1: the name, then the global's
-      # own rules, `retain` on a point before its list, then the location.
+      # own rules, `retain` on a point before its list, then the location. A location
+      # not in its one spelling is the point it names for the global's own rules (RV-31's
+      # review, F1); one that is none makes the global located, no point named.
       refused_as(
         seal,
         {"task", {:array, :int, [2]}, [initial: [1, 2], at: "belt.I.0", retain: true]},
+        :diagnostics,
+        Enum.join(
+          [
+            "`task` is a keyword and cannot name a global",
+            "`task` is an array of input points, `belt.i.0` to `belt.i.1`, and a located " <>
+              "global takes no `retain`: an input point is read again at every start, and " <>
+              "an output point starts at 0 until logic writes it",
+            "`task` is an array of input points, `belt.i.0` to `belt.i.1`: their values " <>
+              "come from the input image, so it takes no initial list",
+            "`belt.I.0` is not a location as written: a location's `i` or `q` is lowercase " <>
+              "and its address has no leading zero, so it is written `belt.i.0`"
+          ],
+          "\n"
+        )
+      )
+
+      refused_as(
+        seal,
+        {"task", {:array, :int, [2]}, [initial: [1, 2], at: "belt.x.0", retain: true]},
         :diagnostics,
         Enum.join(
           [
@@ -1896,8 +2011,8 @@ defmodule Logex.ConfigurationTest do
               "read again at every start, and an output point starts at 0 until logic " <>
               "writes it",
             "`task` is located: a located array takes no initial list",
-            "`belt.I.0` is not a location as written: a location's `i` or `q` is lowercase " <>
-              "and its address has no leading zero, so it is written `belt.i.0`"
+            "`belt.x.0` is not a location: a location is a device, `i` or `q`, and an " <>
+              "address, as in `panel.i.0`"
           ],
           "\n"
         )

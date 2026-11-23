@@ -29,10 +29,12 @@ jobs:
       # No gate reads mix.lock: logex has no dependency but ExDoc, in the docs environment
       # alone, which docs.yml builds in. So the cache is keyed on the versions setup-beam
       # resolved and on mix.exs. It holds Dialyzer's PLT too: actions/cache saves _build
-      # whole, its `!_build/dialyzer` taking nothing out, so a run that built the PLT saves
-      # it here as in the PLT's own cache below (decision 580). Either copy is the right
-      # one or is not used: scripts/dialyzer.sh names a PLT by the toolchain's versions
-      # and the applications it holds, and checks the one it finds against the toolchain.
+      # whole, its `!_build/dialyzer` taking nothing out, so a run whose key here missed
+      # saves the PLT it ends with in this cache, as one whose key below missed saves it
+      # in the PLT's own; a run that restored its exact key saves nothing to that cache
+      # (decision 580). Either copy is the right one or is not used: scripts/dialyzer.sh
+      # names a PLT by the toolchain's versions and the applications it holds, and checks
+      # the one it finds against the toolchain.
       - name: Cache deps and _build
         uses: actions/cache@v5
         with:

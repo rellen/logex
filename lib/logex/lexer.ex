@@ -97,10 +97,14 @@ defmodule Logex.Lexer do
   # given from Elixir past that length the same way, its first 24 characters and `…`, and
   # how many it has, `100000000000000000000000… (100001 characters)`, so that the
   # refusals of `Logex.Tag.new!/5`, `Logex.Configuration.Global.new!/3` and
-  # `Logex.Configuration.check/1` stay short however long the number, and cost what a
-  # short one does: a long integer's text is never made whole, `Integer.to_string/1`'s
-  # time growing with the square of its digits, 9 s of a million, where its first digits
-  # and its length take a power of ten and one division. A number of at most
+  # `Logex.Configuration.check/1` stay short however long the number, and cheap: a long
+  # integer's text is never made whole, `Integer.to_string/1`'s time growing with the
+  # square of its digits, 9 s of a million, where its first digits and its length take a
+  # power of ten and one division, some 20,000 reductions at 100,000 digits and 33,000 at
+  # 400,000. Their time grows faster than the digits: the power and the division are
+  # big-integer work, which reductions count little of, some 4 ms of a refusal at 100,000
+  # digits, 20 ms at 400,000 and 90 ms at a million, where the whole text took 0.09 s,
+  # 1.3 s and 9 s (RV-31's review, F3; the growth test reads reductions). A number of at most
   # `longest_number/0` characters is quoted whole, as a compile quotes a literal it reads
   # (provisional: `PLAN.md`'s RV-31, question 1). The refusals the decision names, and
   # what they show, read this; another of the host contract's quotes as it did
@@ -111,6 +115,13 @@ defmodule Logex.Lexer do
 
   defguardp is_long(n)
             when is_integer(n) and (n >= @past_positive or n <= @past_negative)
+
+  @doc false
+  # Whether a number is past `longest_number/0` characters, and so quoted cut: a message
+  # that gives a line to copy, an example, gives none with a long number in it (RV-31's
+  # review, F5).
+  def long_number?(n) when is_long(n), do: true
+  def long_number?(_n), do: false
 
   @doc false
   # A number as a message shows it: whole, or a long integer cut, its count after it.

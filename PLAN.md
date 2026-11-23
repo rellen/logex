@@ -23905,20 +23905,45 @@ is unchanged: DOC-1's close and its third step, RV-23, RV-25 alone, and DOC-2 la
        String.duplicate("a", 5_000))`. (a) As built: shown as `inspect/1` shows it, a
        text to 4,096 bytes and a list to 200 elements in all, each long number in it cut,
        a 4 KB line. (b) A text or a list cut at 60 bytes as the store's refusals cut one.
-       (c) Shown whole.
+       (c) Shown whole. A name or a location that is text is quoted whole, not through
+       `inspect/1`, in `check/1`'s lines and so now in `new!/3`'s (RV-31's review, F4): a
+       100,000-character name with a wrong value, or a 200,000-character location, gives
+       a line of 100 KB or 200 KB, as `check/1` gave before; (a) and (b) would reach
+       those too, (c) is as built for them.
     3. *Which refusals cut* (decision 583 names three). A host calls
        `Logex.Configuration.new!(10 ** 100_000)`, or `Logex.Configuration.initial/1` of a
        global built by hand with that value. (a) As built: the three the decision names,
        `Logex.Tag.new!/5`, `Global.new!/3` and `check/1`, and `new!/1` through
        `check/1`; `new!/1`'s own refusal of what is no keyword list, `compile/3`'s and
        `compile_file/1`'s of an argument that is no text, `initial/1` and `watchdog/1`
-       quote it whole, a hundred thousand digits. (b) Every refusal of the host contract
-       through the one cut.
+       quote it whole, a hundred thousand digits; so does `new!/1`'s own line of an
+       element brought with a line, `%Global{line: 10 ** 100_000}`, a million digits
+       taking 9 s and a megabyte (RV-31's review, F2). (b) Every refusal of the host
+       contract through the one cut.
     4. *A test's name* (decision 580). `scripts_test.exs`'s test of the PLT's cache is
        named "… cached by the toolchain's versions and the script alone, apart from
        _build's cache", which the workflow's comment no longer says. (a) As built: left,
        the leave reaching that file by the comment alone. (b) The name made true, a line
        of a test changed by no decision.
+    5. *A located global whose location is misspelled* (RV-31's review, F1; decision
+       576: "any initial value on a located global ... one refusal"). A box counter's
+       photo-eye is declared `Global.new!("eye_1", :bool, initial: 1, at:
+       "panel.I.0")`, its `I` capital. (a) Before the review: told only that `panel.I.0`
+       is written `panel.i.0`; mended, told the point takes no initial value: two
+       refusals in turn. (b) As built since the review, provisional: the location is the
+       point it names for the value, the list and `retain`, so one refusal tells both,
+       the point's line and the spelling's, in `new!/3` and in `check/1`, a
+       configuration file's `var_global eye_1 bool 1 at panel.I.0` the same. A location
+       that is none, `panel.x.0`, names no point in either: a value beside it is judged
+       against the type, kept where the type holds it, and `retain` beside it told "is
+       located", as before and as pinned before RV-31. (c) A location that is none read
+       as located for the value too, `` `eye_1` is located: a located global takes no
+       initial value ``, changing `check/1`'s lines a configuration file has had since
+       M5-13. IEC writes a location as `%IX0.0`, its letters part of the one token, so
+       it has no second spelling to read; that a point takes no initial value is
+       logex's own rule (decision 576). In Logix an I/O tag is its module's, named by
+       the module's configuration, so a misspelled address names no tag and an alias to
+       it is refused when the routine is verified (unverified against a controller).
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

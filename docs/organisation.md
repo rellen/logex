@@ -16097,7 +16097,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      number its type holds or not and an array's list, is refused by `new!/3` in the one
      line `check/1` gives of it, `` `eye_1` is an input point: its value comes from the
      input image, so it takes no initial value ``, and `retain: true` on one in the line
-     a `var_global` line is refused in, from the one judge both read.)*
+     a `var_global` line is refused in, from the one judge both read. RV-31's review
+     found a location not in its one spelling, `panel.I.0`, read as no point, the value
+     judged against the type and the point's line told only once the spelling was
+     mended: since its fixes such a location is the point it names for the value, the
+     list and `retain`, the point's line beside the spelling's in one refusal, in
+     `new!/3` and `check/1` alike; one that is none, `panel.x.0`, names no point.
+     Provisional: `PLAN.md`'s RV-31, question 5.)*
 
 577. **What `Global.new!/3` refuses at the line that declares a global (RV-30),** RV-30's
      question 3: `Global.new!("conveyor speed", :dint)`, `Global.new!("speed", :float,
