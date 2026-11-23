@@ -1423,52 +1423,67 @@ defmodule Logex.ConfigurationTest do
     defp agreed(new, hand, global),
       do: flunk("#{inspect(global)}: new!/3 #{inspect(new)}, check/1 #{inspect(hand)}")
 
-    test "the options' mistakes come first; the type, the name and the location stay " <>
-           "check/1's; new!/2 is as it was",
+    test "the options' mistakes come first; a located global's value, the type and the " <>
+           "name are judged at once (decisions 576 and 577); new!/2 is as new!/3",
          %{seal: seal} do
       # A mistake in the options is told alone, the value not yet read.
       assert_raise ArgumentError, "`retain:` for `g` takes true or false, found 1", fn ->
         Global.new!("g", :bool, initial: true, retain: 1)
       end
 
-      # The value is judged against the type alone: a located global's that its type
-      # holds is kept, and check/1 refuses it for its location, as it did.
-      located = Global.new!("f", :bool, initial: 1, at: "panel.i.5")
-      assert located == %Global{name: "f", type: :bool, initial: 1, at: "panel.i.5"}
+      # Decision 576 (RV-31): any initial value on a located global is refused at once, in
+      # check/1's line, one its type holds or not, where until then the value was judged
+      # against the type alone, one the type holds kept for check/1 to refuse.
+      point =
+        "`f` is an input point: its value comes from the input image, so it takes no " <>
+          "initial value"
 
-      assert of_hand(seal, located) ==
-               {:diagnostics,
-                [
-                  "`f` is an input point: its value comes from the input image, so it " <>
-                    "takes no initial value"
-                ]}
+      assert_raise ArgumentError, point, fn ->
+        Global.new!("f", :bool, initial: 1, at: "panel.i.5")
+      end
 
-      # One its type does not hold is refused for that, located or not.
+      assert of_hand(seal, %Global{name: "f", type: :bool, initial: 1, at: "panel.i.5"}) ==
+               {:diagnostics, [point]}
+
+      assert_raise ArgumentError, point, fn ->
+        Global.new!("f", :bool, initial: 2, at: "panel.i.5")
+      end
+
+      # Decision 577 (RV-31): a type that is none, or an array's sizes none, is refused at
+      # once in check/1's lines, where until then it was kept for check/1 to refuse; a
+      # value that is no number is told after it, as check/1 tells both.
+      float =
+        "global `g` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, " <>
+          ":uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an " <>
+          "array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one " <>
+          "integer a dimension"
+
+      assert_raise ArgumentError, float, fn -> Global.new!("g", :float, initial: 5) end
+
       assert_raise ArgumentError,
-                   "`f` is a bool: its initial value must be 0 or 1, found `2`",
-                   fn -> Global.new!("f", :bool, initial: 2, at: "panel.i.5") end
-
-      # A type that is none holds no value to judge a number by: kept, check/1's to
-      # refuse, as an array's sizes are; a value that is no number is no global's.
-      assert Global.new!("g", :float, initial: 5) ==
-               %Global{name: "g", type: :float, initial: 5}
-
-      assert Global.new!("g", {:array, :int, [0]}, initial: [1]) ==
-               %Global{name: "g", type: {:array, :int, [0]}, initial: [1]}
+                   "`g` is declared with a dimension of 0, `[0]`: each dimension of an " <>
+                     "array holds 1 element or more",
+                   fn -> Global.new!("g", {:array, :int, [0]}, initial: [1]) end
 
       assert_raise ArgumentError,
-                   "the initial value of global `g` must be an integer, found true",
+                   float <> "\nthe initial value of global `g` must be an integer, found true",
                    fn -> Global.new!("g", :float, initial: true) end
 
-      # A name that is no string is labelled as given, as in the options' lines.
+      # A name that is no string is refused for itself first, then labelled as given in
+      # the value's line, as check/1 tells both.
       assert_raise ArgumentError,
-                   "the initial value of global :g must be an integer, found true",
+                   ":g cannot name a global: a name is a letter or `_`, then letters, digits " <>
+                     "or `_`\nthe initial value of global :g must be an integer, found true",
                    fn -> Global.new!(:g, :bool, initial: true) end
 
-      # No initial value, or nil for none: nothing to judge.
+      # No initial value, or nil for none: nothing of the value to judge; new!/2 judges the
+      # rest as new!/3 does.
       assert Global.new!("g", :bool) == %Global{name: "g", type: :bool}
       assert Global.new!("g", :bool, initial: nil) == %Global{name: "g", type: :bool}
-      assert Global.new!("g", :nothing) == %Global{name: "g", type: :nothing}
+
+      assert_raise ArgumentError,
+                   String.replace(float, ":float", ":nothing"),
+                   fn -> Global.new!("g", :nothing) end
     end
 
     # RV-30's review (F1): the judge is total. A name that is no text and an array whose
@@ -1476,36 +1491,51 @@ defmodule Logex.ConfigurationTest do
     # raised out of them, a `Protocol.UndefinedError` where the name was interpolated and
     # a `FunctionClauseError` where the elements' word was looked up, the second out of
     # check/1 and new!/1 too, as it was before decision 555. Each is the host's mistake,
-    # an `ArgumentError` pinned whole.
+    # an `ArgumentError` pinned whole. Since decision 577 (RV-31) new!/3 raises every line
+    # check/1 raises of the one global, so the name's own line, or the type's, heads each,
+    # and a value a line could say is not told beside them, as check/1 tells it only of a
+    # global the host's mistakes leave clean.
     test "a name that is no text and an array of no elementary type are told in an " <>
            "ArgumentError, pinned whole",
          %{seal: seal} do
+      unnamed =
+        &"#{&1} cannot name a global: a name is a letter or `_`, then letters, digits or `_`"
+
+      untyped =
+        &("global `g` has type #{&1}: a global is :bool, :sint, :int, :dint, :lint, :usint, " <>
+            ":uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array " <>
+            "of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a " <>
+            "dimension")
+
+      no_numbers =
+        &("the initial value of global `g`, an array, must be a list of its elements' " <>
+            "values, each a number, found #{&1}")
+
       for {name, type, initial, message} <- [
-            {{1, 2}, :sint, 300, "{1, 2} is an sint: `300` is outside -128 to 127"},
-            {%{}, :bool, 2, "%{} is a bool: its initial value must be 0 or 1, found `2`"},
-            {<<1::3>>, :bool, 1.5,
-             "<<1::size(3)>> is a bool: `1.5` is a real, and a bool holds only 0 or 1"},
-            {[1 | 2], :real, 1.0e39,
-             "[1 | 2] is a real: `1.0e39` is beyond a real's range, " <>
-               "-3.4028234663852886e38 to 3.4028234663852886e38"},
-            {nil, :sint, 300, "nil is an sint: `300` is outside -128 to 127"},
-            {:g, :sint, 300, ":g is an sint: `300` is outside -128 to 127"},
+            {{1, 2}, :sint, 300, unnamed.("{1, 2}")},
+            {%{}, :bool, 2, unnamed.("%{}")},
+            {<<1::3>>, :bool, 1.5, unnamed.("<<1::size(3)>>")},
+            {[1 | 2], :real, 1.0e39, unnamed.("[1 | 2]")},
+            {nil, :sint, 300, unnamed.("nil")},
+            {:g, :sint, 300, unnamed.(":g")},
             {{1, 2}, :sint, true,
-             "the initial value of global {1, 2} must be an integer, found true"},
-            {{1, 2}, {:array, :int, [2]}, [1],
-             "{1, 2} is an array of 2 ints: its initial list holds 1 value, and an " <>
-               "array's holds one for every element, 2, in the elements' order"},
+             unnamed.("{1, 2}") <>
+               "\nthe initial value of global {1, 2} must be an integer, " <>
+               "found true"},
+            {{1, 2}, {:array, :int, [2]}, [1], unnamed.("{1, 2}")},
             {"g", {:array, :ton, [2]}, [[1]],
-             "the initial value of global `g`, an array, must be a list of its elements' " <>
-               "values, each a number, found [[1]]"},
+             untyped.("{:array, :ton, [2]}") <> "\n" <> no_numbers.("[[1]]")},
             {"g", {:array, :float, [2]}, [:a],
-             "the initial value of global `g`, an array, must be a list of its elements' " <>
-               "values, each a number, found [:a]"},
+             untyped.("{:array, :float, [2]}") <> "\n" <> no_numbers.("[:a]")},
             {"g", {:array, Logex.FbType.ton(), [2]}, [true],
-             "the initial value of global `g`, an array, must be a list of its elements' " <>
-               "values, each a number, found [true]"}
+             untyped.("{:array, #{inspect(Logex.FbType.ton())}, [2]}") <>
+               "\n" <>
+               no_numbers.("[true]")}
           ] do
         assert_raise ArgumentError, message, fn -> Global.new!(name, type, initial: initial) end
+
+        assert of_hand(seal, %Global{name: name, type: type, initial: initial}) ==
+                 {:raised, String.split(message, "\n")}
       end
 
       # check/1 and new!/1 of the same array built by hand: the type's own line, then the
@@ -1535,24 +1565,22 @@ defmodule Logex.ConfigurationTest do
                  ]
     end
 
-    # What new!/3 or check/1 did: `:kept`, `:raised` for an ArgumentError, the host's
-    # mistake, or the exception that escaped, which nothing may.
-    defp only_argument_errors(fun) do
-      fun.()
-      :kept
-    rescue
-      ArgumentError -> :raised
-      escaped -> {:escaped, escaped.__struct__}
-    end
-
     # The rule of the public API over the door decision 555 opened: whatever the name,
     # the type and the value are, new!/3 gives a struct or raises an ArgumentError, and
-    # check/1 of the same struct built by hand gives diagnostics or raises one. The
-    # walk's reach: each name and each type both kept and raised by new!/3.
-    test "over names, types and values that are none, nothing but an ArgumentError " <>
-           "escapes new!/3 or check/1",
+    # check/1 of the same struct built by hand gives diagnostics or raises one. Since
+    # decisions 576 and 577 (RV-31) the walk takes the location too, and holds new!/3 to
+    # check/1 at every draw: it keeps exactly the global check/1 takes, the struct the one
+    # built by hand, and raises exactly check/1's lines of any other, those it raises or
+    # those it diagnoses. Every name, type, value and location below at no location, and
+    # each location with six values, some 41,000 draws. The walk's reach: each name, type
+    # and location that is a global's both kept and refused by new!/3, each that is none
+    # only refused, and over the walk a global kept, one raised and one diagnosed.
+    test "over names, types, values and locations, new!/3 keeps what check/1 takes and " <>
+           "raises its lines of the rest, nothing else let out",
          %{seal: seal} do
-      names = ["g", "a b", "", <<255>>, :g, nil, 7, 1.5, {1, 2}, %{}, <<1::3>>, [1 | 2], ~c"g"]
+      names =
+        ["g", "a b", "", <<255>>, :g, nil, 7, 1.5, {1, 2}, %{}, <<1::3>>, [1 | 2], ~c"g"] ++
+          ["task", "Task", "a.b", "g[1]"]
 
       types =
         Logex.Declarations.elementary() ++
@@ -1569,41 +1597,91 @@ defmodule Logex.ConfigurationTest do
           [[], [0, 1], [0, 2], [1.5, 2], [1, -0.0], [300, 0], [0, 1, 0]] ++
           [[1, :x], [[0, 1]], [0 | 1], [[1]], [true], [nil, nil]]
 
+      # Devices the base configuration has none of, so that no point of it is taken.
+      locations =
+        ["belt.i.0", "belt.q.3", "belt.x.0", "belt.I.0", "belt.i.00", "task.i.0"] ++
+          ["belt i 0", "", 5, :belt]
+
       fields = base(seal)
       config = Configuration.new!(fields)
 
+      draws =
+        for(
+          name <- names,
+          type <- types,
+          initial <- [nil | values],
+          do: {name, type, initial, nil}
+        ) ++
+          for name <- names,
+              type <- types,
+              initial <- [nil, 1, 2, true, [0, 1], 1.5],
+              at <- locations,
+              do: {name, type, initial, at}
+
       reach =
-        for name <- names, type <- types, initial <- values do
-          new = only_argument_errors(fn -> Global.new!(name, type, initial: initial) end)
+        for {name, type, initial, at} <- draws do
+          hand = %Global{name: name, type: type, initial: initial, at: at}
+          new = drawn(fn -> Global.new!(name, type, initial: initial, at: at) end)
 
-          assert new in [:kept, :raised],
-                 "new!(#{inspect(name)}, #{inspect(type)}, initial: #{inspect(initial)}) " <>
-                   "let #{inspect(new)} escape"
+          checked =
+            drawn(fn ->
+              Enum.map(
+                Configuration.check(%{config | globals: fields[:globals] ++ [hand]}),
+                & &1.message
+              )
+            end)
 
-          {name, type, new}
+          {name, type, at, walked(new, checked, hand)}
         end
 
-      for name <- names do
-        assert Enum.sort(Enum.uniq(for {^name, _type, new} <- reach, do: new)) ==
-                 [:kept, :raised],
-               inspect(name)
+      kept = %{
+        0 => ["g"],
+        1 => Logex.Declarations.elementary() ++ Enum.slice(types, 22, 3),
+        2 => [nil, "belt.i.0", "belt.q.3"]
+      }
+
+      assert Map.fetch!(kept, 1) -- Logex.Declarations.elementary() ==
+               [{:array, :int, [2]}, {:array, :real, [2]}, {:array, :bool, [2, 1]}]
+
+      for {label, index, walked} <-
+            [{"name", 0, names}, {"type", 1, types}] ++
+              [{"location", 2, [nil | locations]}],
+          value <- walked do
+        kinds = for draw <- reach, elem(draw, index) === value, do: kept_or_refused(elem(draw, 3))
+
+        assert Enum.sort(Enum.uniq(kinds)) == reached(value in Map.fetch!(kept, index)),
+               "#{label} #{inspect(value)}"
       end
 
-      for type <- types do
-        assert Enum.sort(Enum.uniq(for {_name, ^type, new} <- reach, do: new)) ==
-                 [:kept, :raised],
-               inspect(type)
-      end
-
-      for name <- ["g", {1, 2}], type <- types, initial <- [nil | values] do
-        hand = %Global{name: name, type: type, initial: initial}
-        with_it = %{config | globals: fields[:globals] ++ [hand]}
-        checked = only_argument_errors(fn -> Configuration.check(with_it) end)
-
-        assert checked in [:kept, :raised],
-               "check/1 of #{inspect(hand)} let #{inspect(checked)} escape"
-      end
+      assert Enum.sort(Enum.uniq(for draw <- reach, do: elem(draw, 3))) ==
+               [:diagnosed, :kept, :raised]
     end
+
+    defp reached(true), do: [:kept, :refused]
+    defp reached(false), do: [:refused]
+
+    defp kept_or_refused(:kept), do: :kept
+    defp kept_or_refused(_raised_or_diagnosed), do: :refused
+
+    # What new!/3 or check/1 of a configuration did: `{:kept, value}`, `{:raised, lines}`
+    # for an ArgumentError, the host's mistake, or the exception that escaped, which
+    # nothing may.
+    defp drawn(fun) do
+      {:kept, fun.()}
+    rescue
+      error in ArgumentError -> {:raised, String.split(error.message, "\n")}
+      escaped -> {:escaped, escaped.__struct__}
+    end
+
+    # A draw as check/1 judges it, new!/3 held to it: kept, the struct the one built by
+    # hand, where check/1 gives no diagnostic; and check/1's lines raised by new!/3, the
+    # host's it raises or its diagnostics' messages.
+    defp walked({:kept, global}, {:kept, []}, global), do: :kept
+    defp walked({:raised, [_ | _] = lines}, {:raised, lines}, _hand), do: :raised
+    defp walked({:raised, [_ | _] = lines}, {:kept, lines}, _hand), do: :diagnosed
+
+    defp walked(new, checked, global),
+      do: flunk("#{inspect(global)}: new!/3 #{inspect(new)}, check/1 #{inspect(checked)}")
 
     # RV-30's review (F7): the value is judged once, its cost growing with the list's
     # length and no faster. Counted in reductions, the least of three counts, at two
@@ -1643,6 +1721,318 @@ defmodule Logex.ConfigurationTest do
                "the initial value of global `fan_on` must be an integer, found true",
                "`trim` is an sint: `300` is outside -128 to 127"
              ]
+    end
+  end
+
+  # Decisions 576 and 577 (RV-31; the maintainer, 2026-11-16, RV-30's questions 2 and 3):
+  # `Global.new!/3` judges the one global whole at the line that declares it, its name,
+  # its type, its location and its value, as `Logex.Tag.new!/5` judges a tag's, and
+  # refuses any initial value on a located global, each an `ArgumentError` of exactly the
+  # lines check/1 gives of the same struct built by hand, joined, from the one judge both
+  # read; until then it judged the value alone, against the type, and kept the rest for
+  # check/1 to refuse. What takes the other globals, a program or a device stays
+  # check/1's. `of_hand/2` above is check/1 of the struct added to a configuration that
+  # runs, whose points are on `panel`: a located global here is on another device.
+  describe "Global.new!/3 judges the one global at its line (decisions 576 and 577)" do
+    @a_name "cannot name a global: a name is a letter or `_`, then letters, digits or `_`"
+
+    @a_type "a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, " <>
+              ":real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, " <>
+              "as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension"
+
+    @a_location "which is not a location: a location is a device, `i` for an input or `q` " <>
+                  "for an output, then an address, as in `panel.i.0` or `panel.q.3`"
+
+    # new!/3 raises `message`, whole, and check/1 of the struct built by hand gives the
+    # same lines, raised or diagnosed as `kind` says.
+    defp refused_as(seal, {name, type, options}, kind, message) do
+      assert_raise ArgumentError, message, fn -> Global.new!(name, type, options) end
+
+      hand = %Global{
+        name: name,
+        type: type,
+        initial: options[:initial],
+        at: options[:at],
+        retain: retained(options)
+      }
+
+      assert of_hand(seal, hand) == {kind, String.split(message, "\n")}, inspect(hand)
+    end
+
+    defp retained(options), do: retained(options[:retain], options[:non_retain])
+    defp retained(true, _non_retain), do: :retain
+    defp retained(_retain, true), do: :non_retain
+    defp retained(_retain, _non_retain), do: nil
+
+    test "decision 577's three examples and decision 576's, each refused at once, in " <>
+           "check/1's line",
+         %{seal: seal} do
+      refused_as(seal, {"conveyor speed", :dint, []}, :raised, ~s|"conveyor speed" | <> @a_name)
+
+      refused_as(
+        seal,
+        {"speed", :float, [initial: 5]},
+        :raised,
+        "global `speed` has type :float: " <> @a_type
+      )
+
+      refused_as(
+        seal,
+        {"speed", :dint, [at: 5]},
+        :raised,
+        "global `speed` is at 5, " <> @a_location
+      )
+
+      # The box counter's photo-eye: refused for its location whatever the value, 2 and
+      # 1 alike, where 2 was refused for the type and 1 kept for check/1 to refuse.
+      eye =
+        "`eye_1` is an input point: its value comes from the input image, so it takes no " <>
+          "initial value"
+
+      for initial <- [2, 1, 0] do
+        assert_raise ArgumentError, eye, fn ->
+          Global.new!("eye_1", :bool, initial: initial, at: "panel.i.0")
+        end
+
+        refused_as(seal, {"eye_1", :bool, [initial: initial, at: "belt.i.0"]}, :diagnostics, eye)
+      end
+
+      # An output point, a located array and a located real alike.
+      refused_as(
+        seal,
+        {"lamp", :bool, [initial: 0, at: "belt.q.0"]},
+        :diagnostics,
+        "`lamp` is an output point: it takes no initial value, and is 0 until its driver " <>
+          "writes it"
+      )
+
+      refused_as(
+        seal,
+        {"temps", {:array, :int, [2]}, [initial: [1, 2], at: "card.i.0"]},
+        :diagnostics,
+        "`temps` is an array of input points, `card.i.0` to `card.i.1`: their values come " <>
+          "from the input image, so it takes no initial list"
+      )
+
+      refused_as(
+        seal,
+        {"speed", :real, [initial: 1.5, at: "belt.q.4"]},
+        :diagnostics,
+        "`speed` is an output point: it takes no initial value, and is 0 until its driver " <>
+          "writes it"
+      )
+
+      # With no value, a location that is one is kept, the struct the one built by hand.
+      assert Global.new!("eye_1", :bool, at: "panel.i.0") ==
+               %Global{name: "eye_1", type: :bool, at: "panel.i.0"}
+
+      assert Global.new!("temps", {:array, :int, [2]}, at: "card.i.0", non_retain: true) ==
+               %Global{
+                 name: "temps",
+                 type: {:array, :int, [2]},
+                 at: "card.i.0",
+                 retain: :non_retain
+               }
+    end
+
+    test "several mistakes in one call are told as check/1 tells them, in its order",
+         %{seal: seal} do
+      # The host's lines, raised alone: name, type, value, location, as check/1 raises them.
+      refused_as(
+        seal,
+        {"a b", :float, [initial: true, at: 5]},
+        :raised,
+        Enum.join(
+          [
+            ~s|"a b" | <> @a_name,
+            "global `a b` has type :float: " <> @a_type,
+            "the initial value of global `a b` must be an integer, found true",
+            "global `a b` is at 5, " <> @a_location
+          ],
+          "\n"
+        )
+      )
+
+      # What a line can say, each a diagnostic in check/1: the name, then the global's
+      # own rules, `retain` on a point before its list, then the location.
+      refused_as(
+        seal,
+        {"task", {:array, :int, [2]}, [initial: [1, 2], at: "belt.I.0", retain: true]},
+        :diagnostics,
+        Enum.join(
+          [
+            "`task` is a keyword and cannot name a global",
+            "`task` is located, and a located global takes no `retain`: an input point is " <>
+              "read again at every start, and an output point starts at 0 until logic " <>
+              "writes it",
+            "`task` is located: a located array takes no initial list",
+            "`belt.I.0` is not a location as written: a location's `i` or `q` is lowercase " <>
+              "and its address has no leading zero, so it is written `belt.i.0`"
+          ],
+          "\n"
+        )
+      )
+
+      # A host's line and a diagnostic together: the host's alone, as check/1 raises them
+      # alone, the diagnostics of a field it refused never read.
+      refused_as(
+        seal,
+        {"task", :float, [initial: 2, at: "belt.x.0"]},
+        :raised,
+        "global `task` has type :float: " <> @a_type
+      )
+
+      # The options' mistakes before any of them, as before.
+      assert_raise ArgumentError,
+                   "`retain:` for `a b` takes true or false, found 1",
+                   fn -> Global.new!("a b", :float, initial: true, retain: 1) end
+    end
+
+    test "a name of each wrong kind", %{seal: seal} do
+      # No text, empty, not one name token: the host's.
+      for {name, shown} <- [
+            {:g, ":g"},
+            {nil, "nil"},
+            {7, "7"},
+            {{1, 2}, "{1, 2}"},
+            {"", ~s|""|},
+            {"a b", ~s|"a b"|},
+            {"1a", ~s|"1a"|},
+            {<<255>>, ~s|<<255>>|}
+          ] do
+        refused_as(seal, {name, :bool, []}, :raised, "#{shown} " <> @a_name)
+      end
+
+      # A configuration file's keyword in any case, and a name with `.` parts or
+      # brackets, which a line can hold and check/1 refuses: diagnostics.
+      for {name, message} <- [
+            {"task", "`task` is a keyword and cannot name a global"},
+            {"Task", "`Task` is a keyword and cannot name a global"},
+            {"VAR_GLOBAL", "`VAR_GLOBAL` is a keyword and cannot name a global"},
+            {"a.b",
+             "`a.b` cannot name a global: `.` is kept for a path, as in `m1.start`, and a " <>
+               "location, as in `panel.i.0`"},
+            {"g[1]",
+             "`g[1]` cannot name a global: brackets are kept for an element's subscripts, " <>
+               "as in `m1.temps[3]`"}
+          ] do
+        refused_as(seal, {name, :bool, []}, :diagnostics, message)
+      end
+
+      # A word a program reserves names a global, as check/1 takes it.
+      assert Global.new!("xic", :bool) == %Global{name: "xic", type: :bool}
+      assert of_hand(seal, %Global{name: "xic", type: :bool}) == {:diagnostics, []}
+    end
+
+    test "a type of each wrong kind", %{seal: seal} do
+      # An unknown atom, a text, an array of no elementary type or whose sizes are no list
+      # of integers: the host's.
+      for type <- [
+            :float,
+            :string,
+            "bool",
+            nil,
+            Logex.FbType.ton(),
+            {:array, :ton, [2]},
+            {:array, :float, [2]},
+            {:array, :int, []},
+            {:array, :int, [2, "2"]},
+            {:array, :int, [2 | 3]},
+            {:array, :int}
+          ] do
+        refused_as(
+          seal,
+          {"g", type, []},
+          :raised,
+          "global `g` has type #{inspect(type)}: " <> @a_type
+        )
+      end
+
+      # An array of a bad size, which a line can say: check/1's diagnostics.
+      for {type, message} <- [
+            {{:array, :int, [0]},
+             "`g` is declared with a dimension of 0, `[0]`: each dimension of an array holds " <>
+               "1 element or more"},
+            {{:array, :int, [-2]},
+             "`g` is declared with a dimension of -2, `[-2]`: each dimension of an array " <>
+               "holds 1 element or more"},
+            {{:array, :int, [2, 2, 2, 2]},
+             "`g` is declared with 4 dimensions, `[2,2,2,2]`: an array has one to three, as " <>
+               "in `int[8]`, `int[4,8]` or `int[2,3,4]`"},
+            {{:array, :int, [100_000, 100_000]},
+             "`g` would hold 10000000000 elements, `[100000,100000]`: an array holds 65536 " <>
+               "at most"}
+          ] do
+        refused_as(seal, {"g", type, []}, :diagnostics, message)
+      end
+    end
+
+    test "a location of each wrong kind", %{seal: seal} do
+      # No text, or text that is not one name token: the host's.
+      for {at, shown} <- [{5, "5"}, {:panel, ":panel"}, {"panel i 0", "`panel i 0`"}, {"", "``"}] do
+        refused_as(
+          seal,
+          {"g", :bool, [at: at]},
+          :raised,
+          "global `g` is at #{shown}, " <> @a_location
+        )
+      end
+
+      # One token that is no location, one not written in its one spelling, and one on a
+      # device a keyword names: check/1's diagnostics.
+      for {at, message} <- [
+            {"belt.x.0",
+             "`belt.x.0` is not a location: a location is a device, `i` or `q`, and an " <>
+               "address, as in `panel.i.0`"},
+            {"belt",
+             "`belt` is not a location: a location is a device, `i` or `q`, and an address, " <>
+               "as in `panel.i.0`"},
+            {"belt.i",
+             "`belt.i` is not a location: a location is a device, `i` or `q`, and an " <>
+               "address, as in `panel.i.0`"},
+            {"belt.I.0",
+             "`belt.I.0` is not a location as written: a location's `i` or `q` is lowercase " <>
+               "and its address has no leading zero, so it is written `belt.i.0`"},
+            {"belt.i.00",
+             "`belt.i.00` is not a location as written: a location's `i` or `q` is lowercase " <>
+               "and its address has no leading zero, so it is written `belt.i.0`"},
+            {"task.i.0", "`task` is a keyword and cannot name a device"},
+            {"Program.q.1", "`Program` is a keyword and cannot name a device"}
+          ] do
+        refused_as(seal, {"g", :bool, [at: at]}, :diagnostics, message)
+      end
+
+      # A located global's `retain`, which a line refuses (decision 272), at once too.
+      refused_as(
+        seal,
+        {"g", :bool, [at: "belt.i.0", retain: true]},
+        :diagnostics,
+        "`g` is an input point, and a located global takes no `retain`: an input point is " <>
+          "read again at every start, and an output point starts at 0 until logic writes it"
+      )
+
+      assert Global.new!("g", :bool, at: "belt.q.0", non_retain: true) ==
+               %Global{name: "g", type: :bool, at: "belt.q.0", retain: :non_retain}
+    end
+
+    # What needs the other globals, a program or a device stays check/1's: two globals of
+    # one name or of a case twin, a point two globals take, devices whose names differ
+    # only in case. new!/3 keeps each, and check/1 refuses the configuration.
+    test "what takes another global to judge stays check/1's", %{seal: seal} do
+      for {global, message} <- [
+            {Global.new!("sp", :dint), "`sp` is declared twice: the first is a global"},
+            {Global.new!("SP", :dint),
+             "`SP` and `sp` differ only in case: names are case-sensitive, so these would be " <>
+               "two (`sp` is a global)"},
+            {Global.new!("eye", :bool, at: "panel.i.0"),
+             "`eye` is at `panel.i.0`, where `pb` already is: a location holds one global"},
+            {Global.new!("eye", :bool, at: "Panel.i.7"),
+             "the device `Panel` and the device `panel` of `pb` differ only in case: device " <>
+               "names are case-sensitive, so these would be two devices"}
+          ] do
+        assert %Global{} = global
+        assert {:diagnostics, [^message]} = of_hand(seal, global), inspect(global)
+      end
     end
   end
 

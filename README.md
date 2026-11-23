@@ -3254,13 +3254,18 @@ broken_retain.logex: line 6: `retain` is a keyword and cannot name an instance
   `Logex.Tag.new!/5` takes it, `non_retain: true` for `non_retain`, and each mistake in
   its options refused in the same words (decision 304); the struct it gives,
   `%Logex.Configuration.Global{retain: :retain}`, `Logex.Configuration.Text.print/1`
-  prints as the line above. An initial value no global of its type holds is refused
-  there, at once: `new!("fan_on", :bool, initial: true)` raises ``the initial value of
-  global `fan_on` must be an integer, found true``, and `new!("trim", :sint, initial:
-  300)`, `` `trim` is an sint: `300` is outside -128 to 127 ``, each the line
-  `Logex.Configuration.check/1` gives of the same value in a struct built by hand with
-  no location, which it still refuses (decision 555); a located global's value is
-  judged by its type here and refused by `check/1` for its location.
+  prints as the line above. Every mistake of the one global is refused there, at once,
+  in the lines `Logex.Configuration.check/1` gives of the same struct built by hand,
+  which it still refuses (decisions 555, 576 and 577): a value its type does not hold,
+  `new!("fan_on", :bool, initial: true)` raising ``the initial value of global `fan_on`
+  must be an integer, found true`` and `new!("trim", :sint, initial: 300)` `` `trim` is
+  an sint: `300` is outside -128 to 127 ``; any initial value on a located global,
+  `new!("eye_1", :bool, initial: 1, at: "panel.i.0")` raising `` `eye_1` is an input
+  point: its value comes from the input image, so it takes no initial value ``; and a
+  name, a type or a location that is none, `new!("conveyor speed", :dint)`,
+  `new!("speed", :float)` and `new!("speed", :dint, at: 5)`, each in `check/1`'s line.
+  Two globals of one name, or two on one point, are `check/1`'s to refuse, which needs
+  the configuration.
 - An online edit that only adds `retain` to a global, or takes it away, reports
   `{:retain_added, "total_boxes", 4}` or `{:retain_removed, …}`, the value it holds, and
   writes nothing; the next warm restart follows the configuration running (decision

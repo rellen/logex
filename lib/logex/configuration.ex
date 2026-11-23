@@ -21,7 +21,11 @@ defmodule Logex.Configuration do
   from Elixir, raises one `ArgumentError` listing every problem it finds, a line each;
   `compile/3`, from a configuration file's text, returns them, and `compile_file/1` from
   the file on disk, its program types loaded from beside it (M2-2); and
-  `Logex.Runtime.start/1` checks again. A mistake a configuration's text could also make
+  `Logex.Runtime.start/1` checks again. A global built with
+  `Logex.Configuration.Global.new!/3` is judged by `check/1`'s rules of the one global
+  where it is built, its name, type, location and initial value, and refused in its lines
+  (decisions 576 and 577); what takes the other elements to judge waits for `check/1`. A
+  mistake a configuration's text could also make
   is a `%Logex.Diagnostic{}` at stage `:configure`, cited at its element's line, which is
   how a reader of the text cites it, and worded as the configuration file says it,
   whether the element came from the text or from Elixir: one message a rule
@@ -174,7 +178,7 @@ defmodule Logex.Configuration do
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
-  alias Logex.Configuration.{Connection, Global, Initial, Instance, Text}
+  alias Logex.Configuration.{Connection, Global, Instance, Judge, Text}
   import Logex.Declarations, only: [is_elementary: 1]
   import Logex.Array, only: [is_array: 1]
 
@@ -255,13 +259,14 @@ defmodule Logex.Configuration do
     since decision 304, `new!/3` takes the qualifier as `Logex.Tag.new!/5` does, the line's
     own word as an option; the struct built by hand carries the atom, as a tag's does.
 
-    Since decision 555 `new!/3` refuses at once an initial value no global of its type
-    holds, as `Logex.Tag.new!/5` refuses a tag's, so that the struct it gives for a name,
-    a type and a location that are a global's is a `t()`. Those three it keeps as given,
-    a name or a location that is no text and a type that is none among them, the struct
-    then outside `t()` (provisional: `PLAN.md`'s RV-30, question 3); they, and a struct
-    built by hand or changed after, are judged where they always were, by
-    `Logex.Configuration.check/1`, which `Logex.Configuration.new!/1` runs.
+    Since decisions 576 and 577 (RV-31) `new!/2,3` judges the one global whole at once,
+    as `Logex.Tag.new!/5` judges a tag: its name, its type, its location, its qualifier
+    on a location and its initial value, any initial value on a located global among
+    them, each refused in the lines `Logex.Configuration.check/1` gives of the same struct
+    built by hand, so that every struct it gives is a `t()`. What takes the other
+    globals, a program or a device to judge, two globals of one name, a point two globals
+    take, is `check/1`'s, which `Logex.Configuration.new!/1` runs; so are a struct built
+    by hand and one changed after `new!/3` gave it.
     """
     @enforce_keys [:name, :type]
     defstruct [:name, :type, initial: nil, at: nil, line: nil, retain: nil]
@@ -278,39 +283,44 @@ defmodule Logex.Configuration do
     `true`, as a line takes `retain` or `non_retain`, not both. The struct's `retain`
     keeps the atom, `:retain`, `:non_retain` or nil.
 
-    Then the initial value is judged against the type, once the options read (decision
-    555, the maintainer, 2026-11-15): one no global of that type holds is refused here,
-    an `ArgumentError` of the lines `Logex.Configuration.check/1` gives of the same value
-    in a struct built by hand with no location, by the one judge both read, internal to
-    logex, where until then `new!/3` kept it for `check/1` to refuse. Refused so:
+    Then the global is judged whole, once the options read (decisions 555, 576 and 577,
+    the maintainer, 2026-11-15 and 16): every mistake of the one global is refused here,
+    an `ArgumentError` of exactly the lines `Logex.Configuration.check/1` gives of the
+    same struct built by hand, joined by newlines, in its order, by the one judge both
+    read, internal to logex. Until decision 555 `new!/3` kept every value, and until
+    decisions 576 and 577 it judged the value alone, against the type, and kept the rest
+    for `check/1` to refuse. As `check/1` has them, two kinds:
 
-    - a value that is no number, `new!("fan_on", :bool, initial: true)`: ``the initial
-      value of global `fan_on` must be an integer, found true``, and for a real ``must be
-      a number``;
-    - a number outside the type, `new!("fan_on", :bool, initial: 2)`: `` `fan_on` is a
-      bool: its initial value must be 0 or 1, found `2` ``; `new!("trim", :sint, initial:
-      300)`: `` `trim` is an sint: `300` is outside -128 to 127 ``, every integer width
-      and bit string by its range; a float in a type that holds integers, `` `g` is a
-      dint: `1.5` is a real, and a dint holds only integers ``; and a real's by the
-      literal rules, a number beyond its range or an integer it does not hold exactly;
-    - -0.0 in a real, which no real holds and no line gives;
-    - an array's that is no list, or a list of anything but numbers, a nested list among
-      them; a list of another length than the array's elements; and each element its
-      type does not hold, named by its element, `` `limits[1]` is an int: `40000` is
-      outside -32768 to 32767 ``, a line each.
+    - what no `var_global` line can say, the host's mistakes, which `check/1` raises, a
+      line each, name, type, value, location: a name that is not one name token,
+      `new!("conveyor speed", :dint)`: ``"conveyor speed" cannot name a global: a name is
+      a letter or `_`, then letters, digits or `_` ``, a name that is no text or is
+      empty among them; a type that is no elementary type nor an array of one whose sizes
+      are a non-empty list of integers, `new!("speed", :float, initial: 5)`: ``global
+      `speed` has type :float: a global is :bool, …``; an initial value that is no number,
+      `new!("fan_on", :bool, initial: true)`: ``the initial value of global `fan_on` must
+      be an integer, found true``, for a real ``must be a number``, an array's that is no
+      list, or a list of anything but numbers, a nested list among them, and -0.0 in a
+      real, which no real holds and no line gives; and a location that is not one name
+      token, `new!("speed", :dint, at: 5)`: ``global `speed` is at 5, which is not a
+      location: …``;
+    - with none of those, what a line can say and `check/1` gives as diagnostics: a name
+      with `.` parts or brackets, or a configuration file's keyword in any case, `` `task`
+      is a keyword and cannot name a global ``; `retain: true` on a located global; any
+      initial value on a located global, its type's or not, `new!("eye_1", :bool,
+      initial: 1, at: "panel.i.0")`: `` `eye_1` is an input point: its value comes from
+      the input image, so it takes no initial value `` (decision 576), an array's list
+      too; a number outside the type, `new!("trim", :sint, initial: 300)`: `` `trim` is an
+      sint: `300` is outside -128 to 127 ``, every integer width and bit string by its
+      range, a float in a type that holds integers and a real's by the literal rules; an
+      array's dimensions and sizes, `` `g` is declared with a dimension of 0, `[0]`: … ``,
+      its list of another length and each element its type does not hold, named by its
+      element, a line each; and a location not written in its one spelling, `` `panel.I.0`
+      is not a location as written: … ``, or on a device a keyword names.
 
-    The value is judged against the type alone: the type itself, the name and the
-    location stay `Logex.Configuration.check/1`'s, as for a struct built by hand. So a
-    located global's initial value its type holds is kept, `new!("eye_1", :bool,
-    initial: 1, at: "panel.i.0")`, and refused by `check/1` for its location, a point
-    taking no initial value; and one its type does not hold is refused here by the type's
-    line, `initial: 2`, where `check/1` says of a located global's value only that it
-    takes none, so a host that mends the number is refused again there, for the location
-    (provisional: `PLAN.md`'s RV-30, question 2). A type that is none holds no number to
-    judge by, `new!("g", :float, initial: 5)`, kept; and a name that is no text is shown
-    as Elixir shows it, `` {1, 2} is an sint: `300` is outside -128 to 127 ``. Whatever
-    the three are, `new!/3` gives a struct or raises an `ArgumentError`, nothing else.
-    `new!/2`, with no initial value, is as it was.
+    A name that is no text is shown as Elixir shows it, `:g cannot name a global: …`.
+    Whatever it is given, `new!/3` gives a struct or raises an `ArgumentError`, nothing
+    else. `new!/2` judges the same, with no initial value.
     """
     @spec new!(String.t(), type) :: t
     @spec new!(String.t(), type,
@@ -394,9 +404,9 @@ defmodule Logex.Configuration do
             retain: qualifier(seen)
         })
 
-    # Decision 555 (RV-30): an initial value no global of the type holds is refused at
-    # once, by the lines check/1 gives of it, from the one judge check/1 reads.
-    defp held!(global), do: held!(Logex.Configuration.Initial.refused(global), global)
+    # Decisions 555 (RV-30), 576 and 577 (RV-31): the one global judged whole at once, by
+    # the lines check/1 gives of it, from the one judge check/1 reads.
+    defp held!(global), do: held!(Logex.Configuration.Judge.refused(global), global)
 
     defp held!([], global), do: global
     defp held!(lines, _global), do: raise(ArgumentError, Enum.join(lines, "\n"))
@@ -427,152 +437,6 @@ defmodule Logex.Configuration do
             line: pos_integer | nil,
             retain: :retain | :non_retain | nil
           }
-  end
-
-  defmodule Initial do
-    @moduledoc false
-    # Decision 555 (RV-30): the one judge of a global's initial value against its type,
-    # internal, which `Logex.Configuration.check/1` and
-    # `Logex.Configuration.Global.new!/3` both read, so that a value is refused in the same
-    # words wherever it is met. Two kinds of line, as check/1 has them:
-    #
-    # - `said/1`, what no `var_global` line can say, the host's mistake, which check/1
-    #   raises: a value that is no number, an array's that is no list of numbers, and
-    #   -0.0 in a real;
-    # - `unheld/1`, what a line can say and no global of the type holds, which check/1
-    #   gives as a diagnostic at the global's line: a number outside the type, by the
-    #   literal rules (`Logex.Declarations`), and an array's list by `array/1`, the rules
-    #   a declared array's list meets.
-    #
-    # `refused/1` is `new!/3`'s: the host's lines, or with none of those the lines of a
-    # value the type does not hold, as check/1 raises the host's mistakes alone. The
-    # location is not read: a located global's initial value is check/1's to refuse, and
-    # so are the type and the name; check/1 reads `unheld/1` only for a global with no
-    # location, a located one's value being told there as one a point does not take, so
-    # that the two say the same of a value only where there is no location. Each takes a `%Logex.Configuration.Global{}` whose
-    # every field may be anything, and is total: whatever the name, the type and the value
-    # are, it gives its lines and raises nothing (RV-30's review, F1; a walk over names,
-    # types and values that are none holds it, `configuration_test.exs`).
-    alias Logex.Configuration.Global
-    alias Logex.Declarations
-    import Logex.Declarations, only: [is_elementary: 1]
-    import Logex.Array, only: [is_array: 1]
-
-    @reals Logex.Declarations.reals()
-
-    def refused(%Global{} = global), do: refused(said(global), global)
-
-    defp refused([], global), do: unheld(global)
-    defp refused(said, _global), do: said
-
-    def said(%Global{initial: nil}), do: []
-
-    # M5-11 (decision 151): an array global's initial value is a list of its elements'
-    # values, each an integer, or a real's a number, whose length and each value check/1
-    # judges.
-    def said(%Global{type: {:array, _type, _dims}, initial: initial} = global)
-        when is_list(initial),
-        do: array_said(numbers?(initial), global)
-
-    def said(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
-      do: [
-        "the initial value of global #{label(name)}, an array, must be a list of its " <>
-          "elements' values, found #{inspect(initial)}"
-      ]
-
-    def said(%Global{initial: initial}) when is_integer(initial),
-      do: []
-
-    # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
-    # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
-    # array's element told by `Logex.Declarations.array_misfits/3`.
-    def said(%Global{name: name, type: type, initial: initial})
-        when type in @reals and initial === -0.0,
-        do: [minus_zero(name)]
-
-    # M5-10: a real global's initial value may be a float, as its line's real literal is;
-    # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`,
-    # so that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and
-    # a dint holds only integers", where until then check/1 raised it as the host's.
-    def said(%Global{initial: initial}) when is_float(initial), do: []
-
-    def said(%Global{name: name, type: type, initial: initial}) when type in @reals,
-      do: [
-        "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
-      ]
-
-    def said(%Global{name: name, initial: initial}),
-      do: [
-        "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
-      ]
-
-    def minus_zero(name),
-      do:
-        "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
-          "gives, a line's `-0.0` being 0.0: give 0.0"
-
-    defp array_said(true, _global), do: []
-
-    # Decision 237: an element's value is a number, a float in an integer array judged by
-    # the literal rules, as a line can say one.
-    defp array_said(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
-      do: [
-        "the initial value of global #{label(name)}, an array#{of(type)}, " <>
-          "must be a list of its elements' values, each a number, found " <>
-          inspect(initial)
-      ]
-
-    # RV-30's review (F1): an array whose elements' type is none, `{:array, :ton, [2]}`,
-    # which check/1 refuses for its type, is told as an array, no word being its
-    # elements', where the word looked up raised a `FunctionClauseError` out of check/1,
-    # new!/1 and new!/3.
-    defp of(type) when is_elementary(type), do: " of #{Declarations.word(type)}s"
-    defp of(_none), do: ""
-
-    # A proper list of numbers: an improper one, or one that holds anything else, is not.
-    defp numbers?([]), do: true
-    defp numbers?([element | rest]) when is_number(element), do: numbers?(rest)
-    defp numbers?(_other), do: false
-
-    # A number a global of an elementary type does not hold: since M5-10 by the literal
-    # rules, as a declaration's initial value (decision 147), a real one no integer
-    # type's, and an integer one a real's only exactly.
-    def unheld(%Global{type: type, initial: v} = global)
-        when is_elementary(type) and is_number(v),
-        do: fit(Declarations.holds?(type, v), global)
-
-    # M5-11 (decision 151): an array's list, its length and each element's value, where its
-    # type is an array's; the lines array/1 gives of the list, which are those it gives
-    # with the list and not without.
-    def unheld(%Global{type: type, initial: initial} = global)
-        when is_array(type) and initial != nil,
-        do: array(global) -- array(%{global | initial: nil})
-
-    def unheld(%Global{}), do: []
-
-    # Every rule a declared array meets, its dimensions, sizes and initial list, as
-    # messages (decision 151).
-    def array(%Global{name: name, type: type, initial: initial}),
-      do: Declarations.array_misfits(name, type, initial)
-
-    defp fit(true, _global), do: []
-
-    # RV-30's review (F1): the name through label/1, as every other line names it, so
-    # that one that is no text, `{1, 2}`, which new!/3 keeps for check/1 to refuse, is
-    # shown as Elixir shows it, where its interpolation raised a `Protocol.UndefinedError`.
-    defp fit(false, %Global{name: name, type: type, initial: v}),
-      do: ["#{label(name)} is #{Declarations.a_type(type)}: " <> misfit(type, v)]
-
-    defp misfit(type, v) when is_float(v) or type in @reals,
-      do: Declarations.literal_misfit(type, v, "`#{shown(v)}`")
-
-    defp misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
-
-    defp shown(v) when is_float(v), do: Float.to_string(v)
-    defp shown(v), do: "#{v}"
-
-    defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: inspect(name)
   end
 
   defmodule Instance do
@@ -613,22 +477,463 @@ defmodule Logex.Configuration do
           }
   end
 
-  @fields [:name, :programs, :tasks, :globals, :instances, :connections]
-  # Decision 300 (the maintainer, 2026-10-29), widening decision 298: no word of a
-  # configuration file's lines names a device, in any case, so a device's name is looked
-  # up among them only where its first two letters, each in either case, and its length
-  # are one of theirs, which a guard reads; since the review of M6-4 two letters, where one
-  # took `drive` for `dword`'s shape and lowercased it to look it up.
-  @device_keywords Map.new(Logex.Configuration.Text.keywords(), &{&1, true})
-  @keyword_shapes Map.new(
-                    for(
-                      word <- Logex.Configuration.Text.keywords(),
-                      <<a::binary-size(1), b::binary-size(1), _::binary>> = word,
-                      first <- Enum.uniq([a, String.upcase(a)]),
-                      second <- Enum.uniq([b, String.upcase(b)]),
-                      do: {{first <> second, byte_size(word)}, true}
+  defmodule Judge do
+    @moduledoc false
+    # Decisions 576 and 577 (RV-31), growing decision 555's judge of a global's initial
+    # value (RV-30): the one judge of a global, internal, which
+    # `Logex.Configuration.check/1` and `Logex.Configuration.Global.new!/3` both read, so
+    # that one global is refused in the same lines wherever it is met and every struct
+    # `new!/3` gives is a `Global.t()`. Every rule of the one global is here, its name, its
+    # type, its initial value, its location and its qualifier; what takes the other
+    # globals, a program or a device to judge stays check/1's: two globals of one name or
+    # of names that differ only in case, a point two globals take, two devices whose names
+    # differ only in case, and what a task, an instance or a connection says of a global.
+    # Two kinds of line, as check/1 has them:
+    #
+    # - `said/1`, what no `var_global` line can say, the host's mistake, which check/1
+    #   raises: a name or a location that is not one name token to the lexer; a type that
+    #   is no elementary type, nor an array of one whose sizes are a non-empty list of
+    #   integers; an initial value that is no number, an array's that is no list of
+    #   numbers, and -0.0 in a real; and a qualifier no line gives;
+    # - `diagnosed/1`, what a line can say and is refused, which check/1 gives as
+    #   diagnostics at the global's line: a name with `.` parts or brackets, or a
+    #   configuration file's keyword (`unnamed/2`, which names a task's and an instance's
+    #   too); `retain` on a located global; an initial value on a located global, or one
+    #   its type does not hold, by the literal rules (`Logex.Declarations`); an array's
+    #   dimensions, sizes and initial list (`array/1`); and a location not written in its
+    #   one spelling, or on a device a keyword names (`placed/1`). In that order, which is
+    #   check/1's for a global alone: the names first, then the globals, then the points.
+    #
+    # `refused/1` is `new!/3`'s: the host's lines, or with none of those the diagnosed
+    # ones, as check/1 raises the host's mistakes alone. `said/1` and `refused/1` take a
+    # `%Logex.Configuration.Global{}` whose every field may be anything, and are total:
+    # whatever the name, the type, the value and the location are, they give their lines
+    # and raise nothing (RV-30's review, F1; the walk over names, types, values and
+    # locations in `configuration_test.exs` holds it). `diagnosed/1` reads a global
+    # `said/1` gives no line of, as check/1 reads only those.
+    alias Logex.Configuration.Global
+    alias Logex.Declarations
+    import Logex.Declarations, only: [is_elementary: 1]
+    import Logex.Array, only: [is_array: 1]
+
+    @reals Logex.Declarations.reals()
+
+    # Decision 300 (the maintainer, 2026-10-29), widening decision 298: no word of a
+    # configuration file's lines names a device, in any case, so a device's name is looked
+    # up among them only where its first two letters, each in either case, and its length
+    # are one of theirs, which a guard reads; since the review of M6-4 two letters, where
+    # one took `drive` for `dword`'s shape and lowercased it to look it up.
+    @device_keywords Map.new(Logex.Configuration.Text.keywords(), &{&1, true})
+    @keyword_shapes Map.new(
+                      for(
+                        word <- Logex.Configuration.Text.keywords(),
+                        <<a::binary-size(1), b::binary-size(1), _::binary>> = word,
+                        first <- Enum.uniq([a, String.upcase(a)]),
+                        second <- Enum.uniq([b, String.upcase(b)]),
+                        do: {{first <> second, byte_size(word)}, true}
+                      )
                     )
-                  )
+
+    def refused(%Global{} = global), do: refused(said(global), global)
+
+    defp refused([], global), do: diagnosed(global)
+    defp refused(said, _global), do: said
+
+    # What no configuration text can say of the global, each such field left out of every
+    # diagnostic check/1 gives.
+    def said(%Global{} = global),
+      do:
+        of_word(word?(global.name), cannot_name(global)) ++
+          type_said(global) ++
+          value_said(global) ++ at_said(global) ++ retain_said(global)
+
+    # What a line can say of the global and is refused, in check/1's order for a global
+    # alone: its name, then the global's own rules, then its location.
+    def diagnosed(%Global{name: name, at: at} = global),
+      do: List.wrap(unnamed(name, :global)) ++ lines(global) ++ place_lines(word?(at), at)
+
+    defp place_lines(false, _at), do: []
+    defp place_lines(true, at), do: placed_lines(placed(at))
+
+    defp placed_lines({:refused, message}), do: [message]
+    defp placed_lines({:ok, _address}), do: []
+
+    # What the lexer reads as one name token, a name or a name with `.` parts: every name
+    # a configuration's line holds is one.
+    def word?(word) when is_binary(word), do: one_word(Logex.Lexer.tokenize(word), word)
+    def word?(_word), do: false
+
+    defp one_word({:ok, [{:name, _, word}], _}, word), do: true
+    defp one_word(_lexed, _word), do: false
+
+    defp of_word(true, _message), do: []
+    defp of_word(false, message), do: [message]
+
+    # An element of the configuration's whose name no line can say: a task's, a global's
+    # or a program instance's.
+    def cannot_name(element),
+      do: "#{inspect(element.name)} cannot name a #{kind(element)}: " <> rule()
+
+    defp kind(%Logex.Configuration.Task{}), do: "task"
+    defp kind(%Global{}), do: "global"
+    defp kind(%Logex.Configuration.Instance{}), do: "program instance"
+
+    def rule, do: "a name is a letter or `_`, then letters, digits or `_`"
+
+    # One namespace for tasks, globals and program instances: a name with `.` parts, which
+    # a line can hold, or a configuration file's keyword, in any case, names nothing in
+    # one, told so where its element is declared (check/1's namespace, §4.8).
+    # M5-11: brackets are kept for an element's subscripts, `m1.temps[3]`, as in a program.
+    def unnamed(name, kind),
+      do: refusal(String.contains?(name, [".", "["]), reserved?(name), name, kind)
+
+    defp refusal(true, _reserved, name, kind)
+         when binary_part(name, byte_size(name) - 1, 1) == "]",
+         do:
+           "`#{name}` cannot name #{a(kind)}: brackets are kept for an element's subscripts, " <>
+             "as in `m1.temps[3]`"
+
+    defp refusal(true, _reserved, name, kind),
+      do:
+        "`#{name}` cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
+          "location, as in `panel.i.0`"
+
+    defp refusal(false, true, name, kind),
+      do: "`#{name}` is a keyword and cannot name #{a(kind)}"
+
+    defp refusal(false, false, _name, _kind), do: nil
+
+    # A configuration file's keyword, in any case, which names nothing in one (§4.8).
+    def reserved?(word), do: String.downcase(word) in Logex.Configuration.Text.keywords()
+
+    def a(:task), do: "a task"
+    def a(:global), do: "a global"
+    def a(:instance), do: "an instance"
+
+    # A global's type: an elementary type, or since M5-11 (decision 151) an array of one,
+    # its sizes any integers a line can say, which check/1 judges as a declaration's, a
+    # line's diagnostic.
+    def type_said(%Global{type: type}) when is_elementary(type), do: []
+
+    def type_said(%Global{type: {:array, type, [_ | _] = dims}} = global)
+        when is_elementary(type),
+        do: sizes_said(sized?(dims), global)
+
+    def type_said(global), do: sizes_said(false, global)
+
+    defp sizes_said(true, _global), do: []
+
+    defp sizes_said(false, %Global{name: name, type: type}),
+      do: [
+        "global #{label(name)} has type #{inspect(type)}: a global is " <>
+          Declarations.either(&inspect/1) <>
+          ", or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of " <>
+          "one integer a dimension"
+      ]
+
+    # Sizes a line can say: a list of integers, an improper one not.
+    def sized?(dims), do: Enum.all?(proper_or_not(dims), &is_integer/1)
+
+    defp proper_or_not(list), do: proper_elements(list, [])
+
+    defp proper_elements([], acc), do: acc
+    defp proper_elements([element | rest], acc), do: proper_elements(rest, [element | acc])
+    defp proper_elements(_improper, _acc), do: [:improper]
+
+    def value_said(%Global{initial: nil}), do: []
+
+    # M5-11 (decision 151): an array global's initial value is a list of its elements'
+    # values, each an integer, or a real's a number, whose length and each value check/1
+    # judges.
+    def value_said(%Global{type: {:array, _type, _dims}, initial: initial} = global)
+        when is_list(initial),
+        do: array_said(numbers?(initial), global)
+
+    def value_said(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)}, an array, must be a list of its " <>
+          "elements' values, found #{inspect(initial)}"
+      ]
+
+    def value_said(%Global{initial: initial}) when is_integer(initial),
+      do: []
+
+    # The review after Milestone 6 (a5-data-model-8): -0.0, which no line gives, a line's
+    # `-0.0` being read as 0.0, and which no real holds (decision 150), as a tag's is, an
+    # array's element told by `Logex.Declarations.array_misfits/3`.
+    def value_said(%Global{name: name, type: type, initial: initial})
+        when type in @reals and initial === -0.0,
+        do: [minus_zero(name)]
+
+    # M5-10: a real global's initial value may be a float, as its line's real literal is;
+    # and since decision 237 any global's, which a line can say, `var_global g dint 1.5`,
+    # so that a float is judged by the literal rules, "`g` is a dint: `1.5` is a real, and
+    # a dint holds only integers", where until then check/1 raised it as the host's.
+    def value_said(%Global{initial: initial}) when is_float(initial), do: []
+
+    def value_said(%Global{name: name, type: type, initial: initial}) when type in @reals,
+      do: [
+        "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
+      ]
+
+    def value_said(%Global{name: name, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
+      ]
+
+    def minus_zero(name),
+      do:
+        "the initial value of global #{label(name)} is -0.0, which no real holds and no line " <>
+          "gives, a line's `-0.0` being 0.0: give 0.0"
+
+    defp array_said(true, _global), do: []
+
+    # Decision 237: an element's value is a number, a float in an integer array judged by
+    # the literal rules, as a line can say one.
+    defp array_said(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
+      do: [
+        "the initial value of global #{label(name)}, an array#{of(type)}, " <>
+          "must be a list of its elements' values, each a number, found " <>
+          inspect(initial)
+      ]
+
+    # RV-30's review (F1): an array whose elements' type is none, `{:array, :ton, [2]}`,
+    # which check/1 refuses for its type, is told as an array, no word being its
+    # elements', where the word looked up raised a `FunctionClauseError` out of check/1,
+    # new!/1 and new!/3.
+    defp of(type) when is_elementary(type), do: " of #{Declarations.word(type)}s"
+    defp of(_none), do: ""
+
+    # A proper list of numbers: an improper one, or one that holds anything else, is not.
+    defp numbers?([]), do: true
+    defp numbers?([element | rest]) when is_number(element), do: numbers?(rest)
+    defp numbers?(_other), do: false
+
+    # A location that the lexer does not read as one name token, which no line can say.
+    defp at_said(%Global{at: nil}), do: []
+    defp at_said(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
+
+    defp not_a_location(global),
+      do:
+        "global #{label(global.name)} is at #{label(global.at)}, which is not a location: " <>
+          "a location is a device, `i` for an input or `q` for an output, then an " <>
+          "address, as in `panel.i.0` or `panel.q.3`"
+
+    # M6-3 (decision 267): a line's qualifier, or none.
+    defp retain_said(%Global{retain: retain}) when retain in [nil, :retain, :non_retain],
+      do: []
+
+    defp retain_said(%Global{name: name, retain: retain}),
+      do: [
+        "unknown qualifier #{inspect(retain)} on global #{label(name)}: logex has :retain " <>
+          "and :non_retain, or nil for none"
+      ]
+
+    # The global's own rules, a line each, which check/1 gives at its line. M6-3 (decision
+    # 272): a located global takes no `retain`, so no output comes back on from a kept
+    # value, and an input point is read again at every start.
+    def lines(%Global{retain: :retain, at: at} = global) when at != nil,
+      do: retained_point(location(at), global) ++ lines(%{global | retain: nil})
+
+    def lines(%Global{type: type} = global) when is_elementary(type),
+      do: initial(global, location(global.at))
+
+    # M5-11 (decision 151): an array global meets every rule a declared array meets, its
+    # dimensions, sizes and initial list. Since M5-13 (decision 156) it may be located,
+    # each element a point at consecutive addresses, and then takes no initial list, as a
+    # located global takes no initial value.
+    def lines(%Global{at: nil, type: type} = global) when is_array(type), do: array(global)
+
+    def lines(%Global{type: type} = global) when is_array(type),
+      do: located_array(location(global.at), global)
+
+    def lines(%Global{}), do: []
+
+    defp located_array(_location, %Global{initial: nil} = global), do: array(global)
+
+    # Its sizes judged as an unlocated array's; its list not, since it takes none, and told
+    # so only where its sizes give it a range.
+    defp located_array(location, %Global{} = global),
+      do: listed_located(array(%{global | initial: nil}), location, global)
+
+    defp listed_located([], location, %Global{name: name} = global),
+      do: ["`#{name}` is #{a_point(location, global)}: " <> no_list(location)]
+
+    defp listed_located(misfits, _location, _global), do: misfits
+
+    defp no_list({:ok, {_device, "i", _fields}}),
+      do: "their values come from the input image, so it takes no initial list"
+
+    defp no_list({:ok, {_device, "q", _fields}}),
+      do: "it takes no initial list, and each element is 0 until its driver writes it"
+
+    defp no_list(:error), do: "a located array takes no initial list"
+
+    # M5-13: how a message names a located global, a point or an array of points with the
+    # range its elements occupy, `an array of input points, `card.i.0` to `card.i.7``.
+    def a_point({:ok, {_device, "i", _fields}}, %Global{type: type}) when not is_array(type),
+      do: "an input point"
+
+    def a_point({:ok, {_device, "q", _fields}}, %Global{type: type}) when not is_array(type),
+      do: "an output point"
+
+    # The range from the first element's address and the count, never the points one by
+    # one, and none for an array of no element, where its sizes are refused: the review
+    # after Milestone 6 (b6-configuration-2) found an array refused for its size of
+    # millions listed point by point for this, and a dimension of 0 raising.
+    def a_point({:ok, {device, io, fields}}, %Global{type: {:array, _type, dims}}),
+      do: ranged_point(Enum.product(dims), {device, io, fields})
+
+    def a_point(:error, _global), do: "located"
+
+    defp ranged_point(count, {device, io, fields}) when count > 0 do
+      {first, [last]} = Enum.split(fields, -1)
+
+      "an array of #{direction_word(io)} points, `#{spelling({device, io, fields})}` to " <>
+        "`#{spelling({device, io, first ++ [last + count - 1]})}`"
+    end
+
+    defp ranged_point(_none, {_device, io, _fields}),
+      do: "an array of #{direction_word(io)} points"
+
+    defp retained_point(location, %Global{name: name} = global),
+      do: [
+        "`#{name}` is #{a_point(location, global)}, and a located global takes no `retain`: " <>
+          "an input point is read again at every start, and an output point starts at 0 " <>
+          "until logic writes it"
+      ]
+
+    defp direction_word("i"), do: "input"
+    defp direction_word("q"), do: "output"
+
+    # A located global takes no initial value: an input point's value is the host's, and
+    # an output point starts at 0, the safe value, until the instance that drives it first
+    # scans; so any initial value on one is refused, in these words, at its line, from
+    # check/1 and since decision 576 from `new!/3` alike.
+    defp initial(%Global{initial: nil}, _location), do: []
+
+    # A value the host's check refused already, any but a number (decision 237: a float in
+    # a global of an integer type is judged by the literal rules, as a line can say it).
+    defp initial(%Global{initial: v}, _location) when not is_number(v), do: []
+
+    defp initial(%Global{name: name}, {:ok, {_device, "i", _address}}),
+      do: [
+        "`#{name}` is an input point: its value comes from the input image, so it takes no " <>
+          "initial value"
+      ]
+
+    defp initial(%Global{name: name}, {:ok, {_device, "q", _address}}),
+      do: [
+        "`#{name}` is an output point: it takes no initial value, and is 0 until its " <>
+          "driver writes it"
+      ]
+
+    # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
+    # real one is no integer type's, and an integer one a real's only exactly.
+    defp initial(global, _location), do: unheld(global)
+
+    # A number a global of an elementary type does not hold: since M5-10 by the literal
+    # rules, as a declaration's initial value (decision 147), a real one no integer
+    # type's, and an integer one a real's only exactly.
+    defp unheld(%Global{type: type, initial: v} = global)
+         when is_elementary(type) and is_number(v),
+         do: fit(Declarations.holds?(type, v), global)
+
+    defp unheld(%Global{}), do: []
+
+    # Every rule a declared array meets, its dimensions, sizes and initial list, as
+    # messages (decision 151).
+    def array(%Global{name: name, type: type, initial: initial}),
+      do: Declarations.array_misfits(name, type, initial)
+
+    defp fit(true, _global), do: []
+
+    # RV-30's review (F1): the name through label/1, as every other line names it.
+    defp fit(false, %Global{name: name, type: type, initial: v}),
+      do: ["#{label(name)} is #{Declarations.a_type(type)}: " <> misfit(type, v)]
+
+    defp misfit(type, v) when is_float(v) or type in @reals,
+      do: Declarations.literal_misfit(type, v, "`#{shown(v)}`")
+
+    defp misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
+
+    defp shown(v) when is_float(v), do: Float.to_string(v)
+    defp shown(v), do: "#{v}"
+
+    # `Logex.Configuration.location/1`'s rule: a location's parts, `{:ok, {device, "i" |
+    # "q", address}}`, or `:error`.
+    def location(at), do: located_word(word?(at), at)
+
+    defp located_word(true, at), do: one_spelling(spelled(at))
+    defp located_word(false, _at), do: :error
+
+    defp one_spelling({:ok, address}), do: {:ok, address}
+    defp one_spelling(_other), do: :error
+
+    # A location as check/1 places it: `{:ok, address}`, or `{:refused, message}` where it
+    # is no location, is not written in its one spelling, or is on a device a keyword
+    # names (decision 300), a global's own name refused or not. `at` is one name token.
+    def placed(at), do: place(spelled(at), at)
+
+    defp place(:error, at),
+      do:
+        {:refused,
+         "`#{at}` is not a location: a location is a device, `i` or `q`, and an address, " <>
+           "as in `panel.i.0`"}
+
+    defp place({:respell, address}, at),
+      do:
+        {:refused,
+         "`#{at}` is not a location as written: a location's `i` or `q` is lowercase and " <>
+           "its address has no leading zero, so it is written `#{spelling(address)}`"}
+
+    defp place({:ok, {device, _io, _fields}} = spelled, _at)
+         when byte_size(device) > 1 and
+                is_map_key(@keyword_shapes, {binary_part(device, 0, 2), byte_size(device)}),
+         do: device_word(is_map_key(@device_keywords, String.downcase(device)), spelled)
+
+    defp place(spelled, _at), do: spelled
+
+    defp device_word(true, {:ok, {device, _io, _fields}}),
+      do: {:refused, "`#{device}` is a keyword and cannot name a device"}
+
+    defp device_word(false, spelled), do: spelled
+
+    # A location's parts, read so that one written another way than its one spelling is
+    # told that spelling: `{:ok, address}` as written, `{:respell, address}` with `I` or
+    # `Q` for `i` or `q`, or a field with a leading zero, and `:error` for no location.
+    # `at` is one name token, so its first part is a name and its others names or digits.
+    # The `.ld` compiler reads the same shape in a rung, to name a location there, and a
+    # test pins the two readings as one shape.
+    def spelled(at), do: spelled_parts(String.split(at, "."), at)
+
+    defp spelled_parts([device, io | fields], at)
+         when io in ["i", "q", "I", "Q"] and fields != [],
+         do: numbered(Enum.all?(fields, &digits?/1), {device, String.downcase(io), fields}, at)
+
+    defp spelled_parts(_parts, _at), do: :error
+
+    defp numbered(false, _parts, _at), do: :error
+
+    defp numbered(true, {device, io, fields}, at) do
+      address = {device, io, Enum.map(fields, &String.to_integer/1)}
+      as_written(spelling(address) == at, address)
+    end
+
+    defp as_written(true, address), do: {:ok, address}
+    defp as_written(false, address), do: {:respell, address}
+
+    defp digits?(field), do: String.match?(field, ~r/\A[0-9]+\z/)
+
+    # A location in its one spelling.
+    def spelling({device, io, fields}),
+      do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
+
+    defp label(name) when is_binary(name), do: "`#{name}`"
+    defp label(name), do: inspect(name)
+  end
+
+  @fields [:name, :programs, :tasks, :globals, :instances, :connections]
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
@@ -1379,7 +1684,7 @@ defmodule Logex.Configuration do
   defp shaped(true, _name, _what), do: []
   defp shaped(false, name, what), do: ["#{inspect(name)} cannot name #{what}: " <> rule()]
 
-  defp rule, do: "a name is a letter or `_`, then letters, digits or `_`"
+  defp rule, do: Judge.rule()
 
   # The names under which programs were given, good or not.
   defp given(programs) when is_map(programs) and not is_struct(programs),
@@ -1552,11 +1857,9 @@ defmodule Logex.Configuration do
         counted(task.priority, priority_rule(name)) ++
         counted(task.watchdog, watchdog_rule(name)) ++ flag(task.continuous, name)
 
-  defp said(%Global{} = global),
-    do:
-      named(global) ++
-        global_type(global) ++
-        Initial.said(global) ++ global_at(global) ++ global_retain(global)
+  # A global's, every rule of the one global, the one judge's (decision 577), which
+  # `Global.new!/3` reads too.
+  defp said(%Global{} = global), do: Judge.said(global)
 
   defp said(%Instance{type: type, task: task} = instance),
     do:
@@ -1577,8 +1880,7 @@ defmodule Logex.Configuration do
   defp of_word(true, _message), do: []
   defp of_word(false, message), do: [message]
 
-  defp cannot_name(element),
-    do: "#{inspect(element.name)} cannot name a #{kind(element)}: " <> rule()
+  defp cannot_name(element), do: Judge.cannot_name(element)
 
   # A task's `single` (M2-6) names a global, as one name token, or is nil for none.
   defp trigger_word(nil, _name), do: []
@@ -1605,53 +1907,6 @@ defmodule Logex.Configuration do
     do: ["task #{label(name)}: continuous is true or false, found #{inspect(continuous)}"]
 
   defp priority_rule(name), do: "task #{label(name)}: a priority is 0, the highest, to 65535"
-
-  defp global_type(%Global{type: type}) when is_elementary(type), do: []
-
-  # M5-11 (decision 151): an array of an elementary type, its sizes any integers a line can
-  # say, which check/1 judges as a declaration's, a line's diagnostic.
-  defp global_type(%Global{type: {:array, type, [_ | _] = dims}} = global)
-       when is_elementary(type),
-       do: sizes_said(Enum.all?(proper_or_not(dims), &is_integer/1), global)
-
-  defp global_type(global), do: sizes_said(false, global)
-
-  defp sizes_said(true, _global), do: []
-
-  defp sizes_said(false, %Global{name: name, type: type}),
-    do: [
-      "global #{label(name)} has type #{inspect(type)}: a global is " <>
-        Declarations.either(&inspect/1) <>
-        ", or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of " <>
-        "one integer a dimension"
-    ]
-
-  defp proper_or_not(list), do: proper_elements(list, [])
-
-  defp proper_elements([], acc), do: acc
-  defp proper_elements([element | rest], acc), do: proper_elements(rest, [element | acc])
-  defp proper_elements(_improper, _acc), do: [:improper]
-
-  # M6-3 (decision 267): a line's qualifier, or none.
-  defp global_retain(%Global{retain: retain}) when retain in [nil, :retain, :non_retain], do: []
-
-  defp global_retain(%Global{name: name, retain: retain}),
-    do: [
-      "unknown qualifier #{inspect(retain)} on global #{label(name)}: logex has :retain and " <>
-        ":non_retain, or nil for none"
-    ]
-
-  # A global's initial value that no `var_global` line can say is `Initial.said/1`'s, the
-  # one judge's, which `Global.new!/3` reads too (decision 555).
-
-  defp global_at(%Global{at: nil}), do: []
-  defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
-
-  defp not_a_location(global),
-    do:
-      "global #{label(global.name)} is at #{label(global.at)}, which is not a location: " <>
-        "a location is a device, `i` for an input or `q` for an output, then an " <>
-        "address, as in `panel.i.0` or `panel.q.3`"
 
   defp instance_task(nil, _instance), do: []
 
@@ -1686,11 +1941,7 @@ defmodule Logex.Configuration do
 
   # What the lexer reads as one name token, a name or a name with `.` parts: every name a
   # configuration's line holds is one.
-  defp word?(word) when is_binary(word), do: one_word(Logex.Lexer.tokenize(word), word)
-  defp word?(_word), do: false
-
-  defp one_word({:ok, [{:name, _, word}], _}, word), do: true
-  defp one_word(_lexed, _word), do: false
+  defp word?(word), do: Judge.word?(word)
 
   # The rule over lines, for the elements whose own line is good: all nil, as from
   # Elixir, or each list in rising lines and no line holding two elements, as a file's.
@@ -1772,10 +2023,6 @@ defmodule Logex.Configuration do
   defp where(%{line: nil}), do: ""
   defp where(%{line: line}), do: " (line #{line})"
 
-  defp kind(%Logex.Configuration.Task{}), do: "task"
-  defp kind(%Global{}), do: "global"
-  defp kind(%Instance{}), do: "program instance"
-
   # The elements whose name the lexer reads as one token: any other name is the host's
   # mistake, refused already.
   defp worded(elements), do: Enum.filter(elements, &word?(&1.name))
@@ -1818,7 +2065,7 @@ defmodule Logex.Configuration do
 
   defp take_name({ref, element}, acc) do
     {kind, name, line} = held(element)
-    refusal = refusal(String.contains?(name, [".", "["]), reserved?(name), name, kind)
+    refusal = Judge.unnamed(name, kind)
     take(refusal, {ref, kind, name, line, stored(ref, element)}, acc)
   end
 
@@ -1830,7 +2077,7 @@ defmodule Logex.Configuration do
   # use of it is silent, where until then a connection or a var_external that named it
   # raised FunctionClauseError or Protocol.UndefinedError inside the check.
   defp stored({:global, _index}, %Global{} = global),
-    do: typed_or_declared(global_type(global), global)
+    do: typed_or_declared(Judge.type_said(global), global)
 
   defp stored(_ref, element), do: element
 
@@ -1841,20 +2088,6 @@ defmodule Logex.Configuration do
   defp held(%Global{name: name, line: line}), do: {:global, name, line}
   defp held(%Instance{name: name, line: line}), do: {:instance, name, line}
   defp held({:declared, line, %{kind: kind, name: name}}), do: {kind, name, line}
-
-  # M5-11: brackets are kept for an element's subscripts, `m1.temps[3]`, as in a program.
-  defp refusal(true, _reserved, name, kind) when binary_part(name, byte_size(name) - 1, 1) == "]",
-    do:
-      "`#{name}` cannot name #{a(kind)}: brackets are kept for an element's subscripts, as " <>
-        "in `m1.temps[3]`"
-
-  defp refusal(true, _reserved, name, kind),
-    do:
-      "`#{name}` cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
-        "location, as in `panel.i.0`"
-
-  defp refusal(false, true, name, kind), do: "`#{name}` is a keyword and cannot name #{a(kind)}"
-  defp refusal(false, false, _name, _kind), do: nil
 
   defp take(nil, {_ref, _kind, name, _line, _element} = held, {_, folded, _, _, _} = acc),
     do: clash(Map.get(folded, String.downcase(name)), held, acc)
@@ -1905,12 +2138,10 @@ defmodule Logex.Configuration do
   defp at_line(nil), do: ""
   defp at_line(line), do: " (line #{line})"
 
-  defp a(:task), do: "a task"
-  defp a(:global), do: "a global"
-  defp a(:instance), do: "an instance"
+  defp a(kind), do: Judge.a(kind)
 
   # A configuration file's keyword, in any case, which names nothing in one (§4.8).
-  defp reserved?(word), do: String.downcase(word) in Text.keywords()
+  defp reserved?(word), do: Judge.reserved?(word)
 
   # Each task's problems, and the globals their triggers use, which M2-2's warning for a
   # global nothing uses counts (M2-6).
@@ -2199,122 +2430,12 @@ defmodule Logex.Configuration do
 
   defp prefixed(prefix, message), do: prefix <> message
 
-  # M6-3 (decision 272): a located global takes no `retain`, so no output comes back on
-  # from a kept value, and an input point is read again at every start.
-  defp global(%Global{retain: :retain, at: at} = global) when at != nil,
-    do: retained_point(location(at), global) ++ global(%{global | retain: nil})
+  # A global's own rules, each a diagnostic at its line: the one judge's (decisions 555,
+  # 576 and 577), which `Global.new!/3` reads too.
+  defp global(%Global{line: line} = global),
+    do: Enum.map(Judge.lines(global), &diagnostic(line, &1))
 
-  defp global(%Global{type: type} = global) when is_elementary(type),
-    do: initial(global, location(global.at))
-
-  # M5-11 (decision 151): an array global meets every rule a declared array meets, its
-  # dimensions, sizes and initial list, each a diagnostic at its line. Since M5-13
-  # (decision 156) it may be located, each element a point at consecutive addresses, and
-  # then takes no initial list, as a located global takes no initial value.
-  defp global(%Global{at: nil, type: type} = global) when is_array(type), do: misfits(global)
-
-  defp global(%Global{type: type} = global) when is_array(type),
-    do: located_array(location(global.at), global)
-
-  defp global(%Global{}), do: []
-
-  defp misfits(%Global{} = global),
-    do: Enum.map(Initial.array(global), &diagnostic(global.line, &1))
-
-  defp located_array(_location, %Global{initial: nil} = global), do: misfits(global)
-
-  # Its sizes judged as an unlocated array's; its list not, since it takes none, and told
-  # so only where its sizes give it a range.
-  defp located_array(location, %Global{} = global),
-    do: listed_located(misfits(%{global | initial: nil}), location, global)
-
-  defp listed_located([], location, %Global{name: name, line: line} = global),
-    do: [diagnostic(line, "`#{name}` is #{a_point(location, global)}: " <> no_list(location))]
-
-  defp listed_located(misfits, _location, _global), do: misfits
-
-  defp no_list({:ok, {_device, "i", _fields}}),
-    do: "their values come from the input image, so it takes no initial list"
-
-  defp no_list({:ok, {_device, "q", _fields}}),
-    do: "it takes no initial list, and each element is 0 until its driver writes it"
-
-  defp no_list(:error), do: "a located array takes no initial list"
-
-  # M5-13: how a message names a located global, a point or an array of points with the
-  # range its elements occupy, `an array of input points, `card.i.0` to `card.i.7``.
-  defp a_point({:ok, {_device, "i", _fields}}, %Global{type: type}) when not is_array(type),
-    do: "an input point"
-
-  defp a_point({:ok, {_device, "q", _fields}}, %Global{type: type}) when not is_array(type),
-    do: "an output point"
-
-  # The range from the first element's address and the count, never the points one by
-  # one, and none for an array of no element, where its sizes are refused: the review
-  # after Milestone 6 (b6-configuration-2) found an array refused for its size of millions
-  # listed point by point for this, and a dimension of 0 raising.
-  defp a_point({:ok, {device, io, fields}}, %Global{type: {:array, _type, dims}}),
-    do: ranged_point(Enum.product(dims), {device, io, fields})
-
-  defp a_point(:error, _global), do: "located"
-
-  defp ranged_point(count, {device, io, fields}) when count > 0 do
-    {first, [last]} = Enum.split(fields, -1)
-
-    "an array of #{direction_word(io)} points, `#{spelling({device, io, fields})}` to " <>
-      "`#{spelling({device, io, first ++ [last + count - 1]})}`"
-  end
-
-  defp ranged_point(_none, {_device, io, _fields}), do: "an array of #{direction_word(io)} points"
-
-  defp retained_point(location, %Global{name: name, line: line} = global),
-    do: [
-      diagnostic(
-        line,
-        "`#{name}` is #{a_point(location, global)}, and a located global takes no `retain`: " <>
-          "an input point is read again at every start, and an output point starts at 0 " <>
-          "until logic writes it"
-      )
-    ]
-
-  defp direction_word("i"), do: "input"
-  defp direction_word("q"), do: "output"
-
-  # A located global takes no initial value: an input point's value is the host's, and an
-  # output point starts at 0, the safe value, until the instance that drives it first
-  # scans.
-  defp initial(%Global{initial: nil}, _location), do: []
-
-  # A value the host's check refused already, any but a number (decision 237: a float in a
-  # global of an integer type is judged by the literal rules, as a line can say it).
-  defp initial(%Global{initial: v}, _location) when not is_number(v), do: []
-
-  defp initial(%Global{name: name, line: line}, {:ok, {_device, "i", _address}}),
-    do: [
-      diagnostic(
-        line,
-        "`#{name}` is an input point: its value comes from the input image, so it takes no " <>
-          "initial value"
-      )
-    ]
-
-  defp initial(%Global{name: name, line: line}, {:ok, {_device, "q", _address}}),
-    do: [
-      diagnostic(
-        line,
-        "`#{name}` is an output point: it takes no initial value, and is 0 until its " <>
-          "driver writes it"
-      )
-    ]
-
-  # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
-  # real one is no integer type's, and an integer one a real's only exactly; the one
-  # judge's (`Initial.unheld/1`), which `Global.new!/3` reads too (decision 555).
-  defp initial(%Global{line: line} = global, _location),
-    do: unheld(Initial.unheld(global), line)
-
-  defp unheld([], _line), do: []
-  defp unheld(messages, line), do: Enum.map(messages, &diagnostic(line, &1))
+  defp a_point(location, global), do: Judge.a_point(location, global)
 
   defp shown_number(v) when is_float(v), do: Float.to_string(v)
   defp shown_number(v), do: "#{v}"
@@ -2370,7 +2491,7 @@ defmodule Logex.Configuration do
   # initial/1 gave it.
   def initial(%Global{name: name, type: type, initial: initial})
       when type in @reals and initial === -0.0,
-      do: raise(ArgumentError, Initial.minus_zero(name))
+      do: raise(ArgumentError, Judge.minus_zero(name))
 
   # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
   # `real`'s rounded to a single, an integer one as the real it is, one past its range the
@@ -2394,7 +2515,7 @@ defmodule Logex.Configuration do
           "got: #{inspect(other)}"
       )
 
-  defp sizes_said?(dims), do: Enum.all?(proper_or_not(dims), &is_integer/1)
+  defp sizes_said?(dims), do: Judge.sized?(dims)
 
   defp initial_sized(false, {global, _array}, _initial), do: no_global(global)
 
@@ -2507,42 +2628,14 @@ defmodule Logex.Configuration do
       :error
   """
   @spec location(term) :: {:ok, {String.t(), String.t(), Logex.IO.address()}} | :error
-  def location(at), do: located_word(word?(at), at)
+  def location(at), do: Judge.location(at)
 
-  defp located_word(true, at), do: one_spelling(spelled(at))
-  defp located_word(false, _at), do: :error
-
-  defp one_spelling({:ok, address}), do: {:ok, address}
-  defp one_spelling(_other), do: :error
-
-  # A location's parts, read so that one written another way than its one spelling is
-  # told that spelling: `{:ok, address}` as written, `{:respell, address}` with `I` or `Q`
-  # for `i` or `q`, or a field with a leading zero, and `:error` for no location. `at` is
-  # one name token, so its first part is a name and its others names or digits. The `.ld`
-  # compiler reads the same shape in a rung, to name a location there, and a test pins the
-  # two readings as one shape.
-  defp spelled(at), do: spelled_parts(String.split(at, "."), at)
-
-  defp spelled_parts([device, io | fields], at) when io in ["i", "q", "I", "Q"] and fields != [],
-    do: numbered(Enum.all?(fields, &digits?/1), {device, String.downcase(io), fields}, at)
-
-  defp spelled_parts(_parts, _at), do: :error
-
-  defp numbered(false, _parts, _at), do: :error
-
-  defp numbered(true, {device, io, fields}, at) do
-    address = {device, io, Enum.map(fields, &String.to_integer/1)}
-    as_written(spelling(address) == at, address)
-  end
-
-  defp as_written(true, address), do: {:ok, address}
-  defp as_written(false, address), do: {:respell, address}
-
-  defp digits?(field), do: String.match?(field, ~r/\A[0-9]+\z/)
+  # A location's parts as written (the one judge's): `{:ok, address}`, `{:respell,
+  # address}` or `:error`, which a name with `.` parts is told by too.
+  defp spelled(at), do: Judge.spelled(at)
 
   # A location in its one spelling.
-  defp spelling({device, io, fields}),
-    do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
+  defp spelling(address), do: Judge.spelling(address)
 
   # Each location a global is at, refused where it is no location or is not written in
   # its one spelling. A global that keeps its name takes its address, where no other
@@ -2563,54 +2656,15 @@ defmodule Logex.Configuration do
   end
 
   defp at(false, _global, _keeps, acc), do: acc
-  defp at(true, global, keeps, acc), do: at_spelled(spelled(global.at), global, keeps, acc)
+  defp at(true, global, keeps, acc), do: placed(Judge.placed(global.at), global, keeps, acc)
 
-  defp at_spelled(:error, global, _keeps, acc),
-    do:
-      noted(
-        acc,
-        global.line,
-        "`#{global.at}` is not a location: a location is a device, `i` or `q`, and an " <>
-          "address, as in `panel.i.0`"
-      )
+  # A location refused is told at its global's line, in the one judge's words (decision
+  # 577), a global's own name refused or not; one that is a location is taken by a global
+  # that keeps its name.
+  defp placed({:refused, message}, global, _keeps, acc), do: noted(acc, global.line, message)
+  defp placed({:ok, _address}, _global, false, acc), do: acc
 
-  defp at_spelled({:respell, address}, global, _keeps, acc),
-    do:
-      noted(
-        acc,
-        global.line,
-        "`#{global.at}` is not a location as written: a location's `i` or `q` is lowercase " <>
-          "and its address has no leading zero, so it is written `#{spelling(address)}`"
-      )
-
-  # Decision 300: a configuration keyword names no device, as it names nothing else in a
-  # configuration file (decision 298 for the two qualifiers), a global's own name refused
-  # or not.
-  defp at_spelled({:ok, {device, _io, _fields}} = spelled, global, keeps, acc)
-       when byte_size(device) > 1 and
-              is_map_key(@keyword_shapes, {binary_part(device, 0, 2), byte_size(device)}),
-       do:
-         device_word(
-           is_map_key(@device_keywords, String.downcase(device)),
-           spelled,
-           global,
-           {keeps, acc}
-         )
-
-  defp at_spelled({:ok, _address}, _global, false, acc), do: acc
-
-  defp at_spelled({:ok, {device, _io, _fields} = address}, global, true, {_, devices, _} = acc),
-    do: device(Map.get(devices, String.downcase(device)), address, global, acc)
-
-  defp device_word(true, {:ok, {device, _io, _fields}}, global, {_keeps, acc}),
-    do: noted(acc, global.line, "`#{device}` is a keyword and cannot name a device")
-
-  defp device_word(false, {:ok, address}, global, {keeps, acc}),
-    do: located_at(address, global, acc, keeps)
-
-  defp located_at(_address, _global, acc, false), do: acc
-
-  defp located_at({device, _io, _fields} = address, global, {_, devices, _} = acc, true),
+  defp placed({:ok, {device, _io, _fields} = address}, global, true, {_, devices, _} = acc),
     do: device(Map.get(devices, String.downcase(device)), address, global, acc)
 
   defp device(
