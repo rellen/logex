@@ -61,6 +61,7 @@
   {"guides/howto/jump-over-rungs.md", :howto, "How-to guides"},
   {"guides/howto/write-a-function-block.md", :howto, "How-to guides"},
   {"guides/howto/keep-values-across-a-restart.md", :howto, "How-to guides"},
+  {"guides/howto/carry-retained-values-to-a-new-version.md", :howto, "How-to guides"},
   {"guides/howto/port-a-program.md", :howto, "How-to guides"},
   {"guides/howto/write-a-configuration-file.md", :howto, "How-to guides"},
   {"guides/howto/build-a-configuration-from-elixir.md", :howto, "How-to guides"},
