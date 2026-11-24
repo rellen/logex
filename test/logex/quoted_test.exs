@@ -1127,6 +1127,37 @@ defmodule Logex.QuotedTest do
     end
   end
 
+  describe "a check that succeeds builds no refusal's text" do
+    # Since RV-32's review a name a refusal quotes is looked at, whether it is UTF-8
+    # text, which a refusal pays and a check that succeeds should not: so
+    # `Logex.Configuration`'s checks of what a configuration says, `of_word/2` and
+    # `counted/2`, take their message as a function, called only where it is told. Read
+    # from its syntax tree: each call's message is an `fn`.
+    # A clause's head is no call: its body is walked, its head passed over, a guard's too.
+    defp messages({:defp, meta, [{:when, _, [{name, _, _} | _]} | body]}, acc)
+         when name in [:of_word, :counted],
+         do: {{:defp, meta, body}, acc}
+
+    defp messages({:defp, meta, [{name, _, _} | body]}, acc) when name in [:of_word, :counted],
+      do: {{:defp, meta, body}, acc}
+
+    defp messages({name, meta, [_said, message]} = node, acc) when name in [:of_word, :counted],
+      do: {node, [{name, meta[:line], match?({:fn, _, _}, message)} | acc]}
+
+    defp messages(node, acc), do: {node, acc}
+
+    test "Logex.Configuration's checks take their message as a function" do
+      {:ok, ast} = Code.string_to_quoted(File.read!("lib/logex/configuration.ex"))
+      {_ast, calls} = Macro.prewalk(ast, [], &messages/2)
+
+      calls =
+        for {name, line, lazy} <- calls, name in [:of_word, :counted], do: {name, line, lazy}
+
+      assert length(calls) >= 10
+      assert for({name, line, false} <- calls, do: {name, line}) == []
+    end
+  end
+
   describe "a refusal of a huge value costs no more than a small one's and the cut's" do
     # Counted in reductions, the least of three, a refusal of 10 ** 1_000_000 and of a
     # list of a million elements against one of -7, in the same run, each bound the small

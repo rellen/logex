@@ -566,7 +566,7 @@ defmodule Logex.Configuration do
     # diagnostic check/1 gives.
     def said(%Global{} = global),
       do:
-        of_word(word?(global.name), cannot_name(global)) ++
+        of_word(word?(global.name), fn -> cannot_name(global) end) ++
           type_said(global) ++
           value_said(global) ++ at_said(global) ++ retain_said(global)
 
@@ -589,8 +589,11 @@ defmodule Logex.Configuration do
     defp one_word({:ok, [{:name, _, word}], _}, word), do: true
     defp one_word(_lexed, _word), do: false
 
+    # The message made only where it is told, so that a configuration that says each of
+    # them builds none of its text (RV-32's review: a name quoted through the cut is
+    # looked at, which a refusal pays and a check that succeeds does not).
     defp of_word(true, _message), do: []
-    defp of_word(false, message), do: [message]
+    defp of_word(false, message), do: [message.()]
 
     # An element of the configuration's whose name no line can say: a task's, a global's
     # or a program instance's.
@@ -734,7 +737,9 @@ defmodule Logex.Configuration do
 
     # A location that the lexer does not read as one name token, which no line can say.
     defp at_said(%Global{at: nil}), do: []
-    defp at_said(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
+
+    defp at_said(%Global{at: at} = global),
+      do: of_word(word?(at), fn -> not_a_location(global) end)
 
     defp not_a_location(global),
       do:
@@ -1892,9 +1897,9 @@ defmodule Logex.Configuration do
     do:
       named(task) ++
         trigger_word(task.single, name) ++
-        counted(task.interval, interval_rule(name)) ++
-        counted(task.priority, priority_rule(name)) ++
-        counted(task.watchdog, watchdog_rule(name)) ++ flag(task.continuous, name)
+        counted(task.interval, fn -> interval_rule(name) end) ++
+        counted(task.priority, fn -> priority_rule(name) end) ++
+        counted(task.watchdog, fn -> watchdog_rule(name) end) ++ flag(task.continuous, name)
 
   # A global's, every rule of the one global, the one judge's (decision 577), which
   # `Global.new!/3` reads too.
@@ -1905,19 +1910,22 @@ defmodule Logex.Configuration do
       named(instance) ++
         of_word(
           word?(type),
-          "#{describe(instance)}: its type is a program's name, found #{shown(type)}"
+          fn ->
+            "#{describe(instance)}: its type is a program's name, found #{shown(type)}"
+          end
         ) ++
         instance_task(task, instance)
 
   defp said(%Connection{} = connection),
     do:
-      of_word(ends?(connection), ends_rule(connection)) ++
-        of_word(other_end(connection.to) != :junk, other_end_rule(connection))
+      of_word(ends?(connection), fn -> ends_rule(connection) end) ++
+        of_word(other_end(connection.to) != :junk, fn -> other_end_rule(connection) end)
 
-  defp named(%{name: name} = element), do: of_word(word?(name), cannot_name(element))
+  defp named(%{name: name} = element), do: of_word(word?(name), fn -> cannot_name(element) end)
 
+  # The message made only where it is told, as the judge's of_word/2.
   defp of_word(true, _message), do: []
-  defp of_word(false, message), do: [message]
+  defp of_word(false, message), do: [message.()]
 
   defp cannot_name(element), do: Judge.cannot_name(element)
 
@@ -1928,12 +1936,14 @@ defmodule Logex.Configuration do
     do:
       of_word(
         word?(single),
-        "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
-          "found #{shown(single)}"
+        fn ->
+          "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
+            "found #{shown(single)}"
+        end
       )
 
   defp counted(value, _rule) when value == nil or is_integer(value), do: []
-  defp counted(value, rule), do: [rule <> ", found #{shown(value)}"]
+  defp counted(value, rule), do: [rule.() <> ", found #{shown(value)}"]
 
   defp interval_rule(name), do: "task #{label(name)}: an interval is 1 to 2147483647 ms"
   defp watchdog_rule(name), do: "task #{label(name)}: a watchdog is 1 to 2147483647 ms"
@@ -1953,7 +1963,9 @@ defmodule Logex.Configuration do
     do:
       of_word(
         word?(task),
-        "#{describe(instance)}: its task is a task's name, or nil for none, found #{shown(task)}"
+        fn ->
+          "#{describe(instance)}: its task is a task's name, or nil for none, found #{shown(task)}"
+        end
       )
 
   # A connection's line writes its instance and member as one path, `m1.start`, whose
