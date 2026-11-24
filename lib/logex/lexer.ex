@@ -156,7 +156,8 @@ defmodule Logex.Lexer do
   # integer in its first `@looked` terms, or has more, is shown field by field, as
   # `inspect/1` shows a struct with no `Inspect` of its own, each field through the cut,
   # `%Date{year: 100000000000000000000000… (100001 characters), month: 1, ...}`; a struct
-  # with none, as every struct of logex's, is shown so already.
+  # with none, as every struct of logex's, is shown so already (provisional: `PLAN.md`'s
+  # RV-32, question 6).
   @looked 200
 
   defp struct_part(Inspect.Any, struct, options), do: Inspect.inspect(struct, options)
@@ -197,7 +198,8 @@ defmodule Logex.Lexer do
   # A name or a location as a message quotes it: text whole, in backquotes, as decision
   # 585 has it, and a binary that is no text, not UTF-8, or any other value, as
   # `inspected/2` shows it, so that a refusal is text however a host's name is made
-  # (RV-32's review, F1 and F4).
+  # (RV-32's review, F1 and F4). A long name that is text is whole however long
+  # (`PLAN.md`'s RV-32, question 4).
   def quoted_text(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
   def quoted_text(other), do: inspected(other)
 

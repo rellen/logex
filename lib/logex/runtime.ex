@@ -2229,7 +2229,8 @@ defmodule Logex.Runtime do
   defp later(value, now),
     do: later(Logex.Lexer.shown_number(value), Logex.Lexer.shown_number(now), value - now)
 
-  # RV-32's review, F8: two long numbers whose cuts read alike are told apart by how far.
+  # RV-32's review, F8: two long numbers whose cuts read alike are told apart by how far
+  # (provisional: `PLAN.md`'s RV-32, question 5).
   defp later(same, same, by),
     do: "#{same} is later than the instance's now, #{same}, by #{Logex.Lexer.shown_number(by)}"
 
@@ -2470,7 +2471,8 @@ defmodule Logex.Runtime do
   defp scan!(other, _state),
     do: raise(ArgumentError, "expected a %Logex.Scan{}, got: #{Logex.Lexer.inspected(other)}")
 
-  # RV-32's review, F8: two long times whose cuts read alike are told apart by how far.
+  # RV-32's review, F8: two long times whose cuts read alike are told apart by how far
+  # (provisional: `PLAN.md`'s RV-32, question 5).
   defp backwards(same, same, by),
     do:
       "time went backwards: this scan is at #{same} ms, but the instance was last " <>

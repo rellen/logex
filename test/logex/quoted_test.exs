@@ -175,6 +175,26 @@ defmodule Logex.QuotedTest do
     # sim's own count, a name that is no text, and two long numbers that cut alike.
     test("what the review of RV-32 found", ctx, do: told(review_rows(ctx)))
 
+    # RV-32's review, F4: `Logex.Declarations.check/1` tells every rule a tag breaks, not
+    # only its name, so a name that is no UTF-8 text is quoted in each of them, which
+    # `Logex.Tag.new!/5`, stopping at the name, never shows.
+    test "Logex.Declarations.check/1 quotes a name that is no text in every message" do
+      bad = opaque("ab" <> <<255>> <> "c")
+      input = %Logex.Tag{name: bad, type: :bool, section: :var_input, initial: 1}
+      counted = %Logex.Tag{name: bad, type: :dint, section: :var, initial: opaque(:x)}
+
+      assert Logex.Declarations.check(input) == [
+               "<<97, 98, 255, 99>> is not a tag name",
+               "<<97, 98, 255, 99>> is a var_input: its value comes from outside, so it " <>
+                 "takes no initial value"
+             ]
+
+      assert Logex.Declarations.check(counted) == [
+               "<<97, 98, 255, 99>> is not a tag name",
+               "the initial value of <<97, 98, 255, 99>> must be an integer, found :x"
+             ]
+    end
+
     # RV-32's review, F3: a struct that writes itself out with more terms than the cut
     # looks through, `@looked`, is shown field by field whatever it holds, so that a long
     # number past them is never written whole; `inspect/1`'s limit shows 196 of its list.
@@ -273,6 +293,12 @@ defmodule Logex.QuotedTest do
        takes <>
          "globals:, instances: and connections:, got: %Time{hour: #{@cut}, minute: 0, " <>
          "second: 0, microsecond: {0, 0}, calendar: Calendar.ISO}"},
+      # The look takes a tuple apart: a long number in one is found there.
+      {"F3 new!/1 a Time whose microsecond holds it",
+       fn -> Configuration.new!(o.(%{time | hour: 0, microsecond: {big, 6}})) end,
+       takes <>
+         "globals:, instances: and connections:, got: %Time{hour: 0, minute: 0, " <>
+         "second: 0, microsecond: {#{@cut}, 6}, calendar: Calendar.ISO}"},
       {"F3 put_inputs/3 a Date", fn -> Runtime.put_inputs(p, s, %{"start" => date}) end,
        "input `start` is a bool: only 0 or 1 fit, found #{dated}"},
       {"F3 Logex.compile/2 a Version in a list", fn -> Logex.compile([version], name: "p") end,
@@ -284,6 +310,12 @@ defmodule Logex.QuotedTest do
          "is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, " <>
          ":lreal, :byte, :word, :dword or :lword, or an array of one of them, as in " <>
          "`{:array, :int, [8]}`, its sizes a list of one integer a dimension"},
+      # Its options are judged before its name, each refusal of them naming it.
+      {"F4 Global.new!/3 the options of a name", fn -> Global.new!(bad, :bool, o.(:x)) end,
+       "the options of <<97, 98, 255, 99>> are a keyword list of `initial:`, `at:`, " <>
+         "`retain: true` or `non_retain: true`, found :x"},
+      {"F4 Global.new!/3 an option of a name", fn -> Global.new!(bad, :bool, o.(retain: 1)) end,
+       "`retain:` for <<97, 98, 255, 99>> takes true or false, found 1"},
       {"F4 Global.new!/3 a location", fn -> Global.new!("g", :bool, at: bad) end,
        "global `g` is at <<97, 98, 255, 99>>, which is not a location: a location is a " <>
          "device, `i` for an input or `q` for an output, then an address, as in " <>
@@ -948,7 +980,8 @@ defmodule Logex.QuotedTest do
     # the syntax trees can tell from a word, is found here wherever a host can reach it.
     # A program built or edited by hand is outside the contract but where a check names it
     # (`Logex.Runtime`'s moduledoc), so its fields are walked at `instance/1` alone, and
-    # what escapes there is listed in `@outside` with its reason.
+    # what escapes there is listed in `@outside` with its reason (`PLAN.md`'s RV-32,
+    # question 7).
     @outside %{
       # A field a program edited by hand holds that the shape check takes for a map,
       # a struct, which the program's own check then walks as a map.
