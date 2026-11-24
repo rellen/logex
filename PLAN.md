@@ -25177,6 +25177,239 @@ step, RV-23, RV-25 alone, and DOC-2 last.
        tuple is told, where it raised `Protocol.UndefinedError` out of the refusal. (b)
        Only what a host passes as an argument is cut, a struct's fields as they were.
 
+  **RV-32's review** (2026-11-24, of `8e54edf`; its working files under
+  `scratchpad/rv/w32r/`). Gate, CI and Docs green on all five commits; decisions 584, 585
+  and 587 held as built; success paths the parent's; 3 of its 15 mutants survived. Nine
+  findings, each mended where it is ours, with tests that fail when reverted, in
+  `559728f`, `c8e969d` and `b59140e`, the last with the marks of the questions below; the
+  working files under `scratchpad/rv/w32/fix/`.
+
+  - *F1, a program's name written whole (important).* `Logex.Runtime`'s and
+    `Logex.Edit`'s `named/1` wrote `"#{name}"`: `put_inputs/3` of a program named
+    `10 ** 100_000` told 100,044 bytes, 9.6 s at a million digits, and a tuple raised
+    `Protocol.UndefinedError`. Now `Logex.Lexer.quoted_text/1`: text whole in
+    backquotes, anything else through the cut; rows for `put_inputs/3`, `call/4` (a
+    tuple), `restart/3` and `Edit.accept/3`'s running and candidate names. The search
+    the census had missed, every message's quoting of a name, found the same in
+    `Logex.Program`'s owner, located and named, `Logex.Image`'s program and
+    configuration, and a retained path a program edited by hand holds, which a `Date`
+    wrote out whole through `String.Chars`: each through `quoted_text/1`, each with a
+    row.
+  - *F2, the sim's own count (important).* `Logex.IO.Sim`'s refusal of an address past
+    `inputs:` wrote the count and its last address whole, 200,104 bytes: both through
+    `shown_number/1`, a row with `inputs: 10 ** 100_000`, and the row no row had (r11),
+    a long address past `inputs: 2`. The same refusal of a runner's opened sim, and of a
+    point bound past the sim, cannot meet a long count, the configuration's text naming
+    no number past the cut (a location with one "is not a location"): left as they
+    were, said in the clause's comment.
+  - *F3, a struct that writes itself out (important).* `inspect_fun` never sees the
+    fields of a `Date`, `Time`, `NaiveDateTime`, `DateTime`, `Duration` or `Version`,
+    whose own `Inspect` wrote a long integer whole, 8 to 12 s and a megabyte at a
+    million digits, and a `Time` raised `Inspect.Error` inside the message. Now
+    `inspected/2` looks at the first 200 terms of a struct that has an `Inspect` of its
+    own (`@looked`, a list an element at a time, a tuple or map larger than what is
+    left not taken apart): one that holds a long integer there, or has more terms, is
+    shown field by field as `Inspect.Any` shows a struct with none, `%Date{year:
+    100000000000000000000000… (100001 characters), month: 1, day: 1, calendar:
+    Calendar.ISO}`. The reviewer's `structs: false` reading was taken in this form, the
+    struct's name kept and its fields in their order. Rows: `new!/1` of a `Date` and a
+    `Time`, `put_inputs/3` of a `Date`, `Logex.compile/2` of a list holding a `Version`,
+    a retained path that is a `Date`, a `Version` of 301 terms, shown field by field
+    though its long number is past the look (provisional, question 6), and, with this
+    record, a `Time` whose microsecond, a tuple, holds the long number (`n08` below).
+  - *F4, a name that is no UTF-8 text written raw (medium).* `Global.new!/3`'s name and
+    location, `Logex.Tag.new!/5`'s options' name, `compile/3`'s type key, `IO.bind!/2`'s
+    device, an image's program, a task's name beside a global's line, a state's type: each
+    wrote the bytes raw, the message no text. Every label of `Logex.Configuration`, its
+    judge, `Logex.Declarations`, `Logex.Tag`, `Logex.Image`, `Logex.Program` and
+    `Logex.IO` now goes through `quoted_text/1`, which shows a binary that is not
+    `String.valid?/1` as `inspect/1` does, `<<97, 98, 255, 99>>`, no backquotes. A row
+    each, and with this record two of `Global.new!/3`'s refusals of its options and
+    `Logex.Declarations.check/1`, where `Global`'s and `Logex.Declarations`' labels are
+    reached (`n13`, `n15` below). Decision 585's "a name or a location that is text quoted
+    whole" holds: valid text is whole.
+  - *F5, a long name that is valid text (question).* Left as decision 585 has it,
+    whole: question 4 below.
+  - *F6, the rows no mutant was caught by.* r06 (a timer's `last` and the instance's
+    `now` both long), r08 (a resource's generation) and r11 (a long address past a short
+    sim): a row each, each pinned whole.
+  - *F7, the walk's holes (low).* `quoted_test.exs`'s walk passes over `Logex.Lexer`'s
+    own `inspected` alone, and finds `inspect` reached through `Kernel.inspect`,
+    `apply/3`, `:erlang.apply/3`, `Function.capture/3` and the `Inspect` protocol's
+    modules, each shown on a planted line. No walk of the syntax trees can tell an
+    integer's `"#{n}"` from a word's, so the integers are held by a walk of the values
+    instead: every argument of the host contract's entry points a host passes a value
+    in (37 callers) and every field of a state, a scan, a program at `instance/1`, a
+    configuration and its tasks, globals, instances and connections at `check/1`, each
+    given a long number, its negative, a tuple and a list that hold one, a name that is
+    no UTF-8 text, a `Date`, a `Time` and a list holding a `Date`: every refusal an
+    `ArgumentError` whose message is text under 5,000 bytes, every caller refusing some
+    value, more than 500 refusals in all. What escapes is pinned in `@outside` with its
+    reason, four, a struct where a program edited by hand holds its tags or blocks,
+    which `instance/1`'s shape check takes for a map and its check then walks
+    (`Protocol.UndefinedError`), outside the contract as `Logex.Runtime`'s moduledoc
+    has a program edited by hand (question 7); and what nothing reads, a program's name,
+    file, source and warnings at `instance/1` and a configuration's warnings, in
+    `@unread`.
+  - *F8, two long numbers cut alike (nit).* A timer's `last` later than the instance's
+    `now`, and a scan's time gone backwards, both long and cut alike, now say by how
+    much: "… is later than the instance's now, 100000000000000000000000… (100001
+    characters), by 5", "… last scanned at … ms, 5 ms later". Only where the two cuts
+    read alike, so no short pin changed (provisional, question 5).
+  - *F9, the documents.* `Logex`'s, `Logex.Configuration`'s and `Logex.Tag`'s
+    moduledocs say how a name is quoted; `Logex.Configuration`'s says its line's figure
+    in bytes and reductions, no wall time; `Logex.Runtime`'s paragraph rewrapped;
+    decision 586's landed note rewrapped and extended; CHANGELOG's item made true;
+    `global_line/1`'s unreached third clause folded into one through `inspected/2`.
+    `guides/reference/host-contract.md` still names decision 583's three refusals:
+    DOC-1's close reconciles the pages (left to it, as this item's brief has it).
+
+  *Found beside them.* `Logex.Configuration`'s checks of what a configuration says built
+  each refusal's text before they knew whether to tell it, a name looked at by
+  `quoted_text/1` on every success: `check/1` of the examples' plant rose 364
+  reductions. With `c8e969d` `of_word/2` and `counted/2` take their message as a
+  function, called only where it is told, and `quoted_test.exs` reads the module's
+  syntax tree for any that does not; the success paths are now cheaper than the
+  parent's, the judge's `inspect/1` of each name gone from them too. And outside the
+  contract, beside `@outside`: a program edited by hand after `instance/1` whose
+  `arrays` is no map raises `BadMapError` out of `put_inputs/3` and `call/4`, and whose
+  rungs hold a struct raises `FunctionClauseError` out of `call/4`, as the moduledoc's
+  "a program swapped in by hand after that check is trusted" has it (question 7).
+
+  *The cost against the review's tip* (`8e54edf`, whose success paths are the parent's;
+  `w32/cost32.exs`, as before, the least of seven, each count in a process of its own;
+  "now" is `c8e969d`):
+
+  | the call | `8e54edf` | now |
+  |---|---|---|
+  | `put_inputs/3`, a program named `10 ** 100_000` | 362,479 reductions, 91 ms, 100,048 bytes | 20,755, 2 ms, 92 bytes |
+  | the same, `10 ** 1_000_000` | 35,393,365, 9,579 ms, 1,000,048 bytes | 36,110, 90 ms, 93 bytes |
+  | `Edit.accept/3`, a running program named `10 ** 100_000` | 339,002, 96 ms, 100,090 bytes | 20,755, 2 ms, 134 bytes |
+  | `Sim.set/3` past `inputs: 10 ** 100_000` | 639,124, 198 ms, 200,104 bytes | 57,373, 6 ms, 197 bytes |
+  | `new!/1` of a `Date` of year `10 ** 1_000_000` | 35,409,841, 12,009 ms, 1,000,139 bytes | 36,475, 119 ms, 224 bytes |
+  | `put_inputs/3` of the same `Date` | 36,105,254, 9,024 ms, 1,000,066 bytes | 36,519, 91 ms, 151 bytes |
+  | `new!/1` of a `Time` of hour `10 ** 100_000` | 732,927, 181 ms, 201,080 bytes | 21,316, 2 ms, 248 bytes |
+  | `Global.new!/3`, a 1 MB name no text, and a type | 15,970, 1,001,333 bytes | 16,064, 2,338 bytes |
+  | `IO.bind!/2`, a 1 MB device name no text | 29,859, 1,000,383 bytes | 30,611, 1,388 bytes |
+  | `new!/1` of `~D[2026-11-24]`, a small struct of its own | 98 | 118 |
+  | the review's refusals of `10 ** 100_000` and small ones | as `8e54edf` | the same within 32, but `IO.bind!/2` and the runner's clock, which check the plant first, 7,868 and 3,858 fewer |
+  | success: `new!/1` and `check/1` of the plant, `IO.points/1`, `Global.new!/3` | 19,123, 19,244, 20,327, 287 | 13,987, 14,108, 15,191, 140 |
+  | success: `Logex.compile/2`, `put_inputs/3`, `scan/3`, `cycle/3`, `Tag.new!/5` | 8,717, 118, 376, 1,223, 139 | the same |
+
+  *The mutation table* (`scripts/mutate.sh -t test/logex/quoted_test.exs`, each patch
+  judged by the full suite, in a clean clone at `c8e969d`, and each that changes `lib/`
+  by `scripts/dialyzer.sh` too; the review's three survivors in their form at
+  `c8e969d`; patches and logs under `w32/fix/mut2/`):
+
+  | mutant | what it does | the full suite | Dialyzer |
+  |---|---|---|---|
+  | `n01_text_raw` | a name that is no UTF-8 text written raw in backquotes | red: quoted_test.exs (2) | green |
+  | `n02_other_interpolated` | a name that is no binary interpolated, "`#{other}`" | red: configuration_test.exs (13), quoted_test.exs (3), retain_configuration_test.exs (1), retain_test.exs (1), typespec_test.exs (1), validation_test.exs (2) | green |
+  | `n03_runtime_named_raw` | `Logex.Runtime`'s program name written raw (F1) | red: quoted_test.exs (2) | green |
+  | `n04_edit_named_raw` | `Logex.Edit`'s program name written raw (F1) | red: quoted_test.exs (2) | green |
+  | `n05_struct_own_inspect` | every struct shown by its own `Inspect` (F3) | red: quoted_test.exs (3), readme_test.exs (1) | red, its compile warning |
+  | `n06_long_never_found` | the look never finds a long number | red: quoted_test.exs (2) | green |
+  | `n07_budget_trusts` | the look's spent budget read as nothing found | red: quoted_test.exs (1) | green |
+  | `n08_no_tuple_look` | the look passes over a tuple | **survived** | green |
+  | `n09_no_list_look` | the look passes over a list | red: quoted_test.exs (2), readme_test.exs (1) | green |
+  | `n10_image_raw` | `Logex.Image`'s text name written raw | red: quoted_test.exs (2) | green |
+  | `n11_io_device_raw` | `IO.bind!/2`'s device written raw | red: quoted_test.exs (2) | green |
+  | `n12_configuration_label_raw` | `Logex.Configuration`'s `label/1` raw for text | red: quoted_test.exs (2) | green |
+  | `n13_global_label_raw` | `Global`'s `label/1` raw for text | **survived** | green |
+  | `n13b_judge_label_raw` | the judge's `label/1` raw for text | red: quoted_test.exs (2) | green |
+  | `n14_tag_label_raw` | `Logex.Tag`'s `label/1` raw for text | red: quoted_test.exs (2) | green |
+  | `n15_declarations_label_raw` | `Logex.Declarations`' `label/1` raw for text | **survived** | green |
+  | `n16_retained_path_raw` | a retained path written raw | red: quoted_test.exs (2) | green |
+  | `n17_program_owner_raw` | `Logex.Program`'s owner written raw | red: quoted_test.exs (1) | green |
+  | `n18_program_located_raw` | `Logex.Program`'s located written raw | red: quoted_test.exs (1) | green |
+  | `n19_program_named_raw` | `Logex.Program`'s name written raw | red: quoted_test.exs (1) | green |
+  | `n20_sim_count_whole` | the sim's count written whole (F2) | red: quoted_test.exs (1) | green |
+  | `n21_sim_last_whole` | the sim's last address written whole (F2) | red: quoted_test.exs (1) | green |
+  | `n22_later_no_difference` | a later `last` not told by how much (F8) | red: quoted_test.exs (1) | green |
+  | `n23_backwards_no_difference` | a time gone backwards not told by how much (F8) | red: quoted_test.exs (1) | green |
+  | `n24_global_line_raw` | a global's line interpolated raw | red: quoted_test.exs (1) | green |
+  | `n25_walk_any_inspected` | the walk passes over any module's `inspected` (F7) | red: quoted_test.exs (1) | (test only) |
+  | `n26_walk_no_apply` | the walk blind to `apply/3` (F7) | red: quoted_test.exs (1) | (test only) |
+  | `n27_walk_no_protocol` | the walk blind to the `Inspect` protocol (F7) | red: quoted_test.exs (1) | (test only) |
+  | `n28_lazy_reverted` | `c8e969d` undone: every check's message built eagerly | red: quoted_test.exs (1) | green |
+  | `n29_named_eager` | one check's message, `named/1`'s, built eagerly | red: quoted_test.exs (1) | green |
+  | `r06_later_now_whole` | the review's r06: `later/2` writes the instance's `now` whole | red: quoted_test.exs (1) | green |
+  | `r08_generation_whole` | the review's r08: a resource's generation written whole | red: quoted_test.exs (1) | green |
+  | `r11_sim_address_apply` | the review's r11: the sim's address through `apply(Kernel, :inspect, ...)` | red: quoted_test.exs (3) | green |
+
+  Three survived at `c8e969d`, each a refusal no row had reached, each mended at `b59140e`
+  by a test that fails when its mutant is put back, the three run again by the full suite
+  at `b59140e` (each red there, `quoted_test.exs` 1): `n08`, a long number in a tuple
+  inside a struct that writes itself out, a row of `new!/1` of a `Time` whose microsecond
+  holds it; `n13`, `Global.new!/3` judging its options before its name, so that a name
+  that is no text reaches `Global`'s `label/1` only in a refusal of its options, two rows;
+  and `n15`, `Logex.Tag.new!/5` stopping at the name, so that `Logex.Declarations`'
+  `label/1` is reached only through `Logex.Declarations.check/1`, which tells every rule a
+  tag breaks, a test of it. The review's three survivors, `r06`, `r08` and `r11`, are red.
+  `n05`'s and `n09`'s `readme_test.exs` line is the examples' project rebuilding the
+  changed `lib/` (`==> logex` in what it printed), as RV-31's `a05`. Dialyzer is green on
+  every mutant of `lib/` but `n05`, whose clause the compile finds redundant: the suite,
+  not Dialyzer, holds each.
+
+  *The test lines taken out*, against `8e54edf`: in `quoted_test.exs` (+460 −12) the
+  walk's twelve lines restated, none weakened, each with what replaced it: the last line
+  of its comment extended; `inspects/3`'s clause that passed over any module's `def
+  inspected` made `Logex.Lexer`'s alone (F7); the loop's three lines of
+  `Code.string_to_quoted/1` and `Macro.prewalk/3` made `found/2`; the lexer's own check
+  and its `=~` restated through `found/2` and `@lexer`; the planted call's and the
+  capture's checks kept, each now an equality among eight. No other test file changed.
+  Against `main` (`4ce7465`) this item's test leave is `configuration_test.exs` +2 −3 (two
+  comments' marks), `scripts_test.exs` +2 −2 (the test's name, decision 587) and
+  `quoted_test.exs`, new, +1,347.
+
+  *The gate*: `559728f` `GATE-OK` 4,255 (4,244 tests and 11 doctests), `DOCS-OK`;
+  `c8e969d` `GATE-OK` 4,256 (4,245 tests and 11 doctests), `DOCS-OK`; `b59140e`, the three
+  rows and the marks, `GATE-OK` 4,257 (4,246 tests and 11 doctests), `DOCS-OK`; this
+  record `GATE-OK` 4,257, `DOCS-OK`. CI and Docs green on `559728f` (45297036002,
+  45297035985), `c8e969d` (45302619004, 45302618939) and `b59140e` (45327232868,
+  45327232826); this record's runs are read as it lands.
+
+  *Questions for the maintainer*, each marked where it stands (with this record:
+  `Logex.Lexer`'s comments, questions 4 and 6; `Logex.Runtime`'s two comments on a cut
+  told by how far, question 5; `quoted_test.exs`'s `@outside`, question 7); 1 to 3
+  above stand.
+  4. *A long name that is valid text* (decision 585: "a name or a location that is text
+     quoted whole"; RV-32's review, F5). A box counter's bridge sends a megabyte of
+     garbage as an input's key, valid UTF-8. (a) As built: quoted whole, the operator's
+     log gets a megabyte after some 2 s, `Runtime.get!/2` 2.2 s, a device's name in
+     `IO.bind!/2` 1 s, a type's text in `Tag.new!/5` 4 s and 75 million reductions
+     though its message is 4,791 bytes. (b) Text past 4,096 bytes cut as `inspect/1`
+     cuts a text value: the log gets a line, the key's start and that it was cut. (c)
+     At 60 bytes, as a store's refusal cuts a text it quotes. IEC has no host API;
+     Logix's tag names are 40 characters at most, refused longer.
+  5. *Two long numbers that cut alike* (RV-32's review, F8; provisional). A fan's timer
+     `last` and the instance's `now`, both past 10,000 digits, differ by 5. (a) As built:
+     where the two cuts read alike the refusal adds by how much, "…, by 5"; a short pin
+     unchanged. (b) As before: two identical cuts, which read as a contradiction. (c)
+     The cut shows the last digits too, `1000…0005 (100001 characters)`, which changes
+     decision 583's form everywhere. Neither IEC nor Logix has a number past 64 bits to
+     show.
+  6. *A struct that writes itself out, and too large to look through* (RV-32's review,
+     F3; provisional). A lamp panel's host hands `new!/1` a `MapSet` of 300 lamp names
+     by mistake. (a) As built: a struct with an `Inspect` of its own whose first 200
+     terms hold a long number, or which has more than 200, is shown field by field,
+     `%MapSet{map: %{...}}`, bounded and cheap, unfamiliar to read. (b) Look through the
+     whole struct: shown as its own `inspect/1` shows it unless a long number is in it,
+     the look's cost growing with the struct, which a refusal pays. (c) Every struct
+     with an `Inspect` of its own field by field, always. Elixir's own messages show a
+     struct through its `Inspect`.
+  7. *A program edited by hand that holds a struct where a map is due* (RV-32's review,
+     found beside F7). A box counter's host edits a program after it compiled and puts
+     a `Date` where its tag table goes, or replaces its arrays table with text after
+     `instance/1`. (a) As now: outside the contract, as `Logex.Runtime`'s moduledoc has
+     a program edited by hand, `Protocol.UndefinedError` out of `instance/1` (its
+     message Elixir's, 100 KB with a long year), `BadMapError` out of `put_inputs/3` and
+     `call/4`; pinned in `@outside`. (b) `instance/1`'s shape check refuses a struct
+     where a map is due, a pinned `ArgumentError`; `put_inputs/3` and `call/4` stay as
+     they are, a program edited after `instance/1` being trusted. (c) Every entry point
+     checks the program's shape again, a cost on every scan. IEC has no host API; in
+     Logix a program is downloaded whole and checked when it is.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex
