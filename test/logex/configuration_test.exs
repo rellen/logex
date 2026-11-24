@@ -1865,7 +1865,7 @@ defmodule Logex.ConfigurationTest do
                }
     end
 
-    # RV-31's review (F1), provisional (PLAN's RV-31, question 5): a location not in its
+    # RV-31's review (F1), since decision 588 as the maintainer took it: a location not in its
     # one spelling, `panel.I.0` or `panel.i.00`, is the point it names for the global's
     # value, list and `retain`, so that the photo-eye's call is told the point's line and
     # the spelling's at once, decision 576's one refusal, where it was told the spelling's
@@ -2318,8 +2318,7 @@ defmodule Logex.ConfigurationTest do
 
     # A long value that is no number is shown as `inspect/1` shows it, bounded by its own
     # limits, 200 elements in all and 4,096 bytes of a text, as RV-30's review pinned
-    # sixty numbers shown whole (provisional: the decision names a number, `PLAN.md`'s
-    # RV-31, question 2).
+    # sixty numbers shown whole (decision 585).
     test "a long text or list is shown as inspect/1 shows it, a long number in it cut" do
       error =
         assert_raise ArgumentError, fn ->

@@ -171,10 +171,45 @@ changed after its last item was written, under "The host's API".
   digits, a second for 320,000. A number of 10,000 characters or fewer is quoted whole,
   as before; one inside a value that is no number, a list's, is cut the same way. A
   connection of an array var_input to a long constant is told the element to connect,
-  `` the first `m.limits[0]` ``, where its example line held the constant. `new!/1`'s own
-  lines, of a field list that is no keyword list and of an element brought with a line,
-  quote a number whole, as the host contract's other refusals do. Look for: code that
-  reads a number back out of such a message.
+  `` the first `m.limits[0]` ``, where its example line held the constant. Since decision
+  586 so does every other refusal of the host contract, `new!/1`'s own lines among them
+  (below). Look for: code that reads a number back out of such a message.
+- **Every refusal of the host contract quotes a long number cut** (decision 586), as
+  decision 583's three do: `Logex.compile/2`'s and its loaders', `Logex.Runtime`'s of a
+  state, a scan, inputs, a program edited by hand, a resource or a retained image,
+  `Logex.Edit`'s and `Logex.Configuration.Edit`'s, `Logex.IO.bind!/2`'s and
+  `points/1`'s, `Logex.Runner`'s of its options, its clock's answers, a force and a
+  request, `Logex.IO.Sim`'s, the runner's clocks', and `Logex.Configuration`'s own,
+  `new!/1`'s of what is no keyword list and of an element brought with a line,
+  `compile/3`'s and `compile_file/1`'s of an argument that is no text, `initial/1`'s and
+  `watchdog/1`'s. Each quotes the value the host gave as `inspect/1` shows it, with its
+  limits, a number past 10,000 characters by its first 24 and how many it has, where it
+  quoted the number whole: `Logex.Configuration.new!(10 ** 100_000)` raises
+  "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:,
+  globals:, instances: and connections:, got: 100000000000000000000000… (100001
+  characters)", 168 bytes where it was a hundred thousand digits, and a global brought
+  with `line: 10 ** 1_000_000` is told in milliseconds where its line took 9 s and a
+  megabyte. The integers a refusal wrote out itself are cut too: a timer's `last` later
+  than the instance's `now`, a scan's time that went backwards, an input or a held value
+  outside its type, a clock's time out of range, an edit's generation and the line of a
+  program or configuration edited by hand. A value of 10,000 characters or fewer is
+  quoted as before. A line of a program edited by hand that is no integer is quoted as
+  `inspect/1` shows it, `"7"` with its quotes where it was written bare, and a tuple is
+  told in the refusal where `Logex.Runtime.put_inputs/3`, `call/4` and `instance/1`
+  raised `Protocol.UndefinedError`. So is a program's name a refusal quotes, where a
+  number was written whole and a tuple raised `Protocol.UndefinedError` out of
+  `put_inputs/3`, `call/4`, `restart/3` and `Logex.Edit.accept/3`, and a sim's own count
+  of inputs, which `inputs:` gave. A struct that writes itself out, a `Date`, a `Time` or
+  a `Version`, holding a long number is shown field by field, `%Date{year:
+  100000000000000000000000… (100001 characters), month: 1, ...}`, where its own text
+  wrote the number whole, 8 s and a megabyte at a million digits, and a `Time` raised
+  `Inspect.Error` inside the message. Where two long numbers a refusal compares cut
+  alike, a timer's `last` and the instance's `now`, a scan's time and the instance's,
+  the refusal says by how much they differ. A name, a location, a device, a program's
+  name or a path that is no UTF-8 text is quoted as `inspect/1` shows it, `<<97, 98,
+  255, 99>>`, where its bytes were written raw and the message was no text. Look for:
+  code that reads a number back out of such a message, or matches a name in backquotes
+  in one.
 
 ### What it carries, by the work that built it
 

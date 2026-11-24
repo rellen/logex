@@ -106,8 +106,12 @@ defmodule Logex.Tag do
   A number the message quotes is quoted whole up to 10,000 characters, and past that by
   its first 24 and how many it has, `` `x` is a dint: `100000000000000000000000…` (100001
   characters) is outside -2147483648 to 2147483647 ``, as a compile quotes a long literal
-  (decision 583), where until then the whole number was, a hundred thousand digits for
-  `10 ** 100_000`, made in time that grows with the square of its digits.
+  (decisions 583 and 584), where until then the whole number was, a hundred thousand
+  digits for `10 ** 100_000`, made in time that grows with the square of its digits; a
+  value that is no number, as `inspect/1` shows it, each long number in it cut (decision
+  585), as every refusal of the host contract quotes a host's value (decision 586). A
+  name that is text is quoted whole, in backquotes, and one that is no UTF-8 text as
+  `inspect/1` shows it, `<<97, 98, 255, 99>>` (RV-32's review).
 
   Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
   key: `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and
@@ -194,8 +198,7 @@ defmodule Logex.Tag do
       "the options of #{label(name)} are a keyword list, `retain: true` or " <>
         "`non_retain: true`, found #{shown(options)}"
 
-  defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: shown(name)
+  defp label(name), do: Logex.Lexer.quoted_text(name)
 
   # A value a refusal shows, as `inspect/1` does, each long number in it cut (decision
   # 583, `Logex.Lexer.inspected/2`).

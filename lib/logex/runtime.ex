@@ -273,9 +273,11 @@ defmodule Logex.Runtime do
   type, a misfit a line by the element's name, `w[1,2]`, and since decision 222 one element
   alone may be set by its name, `%{"steps[3]" => 5}`, every other kept, one subscript a
   dimension, each a number within it, and one call setting an array whole or by its
-  elements, each once; and an array var_output is given as such a list. Every input problem in one call
-  comes in one raise, a line each, in key order. Inputs merge into the instance, so a host
-  sends only what changed. Outputs are every `var_output`.
+  elements, each once; and an array var_output is given as such a list. Every input
+  problem in one call comes in one raise, a line each, in key order, however many there
+  are, each value through the one cut (decision 586; provisional: `PLAN.md`'s RV-32,
+  question 1). Inputs merge into the instance, so a host sends only what changed. Outputs
+  are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
@@ -864,7 +866,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a warm restart keeps the retained path #{inspect(path)}, which is no path: " <>
+        "a warm restart keeps the retained path #{Logex.Lexer.inspected(path)}, which is no path: " <>
           by_hand()
       )
 
@@ -873,7 +875,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "a warm restart reads retained paths that are no list of paths, got: " <>
-          "#{inspect(paths)}: #{by_hand()}"
+          "#{Logex.Lexer.inspected(paths)}: #{by_hand()}"
       )
 
   defp warm_tag({:ok, %Tag{type: type}}, path, kept, at), do: warm_kept(path, type, kept, at)
@@ -1038,7 +1040,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: #{inspect(other)}"
+        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: #{Logex.Lexer.inspected(other)}"
       )
 
   @doc """
@@ -1760,7 +1762,7 @@ defmodule Logex.Runtime do
   defp mode!(mode) when mode in [:cold, :warm], do: :ok
 
   defp mode!(mode),
-    do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
+    do: raise(ArgumentError, "restart takes :cold or :warm, got: #{Logex.Lexer.inspected(mode)}")
 
   # The evaluator's scan is the host's `now` and `first` with the instance's block list,
   # which holds for this one scan (OE-1), made a tree once here so that each `ons` looks its
@@ -1987,7 +1989,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(other)}"
+        "expected a %Logex.Program{} from Logex.compile/2, got: #{Logex.Lexer.inspected(other)}"
       )
 
   defp computable!([]), do: :ok
@@ -2001,15 +2003,22 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(state)}"
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{Logex.Lexer.inspected(state)}"
       )
 
   defp state!(%Instance{type: type}, _program) when not is_binary(type) and type != nil,
-    do: raise(ArgumentError, "state.type must be a program name, got: #{inspect(type)}")
+    do:
+      raise(
+        ArgumentError,
+        "state.type must be a program name, got: #{Logex.Lexer.inspected(type)}"
+      )
 
   defp state!(%Instance{env: env}, _program) when not is_map(env) or is_struct(env),
     do:
-      raise(ArgumentError, "state.env must be a map of tag names to values, got: #{inspect(env)}")
+      raise(
+        ArgumentError,
+        "state.env must be a map of tag names to values, got: #{Logex.Lexer.inspected(env)}"
+      )
 
   # M3-5's review: a record of a scan's own, under a key no tag can be, would change the
   # run: a `:jump` skips rungs, a `:faults` entry is a fault no divisor met, and a `:ran`
@@ -2021,13 +2030,21 @@ defmodule Logex.Runtime do
        do: raise(ArgumentError, own_keys(for key <- @own_keys, is_map_key(env, key), do: key))
 
   defp state!(%Instance{now: now}, _program) when not is_integer(now) or now < 0,
-    do: raise(ArgumentError, "state.now must be #{ms()}, got: #{inspect(now)}")
+    do: raise(ArgumentError, "state.now must be #{ms()}, got: #{Logex.Lexer.inspected(now)}")
 
   defp state!(%Instance{first: first}, _program) when not is_boolean(first),
-    do: raise(ArgumentError, "state.first must be true or false, got: #{inspect(first)}")
+    do:
+      raise(
+        ArgumentError,
+        "state.first must be true or false, got: #{Logex.Lexer.inspected(first)}"
+      )
 
   defp state!(%Instance{switched: switched}, _program) when not is_boolean(switched),
-    do: raise(ArgumentError, "state.switched must be true or false, got: #{inspect(switched)}")
+    do:
+      raise(
+        ArgumentError,
+        "state.switched must be true or false, got: #{Logex.Lexer.inspected(switched)}"
+      )
 
   defp state!(%Instance{ons_blocked: blocked, faults: faults} = state, program),
     do:
@@ -2037,7 +2054,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(other)}"
+        "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # F8: a proper list of names, or `run/3`'s `Map.from_keys/2` raises an unpinned
@@ -2052,7 +2069,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "state.ons_blocked must be a list of storage bit names, got: #{inspect(blocked)}"
+        "state.ons_blocked must be a list of storage bit names, got: #{Logex.Lexer.inspected(blocked)}"
       )
 
   # M3-3 (decision 99): the faults of the last scan, a proper list of them, as a scan gives
@@ -2067,17 +2084,17 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "state.faults must be a list of %Logex.Fault{}, got: #{inspect(faults)}"
+        "state.faults must be a list of %Logex.Fault{}, got: #{Logex.Lexer.inspected(faults)}"
       )
 
   defp own_keys([key]),
     do:
-      "state.env holds #{inspect(key)}, the runtime's own key for a record a scan keeps " <>
+      "state.env holds #{Logex.Lexer.inspected(key)}, the runtime's own key for a record a scan keeps " <>
         "and takes out before it ends: an env is keyed by tag names"
 
   defp own_keys(keys),
     do:
-      "state.env holds #{and_list(Enum.map(keys, &inspect/1))}, the runtime's own keys for " <>
+      "state.env holds #{and_list(Enum.map(keys, &Logex.Lexer.inspected/1))}, the runtime's own keys for " <>
         "records a scan keeps and takes out before it ends: an env is keyed by tag names"
 
   defp owner!(%Instance{type: name} = state, %Program{name: name}), do: state
@@ -2085,8 +2102,11 @@ defmodule Logex.Runtime do
   defp owner!(%Instance{type: type}, %Program{name: name}),
     do: raise(ArgumentError, "this state is an instance of #{named(type)}, not of #{named(name)}")
 
+  # A program's name is the host's, a program edited by hand may hold anything there, so
+  # it is quoted through the cut: text whole, anything else as `inspect/1` shows it, a
+  # long number cut (RV-32's review, F1).
   defp named(nil), do: "an unnamed program"
-  defp named(name), do: "`#{name}`"
+  defp named(name), do: Logex.Lexer.quoted_text(name)
 
   # Decision 171: no value outside its tag's type reaches a scan. An integer a state holds
   # for a tag, or for a member of an instance it holds, at any depth, must fit the tag's or
@@ -2206,7 +2226,15 @@ defmodule Logex.Runtime do
   defp of_type(:clock, value, path, _blocks, acc),
     do: [described(Declarations.a_type(:clock), unfitting(:clock, :clock, value), path) | acc]
 
-  defp later(value, now), do: "#{value} is later than the instance's now, #{now}"
+  defp later(value, now),
+    do: later(Logex.Lexer.shown_number(value), Logex.Lexer.shown_number(now), value - now)
+
+  # RV-32's review, F8: two long numbers whose cuts read alike are told apart by how far
+  # (provisional: `PLAN.md`'s RV-32, question 5).
+  defp later(same, same, by),
+    do: "#{same} is later than the instance's now, #{same}, by #{Logex.Lexer.shown_number(by)}"
+
+  defp later(value, now, _by), do: "#{value} is later than the instance's now, #{now}"
 
   # Its shape is looked at only where an element does not fit, so a state whose every
   # element fits is walked once (M5-11's review).
@@ -2277,7 +2305,7 @@ defmodule Logex.Runtime do
 
   # A host's value as a message shows it, a list of integers as a list, never as the
   # charlist it may also be read as, `[72, 105]` and not `~c"Hi"`.
-  defp shown_value(value), do: inspect(value, charlists: :as_lists)
+  defp shown_value(value), do: Logex.Lexer.inspected(value, charlists: :as_lists)
 
   defp tuple_shape(dims), do: "a tuple of " <> shape_of(dims, "tuple")
 
@@ -2343,19 +2371,20 @@ defmodule Logex.Runtime do
     do: "its value must be a float, found #{shown_value(value)}"
 
   defp unfitting(_kind, type, value) when is_integer(value),
-    do: Declarations.misfit(type, "#{value}")
+    do: Declarations.misfit(type, Logex.Lexer.shown_number(value))
 
-  defp unfitting(:boolean, type, value), do: Declarations.misfit(type, inspect(value))
+  defp unfitting(:boolean, type, value),
+    do: Declarations.misfit(type, Logex.Lexer.inspected(value))
 
   defp unfitting(_integer, _type, value),
     do: "its value must be an integer, found #{shown_value(value)}"
 
   defp unreal(true, type, value),
     do:
-      "#{inspect(value)} is no value of #{Declarations.a_type(type)}, whose nearest is " <>
-        inspect(Logex.Real.nearest(type, value))
+      "#{Logex.Lexer.inspected(value)} is no value of #{Declarations.a_type(type)}, whose nearest is " <>
+        Logex.Lexer.inspected(Logex.Real.nearest(type, value))
 
-  defp unreal(false, type, value), do: Declarations.misfit(type, inspect(value))
+  defp unreal(false, type, value), do: Declarations.misfit(type, Logex.Lexer.inspected(value))
 
   # As a state is (a5-data-model-7, c4-api-fuzz-9): a scan that lacks one of its keys is
   # none.
@@ -2363,21 +2392,25 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Scan{}, got: #{inspect(scan)}"
+        "expected a %Logex.Scan{}, got: #{Logex.Lexer.inspected(scan)}"
       )
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
-    do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")
+    do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{Logex.Lexer.inspected(now)}")
 
   defp scan!(%Scan{first: first}, _state) when not is_boolean(first),
-    do: raise(ArgumentError, "scan.first must be true or false, got: #{inspect(first)}")
+    do:
+      raise(
+        ArgumentError,
+        "scan.first must be true or false, got: #{Logex.Lexer.inspected(first)}"
+      )
 
   defp scan!(%Scan{ons_blocked: blocked}, _state) when blocked != [],
     do:
       raise(
         ArgumentError,
         "scan.ons_blocked is the runtime's, taken from the instance: a host leaves it out, " <>
-          "got: #{inspect(blocked)}"
+          "got: #{Logex.Lexer.inspected(blocked)}"
       )
 
   defp scan!(%Scan{tags: tags}, _state) when tags != nil,
@@ -2385,7 +2418,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "scan.tags is the runtime's, taken from the program: a host leaves it out, " <>
-          "got: #{inspect(tags)}"
+          "got: #{Logex.Lexer.inspected(tags)}"
       )
 
   defp scan!(%Scan{units: units}, _state) when units != nil,
@@ -2393,7 +2426,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "scan.units is the runtime's, taken from the program: a host leaves it out, " <>
-          "got: #{inspect(units)}"
+          "got: #{Logex.Lexer.inspected(units)}"
       )
 
   defp scan!(%Scan{reals: reals}, _state) when reals != nil,
@@ -2401,7 +2434,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "scan.reals is the runtime's, taken from the program: a host leaves it out, " <>
-          "got: #{inspect(reals)}"
+          "got: #{Logex.Lexer.inspected(reals)}"
       )
 
   defp scan!(%Scan{blocks: blocks}, _state) when blocks != nil,
@@ -2409,15 +2442,14 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "scan.blocks is the runtime's, taken from the program: a host leaves it out, " <>
-          "got: #{inspect(blocks)}"
+          "got: #{Logex.Lexer.inspected(blocks)}"
       )
 
   defp scan!(%Scan{now: now}, %Instance{now: last}) when now < last,
     do:
       raise(
         ArgumentError,
-        "time went backwards: this scan is at #{now} ms, " <>
-          "but the instance was last scanned at #{last} ms"
+        backwards(Logex.Lexer.shown_number(now), Logex.Lexer.shown_number(last), last - now)
       )
 
   defp scan!(%Scan{first: first} = scan, %Instance{first: first}), do: scan
@@ -2437,12 +2469,24 @@ defmodule Logex.Runtime do
       )
 
   defp scan!(other, _state),
-    do: raise(ArgumentError, "expected a %Logex.Scan{}, got: #{inspect(other)}")
+    do: raise(ArgumentError, "expected a %Logex.Scan{}, got: #{Logex.Lexer.inspected(other)}")
+
+  # RV-32's review, F8: two long times whose cuts read alike are told apart by how far
+  # (provisional: `PLAN.md`'s RV-32, question 5).
+  defp backwards(same, same, by),
+    do:
+      "time went backwards: this scan is at #{same} ms, but the instance was last " <>
+        "scanned at #{same} ms, #{Logex.Lexer.shown_number(by)} ms later"
+
+  defp backwards(now, last, _by),
+    do:
+      "time went backwards: this scan is at #{now} ms, but the instance was last scanned " <>
+        "at #{last} ms"
 
   defp elapsed!(ms) when is_integer(ms) and ms >= 0, do: ms
 
   defp elapsed!(other),
-    do: raise(ArgumentError, "elapsed_ms must be #{ms()}, got: #{inspect(other)}")
+    do: raise(ArgumentError, "elapsed_ms must be #{ms()}, got: #{Logex.Lexer.inspected(other)}")
 
   defp ms, do: "a non-negative integer of milliseconds"
 
@@ -2460,7 +2504,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         ~s|inputs must be a map of var_input names to values, as in %{"start" => 1}, | <>
-          "got: #{inspect(inputs)}"
+          "got: #{Logex.Lexer.inspected(inputs)}"
       )
 
   # Decision 222 (provisional): one call sets an array whole or by its elements, never both,
@@ -2593,7 +2637,7 @@ defmodule Logex.Runtime do
 
   defp problem(key, _value, _program) when not is_binary(key),
     do:
-      "input #{inspect(key)} is not a tag name: inputs are keyed by tag name, as a string, " <>
+      "input #{Logex.Lexer.inspected(key)} is not a tag name: inputs are keyed by tag name, as a string, " <>
         ~s|as in %{"start" => 1}|
 
   defp problem(key, value, %Program{tags: tags} = program),
@@ -2638,12 +2682,12 @@ defmodule Logex.Runtime do
 
   defp element_input({:ok, %Tag{type: {:array, _, _}} = tag}, {key, _, _}, _tags, _program),
     do:
-      "input #{inspect(key)} names an element of `#{tag.name}`, a #{tag.section}#{on_line(tag)}, " <>
+      "input #{Logex.Lexer.inspected(key)} names an element of `#{tag.name}`, a #{tag.section}#{on_line(tag)}, " <>
         "not a var_input: only a var_input is set from outside"
 
   defp element_input(_not_an_array, {key, _, _}, tags, _program) do
     inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
-    hint("input #{inspect(key)} is not declared", "", inputs)
+    hint("input #{Logex.Lexer.inspected(key)} is not declared", "", inputs)
   end
 
   defp one_name({:ok, [{:name, _, key}], _line}, {tag, key, subscripts, value}, _world),
@@ -2801,8 +2845,8 @@ defmodule Logex.Runtime do
         Declarations.misfit(type, shown(Declarations.kind(type), value))
 
   # A bool's misfit is shown as the host gave it, an integer's as a number.
-  defp shown(:boolean, value), do: inspect(value)
-  defp shown(_kind, value), do: "#{value}"
+  defp shown(:boolean, value), do: Logex.Lexer.inspected(value)
+  defp shown(_kind, value), do: Logex.Lexer.shown_number(value)
 
   # A key is quoted as a name when the lexer reads it as one name, so `t1.dn` reads as
   # written, and since M5-13's review so does an element, `tb[9]`, as a misfit names it,
@@ -2810,10 +2854,15 @@ defmodule Logex.Runtime do
   defp label(key), do: labelled(Logex.Lexer.tokenize(key), key)
 
   defp labelled({:ok, [{:name, _at, key}], _lines}, key), do: "`#{key}`"
-  defp labelled(_tokens, key), do: inspect(key)
+  defp labelled(_tokens, key), do: Logex.Lexer.inspected(key)
 
   defp on_line(%Tag{line: nil}), do: ""
-  defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
+
+  # Decision 586 (RV-32): a line through the one cut, a long one's start and count, and
+  # one a program edited by hand gives that is no integer as `inspect/1` shows it, where
+  # a tuple raised `Protocol.UndefinedError` out of the refusal (provisional: `PLAN.md`'s
+  # RV-32, question 3).
+  defp on_line(%Tag{line: line}), do: " (declared on line #{Logex.Lexer.inspected(line)})"
 
   # The configuration, checked again: check/1 raises the host's mistakes itself, and a
   # diagnostic raises as `Logex.Configuration.new!/1`'s do, formatted, a line each.
@@ -3074,7 +3123,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: #{inspect(other)}"
+        "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # The input image: every problem with the inputs, a line each in key order, or the
@@ -3095,7 +3144,7 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         ~s|inputs must be a map of input-point names to values, as in %{"pb_start_1" => 1}, | <>
-          "got: #{inspect(inputs)}"
+          "got: #{Logex.Lexer.inspected(inputs)}"
       )
 
   # Decision 384 (the maintainer, 2026-11-01): an element of a located array of input
@@ -3168,7 +3217,11 @@ defmodule Logex.Runtime do
       )
 
   defp global_line(%Configuration.Global{line: nil}), do: ""
-  defp global_line(%Configuration.Global{line: line}), do: " (line #{line})"
+
+  # A global's line, an integer `start/1` checked, through the one cut; one clause, where a
+  # third that wrote any other value raw was never reached (RV-32's review, F9).
+  defp global_line(%Configuration.Global{line: line}),
+    do: " (line #{Logex.Lexer.inspected(line)})"
 
   defp imaged([], {globals, %{reals: nil, elements: nil}, _written}, inputs),
     do: Map.merge(globals, inputs)
@@ -3250,7 +3303,7 @@ defmodule Logex.Runtime do
 
   defp point_problem(key, _value, _runtime) when not is_binary(key),
     do:
-      "input #{inspect(key)} is not a point name: inputs are keyed by input-point name, " <>
+      "input #{Logex.Lexer.inspected(key)} is not a point name: inputs are keyed by input-point name, " <>
         ~s|as a string, as in %{"pb_start_1" => 1}|
 
   defp point_problem(key, value, %__MODULE__{wiring: wiring} = runtime),
@@ -3758,7 +3811,7 @@ defmodule Logex.Runtime do
 
   defp not_a_path(path),
     do:
-      "#{inspect(path)} is not an access path: a global, or a program instance, its tag and " <>
+      "#{Logex.Lexer.inspected(path)} is not an access path: a global, or a program instance, its tag and " <>
         ~s|the members below it, joined by `.`, as in "m1.t1.acc"|
 
   defp at_path({:ok, global}, _instance, {head, [], _path}, runtime),
@@ -5454,11 +5507,13 @@ defmodule Logex.Runtime do
 
   defp computes_in({:ok, type}, _at, _destination), do: type
 
+  # An op's line through the one cut, a value of a program edited by hand however it was
+  # edited (decision 586; provisional: `PLAN.md`'s RV-32, question 3).
   defp computes_in({:error, what}, {op, line}, destination),
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{line} computes in the type of " <>
+        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} computes in the type of " <>
           Program.met(destination, what) <>
           ": the program was edited by hand after it was handed in and checked"
       )
@@ -5552,8 +5607,8 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{line} reads the unit of #{shown_timer(timer)} from units that " <>
-          "are no map, got: #{inspect(units)}: #{by_hand()}"
+        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} reads the unit of #{shown_timer(timer)} from units that " <>
+          "are no map, got: #{Logex.Lexer.inspected(units)}: #{by_hand()}"
       )
 
   defp unit_of(per_ms, _at) when is_integer(per_ms) and per_ms > 0, do: per_ms
@@ -5562,8 +5617,8 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{line} times #{shown_timer(timer)} in a unit of " <>
-          "#{inspect(per_ms)}, which is no positive whole number a millisecond: #{by_hand()}"
+        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} times #{shown_timer(timer)} in a unit of " <>
+          "#{Logex.Lexer.inspected(per_ms)}, which is no positive whole number a millisecond: #{by_hand()}"
       )
 
   defp shown_timer({:name, _, name}), do: "`#{name}`"

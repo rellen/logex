@@ -67,6 +67,19 @@ defmodule Logex do
 
   Outside its own process a compile costs what it did: the examples' motor 8,712 reductions,
   63 more than when the caller compiled itself, the handing over.
+
+  **What a refusal quotes** (decision 586). A host's mistake quotes the value the host
+  gave as `inspect/1` shows it, with its limits, a number whole up to 10,000 characters
+  and past that by its first 24 and how many it has, as a compile quotes a long literal
+  (decisions 584 and 585): `Logex.compile(10 ** 100_000, name: "p")` raises "Logex.compile/2
+  takes source text as a binary, got: 100000000000000000000000… (100001 characters)", in
+  a few milliseconds, where it quoted a hundred thousand digits. So does every refusal of
+  the host contract, `Logex.Runtime`'s, `Logex.Runner`'s, the edits', `Logex.IO`'s and
+  `Logex.Configuration`'s among them. A name or a location that is text is quoted whole,
+  in backquotes; one that is no UTF-8 text, or no text at all, is quoted as `inspect/1`
+  shows it, `<<97, 98, 255, 99>>`, so that a refusal's message is always text; and a
+  struct that shows itself, a `Date` or a `Version`, is shown field by field where it
+  holds a long number, which its own `inspect/1` would write out whole (RV-32's review).
   """
 
   # Decision 515 (c), RV-24: what a compile hands back, the host contract's types.

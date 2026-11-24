@@ -622,7 +622,7 @@ defmodule Logex.Program do
   def edited_by_hand(%__MODULE__{name: name, blocks: blocks}),
     do: [
       "#{owner({name, nil})} block types are no map of the types it holds by name, got: " <>
-        "#{inspect(blocks)}: #{named(name)} was edited by hand after it compiled"
+        "#{Logex.Lexer.inspected(blocks)}: #{named(name)} was edited by hand after it compiled"
     ]
 
   defp routine(
@@ -777,7 +777,7 @@ defmodule Logex.Program do
 
   defp computes({:error, what}, symbol, line, operands, {program, _block} = where, lines),
     do: [
-      "#{located(where)}`#{symbol}` on line #{line}#{within(where)} computes in the type of " <>
+      "#{located(where)}`#{symbol}` on line #{Logex.Lexer.inspected(line)}#{within(where)} computes in the type of " <>
         "#{written(List.last(operands), what, where)}: #{named(program)} was edited by " <>
         "hand after it compiled"
       | lines
@@ -800,7 +800,7 @@ defmodule Logex.Program do
 
   defp unit_lines(units, _tags, where),
     do: [
-      "#{owner(where)} units are neither nil nor a map of timer names to units, got: #{inspect(units)}: " <>
+      "#{owner(where)} units are neither nil nor a map of timer names to units, got: #{Logex.Lexer.inspected(units)}: " <>
         "#{named(elem(where, 0))} was edited by hand after it compiled"
     ]
 
@@ -817,14 +817,15 @@ defmodule Logex.Program do
         MapSet.member?(given, path) != MapSet.member?(wanted, path),
         do:
           "#{owner(where)} retained paths #{retained_given(MapSet.member?(given, path))} " <>
-            "`#{path}`, where its tags #{retained_given(MapSet.member?(wanted, path))} it: " <>
+            "#{Logex.Lexer.quoted_text(path)}, where its tags " <>
+            "#{retained_given(MapSet.member?(wanted, path))} it: " <>
             "#{named(elem(where, 0))} was edited by hand after it compiled"
   end
 
   defp retained_lines(retained, _wanted, where),
     do: [
       "#{owner(where)} retained paths are neither nil nor a list of paths, got: " <>
-        "#{inspect(retained)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+        "#{Logex.Lexer.inspected(retained)}: #{named(elem(where, 0))} was edited by hand after it compiled"
     ]
 
   defp retained_given(true), do: "hold"
@@ -848,7 +849,7 @@ defmodule Logex.Program do
   defp real_lines(reals, _tags, where),
     do: [
       "#{owner(where)} reals are neither nil nor a map of tag names to real types, got: " <>
-        "#{inspect(reals)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+        "#{Logex.Lexer.inspected(reals)}: #{named(elem(where, 0))} was edited by hand after it compiled"
     ]
 
   # M5-11: a routine's arrays against the ones its tags give, by name in order, as its reals.
@@ -869,7 +870,7 @@ defmodule Logex.Program do
   defp array_lines(arrays, _tags, where),
     do: [
       "#{owner(where)} arrays are neither nil nor a map of tag names to array types, got: " <>
-        "#{inspect(arrays)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+        "#{Logex.Lexer.inspected(arrays)}: #{named(elem(where, 0))} was edited by hand after it compiled"
     ]
 
   defp array_given(:error), do: "no array type"
@@ -877,13 +878,16 @@ defmodule Logex.Program do
   defp array_given({:ok, {:array, type, [_ | _]} = array}) when is_elementary(type),
     do: shown_array(Enum.all?(elem(array, 2), &(is_integer(&1) and &1 > 0)), array)
 
-  defp array_given({:ok, type}), do: "the type #{inspect(type, charlists: :as_lists)}"
+  defp array_given({:ok, type}),
+    do: "the type #{Logex.Lexer.inspected(type, charlists: :as_lists)}"
 
   defp shown_array(true, array), do: a(array)
-  defp shown_array(false, array), do: "the type #{inspect(array, charlists: :as_lists)}"
+
+  defp shown_array(false, array),
+    do: "the type #{Logex.Lexer.inspected(array, charlists: :as_lists)}"
 
   defp real_given(:error), do: "no real type"
-  defp real_given({:ok, type}), do: "the type #{inspect(type)}"
+  defp real_given({:ok, type}), do: "the type #{Logex.Lexer.inspected(type)}"
 
   defp real_wanted({:ok, %Logex.Tag{type: type}}, _where), do: "it is #{a(type)}"
   defp real_wanted(_undeclared, where), do: "#{declarer(where)} declares no such tag"
@@ -893,14 +897,13 @@ defmodule Logex.Program do
   defp table(units), do: units
 
   defp owner({nil, nil}), do: "an unnamed program's"
-  defp owner({program, nil}), do: "`#{program}`'s"
-  defp owner({_program, block}), do: "`#{block}`'s body's"
+  defp owner({program, nil}), do: "#{Logex.Lexer.quoted_text(program)}'s"
+  defp owner({_program, block}), do: "#{Logex.Lexer.quoted_text(block)}'s body's"
 
-  defp shown_name(name) when is_binary(name), do: "`#{name}`"
-  defp shown_name(name), do: inspect(name)
+  defp shown_name(name), do: Logex.Lexer.quoted_text(name)
 
   defp unit_given(:error), do: "no unit"
-  defp unit_given({:ok, per_ms}), do: "#{inspect(per_ms)} a millisecond"
+  defp unit_given({:ok, per_ms}), do: "#{Logex.Lexer.inspected(per_ms)} a millisecond"
 
   # M5-14: an array of timers times in its elements' unit, each element its own timer.
   defp unit_wanted({:ok, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _} = array}}, _where),
@@ -922,14 +925,14 @@ defmodule Logex.Program do
   defp of_unit(per_ms, type), do: "#{a(type)} adds #{per_ms} to its `acc` each millisecond"
 
   defp located({nil, nil}), do: "an unnamed program's "
-  defp located({program, nil}), do: "`#{program}`'s "
+  defp located({program, nil}), do: "#{Logex.Lexer.quoted_text(program)}'s "
   defp located({_program, _block}), do: ""
 
   defp within({_program, nil}), do: ""
-  defp within({_program, block}), do: " of `#{block}`'s body"
+  defp within({_program, block}), do: " of #{Logex.Lexer.quoted_text(block)}'s body"
 
   defp named(nil), do: "the program"
-  defp named(program), do: "`#{program}`"
+  defp named(program), do: Logex.Lexer.quoted_text(program)
 
   defp written(destination, :undeclared, where),
     do: "#{shown(destination)}, which #{declarer(where)} does not declare"
@@ -969,21 +972,24 @@ defmodule Logex.Program do
   defp declarer({program, nil}), do: named(program)
   defp declarer({_program, _block}), do: "the body"
 
-  defp shown({:name, _, name}), do: "`#{name}`"
+  defp shown({:name, _, name}), do: Logex.Lexer.quoted_text(name)
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
 
   defp shown({:member, _, element, members}),
     do: "`#{Enum.join([elem(element, tuple_size(element) - 1) | members], ".")}`"
 
-  defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
-  defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
-  defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
-  defp shown({:element_at, _, _array, _index, _dims, name}), do: "`#{name}`"
-  defp shown(other), do: "`#{inspect(other)}`"
+  defp shown({:bit, _, _path, _n, _mask, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:bit_at, _, _path, _index, _width, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:element, _, _array, _index, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:element_at, _, _array, _index, _dims, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown(other), do: "`#{Logex.Lexer.inspected(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)
-  defp a({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
+
+  defp a({:block, name}) when is_binary(name),
+    do: "an instance of #{Logex.Lexer.quoted_text(name)}"
+
   defp a(type) when is_atom(type), do: Logex.Declarations.a_type(type)
   defp a(type) when is_array(type), do: Logex.Declarations.a_type(type)
-  defp a(other), do: inspect(other)
+  defp a(other), do: Logex.Lexer.inspected(other)
 end

@@ -564,7 +564,7 @@ defmodule Logex.Configuration.Edit do
     do:
       raise(
         ArgumentError,
-        "elapsed_ms must be a non-negative integer of milliseconds, got: #{inspect(other)}"
+        "elapsed_ms must be a non-negative integer of milliseconds, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # Decision 63: one rule for handing a configuration to a running resource, start/1's, its
@@ -589,7 +589,7 @@ defmodule Logex.Configuration.Edit do
       raise(
         ArgumentError,
         "expected a %Logex.Configuration.Edit{} from Logex.Configuration.Edit.accept/2, " <>
-          "got: #{inspect(other)}"
+          "got: #{Logex.Lexer.inspected(other)}"
       )
 
   # Decision 60: the generation the edit expects, then the configuration the resource runs.
@@ -606,8 +606,8 @@ defmodule Logex.Configuration.Edit do
     do:
       raise(
         ArgumentError,
-        "this edit expects the resource at generation #{expected}, but it is at generation " <>
-          "#{generation}: the edit has ended, or another edit has stepped since"
+        "this edit expects the resource at generation #{Logex.Lexer.inspected(expected)}, but it " <>
+          "is at generation #{Logex.Lexer.inspected(generation)}: the edit has ended, or another edit has stepped since"
       )
 
   defp configured!(true, runtime), do: runtime
@@ -1341,7 +1341,7 @@ defmodule Logex.Configuration.Edit do
     do: [
       "#{context.wire} is a var_output no rung of `#{context.type}` writes and line #{line} " <>
         "of `#{context.type}` reads, wired to `#{name}`, a global #{context.held}, and holds " <>
-        "#{inspect(host(was))} where `#{name}` holds #{inspect(host(value))} until `#{instance}` " <>
+        "#{Logex.Lexer.inspected(host(was))} where `#{name}` holds #{Logex.Lexer.inspected(host(value))} until `#{instance}` " <>
         "first runs after a start or a restart: holding it now would change what that rung " <>
         "gives, so the edit is accepted only once `#{instance}` has run, or with a restart"
     ]

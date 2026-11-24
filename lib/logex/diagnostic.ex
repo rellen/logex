@@ -91,6 +91,6 @@ defmodule Logex.Diagnostic do
     do:
       raise(
         ArgumentError,
-        "a diagnostic's severity is :error or :warning, got: #{inspect(severity)}"
+        "a diagnostic's severity is :error or :warning, got: #{Logex.Lexer.inspected(severity)}"
       )
 end

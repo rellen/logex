@@ -256,7 +256,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "the simulated device #{inspect(sim)} holds its next reread already: let_go/1 " <>
+        "the simulated device #{Logex.Lexer.inspected(sim)} holds its next reread already: let_go/1 " <>
           "lets it go"
       )
 
@@ -266,7 +266,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "the simulated device #{inspect(sim)} holds no reread: hold/1 holds its next"
+        "the simulated device #{Logex.Lexer.inspected(sim)} holds no reread: hold/1 holds its next"
       )
 
   # Decision 477 (RV-18): a hold armed that no reread has come to, let go, is the test's
@@ -275,7 +275,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "the simulated device #{inspect(sim)} holds no reread yet: hold/1 armed the hold, " <>
+        "the simulated device #{Logex.Lexer.inspected(sim)} holds no reread yet: hold/1 armed the hold, " <>
           "and no restart has read the device since"
       )
 
@@ -295,12 +295,17 @@ defmodule Logex.IO.Sim do
   # text, as the test wrote it.
   defp set!(:renamed, sim, taken), do: setting(sim, taken)
 
+  # RV-32's review, F2: the sim's own count, which `inputs:` gave and may be long, is
+  # quoted through the cut as the address is. Where a runner has opened the sim an
+  # address is the configuration's text, which names no number past the cut, so a count
+  # past it is never reached there.
   defp set!({:past, address, size, nil}, _sim, _taken),
     do:
       raise(
         ArgumentError,
-        "the sim has #{size} #{noun(:input, size)}, at the addresses [0] to [#{size - 1}], " <>
-          "got: #{inspect(address, charlists: :as_lists)}"
+        "the sim has #{Logex.Lexer.shown_number(size)} #{noun(:input, size)}, at the " <>
+          "addresses [0] to [#{Logex.Lexer.shown_number(size - 1)}], got: " <>
+          Logex.Lexer.inspected(address, charlists: :as_lists)
       )
 
   defp set!({:past, address, size, named}, _sim, _taken),
@@ -308,8 +313,8 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "the sim has #{size} #{noun(:input, size)}, at the addresses " <>
-          "#{inspect(at(named, :input, [0]))} to #{inspect(at(named, :input, [size - 1]))}, " <>
-          "got: #{inspect(at(named, :input, address))}"
+          "#{Logex.Lexer.inspected(at(named, :input, [0]))} to #{Logex.Lexer.inspected(at(named, :input, [size - 1]))}, " <>
+          "got: #{Logex.Lexer.inspected(at(named, :input, address))}"
       )
 
   defp set!({reporter, changed, wait}, sim, _taken),
@@ -333,7 +338,7 @@ defmodule Logex.IO.Sim do
 
   defp unanswered(pid, wait),
     do:
-      "Logex.IO.Sim waited #{wait} ms for #{inspect(pid)}, the device that opened it, to " <>
+      "Logex.IO.Sim waited #{wait} ms for #{Logex.Lexer.inspected(pid)}, the device that opened it, to " <>
         "handle its report: a device is an OTP process, as the runner's are, which answers " <>
         ":sys once it has handled what it was sent"
 
@@ -427,8 +432,8 @@ defmodule Logex.IO.Sim do
 
   defp holding(sim, pid, device),
     do:
-      "the simulated device #{inspect(sim)} is the device `#{device}`'s, opened by " <>
-        "#{inspect(pid)}, which has not closed it: a sim is one device's"
+      "the simulated device #{Logex.Lexer.inspected(sim)} is the device `#{device}`'s, opened by " <>
+        "#{Logex.Lexer.inspected(pid)}, which has not closed it: a sim is one device's"
 
   # The next failure told to a callback, taken, with the clock a delay passes on.
   defp take(sim, callback), do: GenServer.call(sim, {:take, callback})
@@ -440,7 +445,10 @@ defmodule Logex.IO.Sim do
   defp act({{:error, reason}, _clock}, _callback, state, _go), do: {:error, reason, state}
 
   defp act({:raise, _clock}, callback, %{device: device}, _go),
-    do: raise("the simulated device #{inspect(device)} raised in #{callback}, as fail/3 told it")
+    do:
+      raise(
+        "the simulated device #{Logex.Lexer.inspected(device)} raised in #{callback}, as fail/3 told it"
+      )
 
   defp act({:throw, _clock}, callback, _state, _go), do: throw({__MODULE__, callback})
   defp act({:exit, _clock}, callback, _state, _go), do: exit({__MODULE__, callback})
@@ -700,7 +708,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim's writes: is how many writes it keeps, its newest, 1 or more, got: " <>
-          inspect(other)
+          Logex.Lexer.inspected(other)
       )
 
   # M5-13: how many points of a direction the sim has, nil for as many as it is given.
@@ -712,13 +720,13 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim's #{key}: is how many points it has, 1 or more, or nil for as many " <>
-          "as it is given, got: " <> inspect(other)
+          "as it is given, got: " <> Logex.Lexer.inspected(other)
       )
 
   defp takes(opts),
     do:
       "Logex.IO.Sim takes a keyword list of options, reports:, clock:, wait:, inputs:, " <>
-        "outputs: and writes:, got: " <> inspect(opts)
+        "outputs: and writes:, got: " <> Logex.Lexer.inspected(opts)
 
   defp known!([]), do: :ok
 
@@ -727,7 +735,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim takes reports:, clock:, wait:, inputs:, outputs: and writes:, got: " <>
-          inspect(key)
+          Logex.Lexer.inspected(key)
       )
 
   # A key given twice, as `Logex.Runner.start_link/1` tells one (M5-13's review): which of
@@ -738,13 +746,17 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "Logex.IO.Sim takes each option once, got #{inspect(key)} more than once"
+        "Logex.IO.Sim takes each option once, got #{Logex.Lexer.inspected(key)} more than once"
       )
 
   defp reports!(reports) when is_boolean(reports), do: reports
 
   defp reports!(other),
-    do: raise(ArgumentError, "Logex.IO.Sim's reports: is true or false, got: #{inspect(other)}")
+    do:
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim's reports: is true or false, got: #{Logex.Lexer.inspected(other)}"
+      )
 
   # A manual clock, which Logex.Runner.Clock.Manual checks in its own words.
   defp clock!(nil), do: nil
@@ -761,7 +773,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 to #{@longest}, the " <>
-          "longest the VM waits, got: " <> inspect(other)
+          "longest the VM waits, got: " <> Logex.Lexer.inspected(other)
       )
 
   # A sim is a process this module started, by its pid: what is wrong with one, `[]` for
@@ -774,13 +786,15 @@ defmodule Logex.IO.Sim do
   defp started({:dictionary, dictionary}, sim),
     do: ours(List.keyfind(dictionary, :"$initial_call", 0), sim)
 
-  defp started(nil, sim), do: ["the simulated device #{inspect(sim)} is not running"]
+  defp started(nil, sim),
+    do: ["the simulated device #{Logex.Lexer.inspected(sim)} is not running"]
 
   defp ours({_key, {__MODULE__, :init, 1}}, _sim), do: []
   defp ours(_other, sim), do: [expected(sim) <> ", another process"]
 
   defp expected(other),
-    do: "expected a simulated device from Logex.IO.Sim.start_link/1, got: #{inspect(other)}"
+    do:
+      "expected a simulated device from Logex.IO.Sim.start_link/1, got: #{Logex.Lexer.inspected(other)}"
 
   defp first!([], value), do: value
   defp first!([mistake | _rest], _value), do: raise(ArgumentError, mistake)
@@ -800,13 +814,13 @@ defmodule Logex.IO.Sim do
     simulated(unsimulated(sim), sim, device) ++
       twice(length(Keyword.get_values(opts, :sim))) ++
       for key <- Enum.uniq(Keyword.keys(opts)) -- [:sim],
-          do: "Logex.IO.Sim is bound with sim: alone, got: #{inspect(key)}"
+          do: "Logex.IO.Sim is bound with sim: alone, got: #{Logex.Lexer.inspected(key)}"
   end
 
   defp bound(false, opts, _device),
     do: [
       "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
-        inspect(opts)
+        Logex.Lexer.inspected(opts)
     ]
 
   # c3-io-contract-8 (RV-4): `sim:` once, as each option of start_link/1 is, the first of
@@ -877,7 +891,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim opens a device given its points, a list of %Logex.IO.Point{}, got: " <>
-          inspect(points)
+          Logex.Lexer.inspected(points)
       )
 
   # The values the runner's device writes, by the adapter's own address, a list.
@@ -896,7 +910,8 @@ defmodule Logex.IO.Sim do
   defp inputs!(other, _named, _sim), do: raise(ArgumentError, by_address(other))
 
   defp by_address(other),
-    do: "values go by address, a map of addresses to numbers, got: #{inspect(other)}"
+    do:
+      "values go by address, a map of addresses to numbers, got: #{Logex.Lexer.inspected(other)}"
 
   # Decision 517 (e) (RV-21): an input's address as a test gives one, a list until a runner
   # has opened the sim and from then on the configuration's text, the device's own input,
@@ -910,9 +925,9 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "no runner has opened the simulated device #{inspect(sim)}, so it knows no device's " <>
+        "no runner has opened the simulated device #{Logex.Lexer.inspected(sim)}, so it knows no device's " <>
           "name: until one has, an input's address is a list of whole numbers, [0], got: " <>
-          inspect(address)
+          Logex.Lexer.inspected(address)
       )
 
   defp addressed!(nil, address, _sim), do: address!(address)
@@ -924,10 +939,10 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "a runner has opened the simulated device #{inspect(sim)} for the device `#{named}`: " <>
+        "a runner has opened the simulated device #{Logex.Lexer.inspected(sim)} for the device `#{named}`: " <>
           "an input's address is the configuration's text from then on, " <>
-          "#{inspect(at(named, :input, [0]))}, got: " <>
-          inspect(address, charlists: :as_lists)
+          "#{Logex.Lexer.inspected(at(named, :input, [0]))}, got: " <>
+          Logex.Lexer.inspected(address, charlists: :as_lists)
       )
 
   defp located!({:ok, {named, "i", fields}}, named, _address, _sim), do: fields
@@ -936,25 +951,25 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "#{inspect(address)} is an output of the device `#{named}`, and set/2 and set/3 " <>
-          "set the simulated device #{inspect(sim)}'s inputs"
+        "#{Logex.Lexer.inspected(address)} is an output of the device `#{named}`, and set/2 and set/3 " <>
+          "set the simulated device #{Logex.Lexer.inspected(sim)}'s inputs"
       )
 
   defp located!({:ok, {device, _io, _fields}}, named, address, sim),
     do:
       raise(
         ArgumentError,
-        "#{inspect(address)} is the device `#{device}`'s, and the simulated device " <>
-          "#{inspect(sim)} is the device `#{named}`'s, its inputs " <>
-          "#{inspect(at(named, :input, [0]))} and on"
+        "#{Logex.Lexer.inspected(address)} is the device `#{device}`'s, and the simulated device " <>
+          "#{Logex.Lexer.inspected(sim)} is the device `#{named}`'s, its inputs " <>
+          "#{Logex.Lexer.inspected(at(named, :input, [0]))} and on"
       )
 
   defp located!(:error, named, address, _sim),
     do:
       raise(
         ArgumentError,
-        "#{inspect(address)} is no address as the configuration writes one, an input of " <>
-          "the device `#{named}` as #{inspect(at(named, :input, [0]))}"
+        "#{Logex.Lexer.inspected(address)} is no address as the configuration writes one, an input of " <>
+          "the device `#{named}` as #{Logex.Lexer.inspected(at(named, :input, [0]))}"
       )
 
   defp address!([_ | _] = address), do: whole!(fields?(address), address)
@@ -972,14 +987,14 @@ defmodule Logex.IO.Sim do
   defp unaddressed(other),
     do:
       "an address is a list of whole numbers, 0 or more, as `panel.i.1.3`'s is [1, 3], " <>
-        "got: #{inspect(other)}"
+        "got: #{Logex.Lexer.inspected(other)}"
 
   # M5-10: a real point's value is a float or an integer, which the runner stores as its
   # nearest real (decision 166); every other point's an integer, which the runner checks.
   defp value!(value) when is_number(value), do: value
 
   defp value!(other),
-    do: raise(ArgumentError, "a point's value is a number, got: #{inspect(other)}")
+    do: raise(ArgumentError, "a point's value is a number, got: #{Logex.Lexer.inspected(other)}")
 
   defp callback!(callback) when callback in @callbacks, do: callback
 
@@ -988,7 +1003,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "Logex.IO.Sim fails one of its callbacks, :init, :read, :write, :report or :close, " <>
-          "got: #{inspect(other)}"
+          "got: #{Logex.Lexer.inspected(other)}"
       )
 
   # What each callback can act out: a close neither gives an error back nor a value, and
@@ -1009,9 +1024,13 @@ defmodule Logex.IO.Sim do
         ArgumentError,
         "a failure is {:error, reason}, :raise, :throw, :exit, :hang, {:delay, ms} with ms " <>
           "0 or more, or, for a read or a report, {:value, address, value}, got: " <>
-          inspect(other)
+          Logex.Lexer.inspected(other)
       )
 
   defp cannot!(how, callback),
-    do: raise(ArgumentError, "Logex.IO.Sim cannot act out #{inspect(how)} in #{callback}")
+    do:
+      raise(
+        ArgumentError,
+        "Logex.IO.Sim cannot act out #{Logex.Lexer.inspected(how)} in #{callback}"
+      )
 end

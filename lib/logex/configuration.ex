@@ -151,7 +151,16 @@ defmodule Logex.Configuration do
   A number `check/1` quotes, a global's initial value, an array's size, a task's interval,
   priority or watchdog, a connection's constant or an element's line, is quoted whole up
   to 10,000 characters and past that by its first 24 and how many it has, as a compile
-  quotes a long literal (decision 583), so that a refusal stays short.
+  quotes a long literal (decisions 583 and 584), so that a refusal stays short, and a
+  value that is no number as `inspect/1` shows it, with its limits, each long number in
+  it cut (decision 585). Since decision 586 every refusal of this module quotes a host's
+  value so: `new!/1`'s own, of what is no keyword list and of an element brought with a
+  line, `%Global{line: 10 ** 1_000_000}` told in 152 bytes and some 37,000 reductions
+  where it took a megabyte and 32 million, `compile/3`'s and `compile_file/1`'s of an
+  argument that is no text, and `initial/1`'s and `watchdog/1`'s. A name or a location
+  that is text is quoted whole, in backquotes; one that is no UTF-8 text, as `inspect/1`
+  shows it, `<<97, 98, 255, 99>>`; and a struct that writes itself out, a `Date` among
+  them, field by field where it holds a long number (RV-32's review).
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -325,8 +334,7 @@ defmodule Logex.Configuration do
       in its one spelling is the point it names for the global's value, list and
       `retain`, so `new!("eye_1", :bool, initial: 1, at: "panel.I.0")` is told the
       point's line and the spelling's, both; one that is none, `panel.x.0`, names no
-      point, and a value beside it is judged against the type (provisional: `PLAN.md`'s
-      RV-31, question 5).
+      point, and a value beside it is judged against the type (decision 588).
 
     A name that is no text is shown as Elixir shows it, `:g cannot name a global: …`. A
     number a line quotes is quoted whole up to 10,000 characters, and past that by its
@@ -436,8 +444,7 @@ defmodule Logex.Configuration do
         "the options of #{label(name)} are a keyword list of `initial:`, `at:`, " <>
           "`retain: true` or `non_retain: true`, found #{Logex.Lexer.inspected(options)}"
 
-    defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: Logex.Lexer.inspected(name)
+    defp label(name), do: Logex.Lexer.quoted_text(name)
 
     @typedoc "A global's type: an elementary type, or an array of one."
     @type type ::
@@ -559,7 +566,7 @@ defmodule Logex.Configuration do
     # diagnostic check/1 gives.
     def said(%Global{} = global),
       do:
-        of_word(word?(global.name), cannot_name(global)) ++
+        of_word(word?(global.name), fn -> cannot_name(global) end) ++
           type_said(global) ++
           value_said(global) ++ at_said(global) ++ retain_said(global)
 
@@ -582,8 +589,11 @@ defmodule Logex.Configuration do
     defp one_word({:ok, [{:name, _, word}], _}, word), do: true
     defp one_word(_lexed, _word), do: false
 
+    # The message made only where it is told, so that a configuration that says each of
+    # them builds none of its text (RV-32's review: a name quoted through the cut is
+    # looked at, which a refusal pays and a check that succeeds does not).
     defp of_word(true, _message), do: []
-    defp of_word(false, message), do: [message]
+    defp of_word(false, message), do: [message.()]
 
     # An element of the configuration's whose name no line can say: a task's, a global's
     # or a program instance's.
@@ -642,7 +652,7 @@ defmodule Logex.Configuration do
     defp sizes_said(false, %Global{name: name, type: type}),
       do: [
         "global #{label(name)} has type #{Logex.Lexer.inspected(type)}: a global is " <>
-          Declarations.either(&inspect/1) <>
+          Declarations.either(&Logex.Lexer.inspected/1) <>
           ", or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of " <>
           "one integer a dimension"
       ]
@@ -727,7 +737,9 @@ defmodule Logex.Configuration do
 
     # A location that the lexer does not read as one name token, which no line can say.
     defp at_said(%Global{at: nil}), do: []
-    defp at_said(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
+
+    defp at_said(%Global{at: at} = global),
+      do: of_word(word?(at), fn -> not_a_location(global) end)
 
     defp not_a_location(global),
       do:
@@ -846,8 +858,7 @@ defmodule Logex.Configuration do
 
     # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
     # real one is no integer type's, and an integer one a real's only exactly. So is one
-    # beside a location that is none, `panel.x.0`, which names no point (provisional:
-    # `PLAN.md`'s RV-31, question 5).
+    # beside a location that is none, `panel.x.0`, which names no point (decision 588).
     defp initial(global, :error), do: unheld(global)
 
     # A number a global of an elementary type does not hold: since M5-10 by the literal
@@ -881,8 +892,8 @@ defmodule Logex.Configuration do
     # "q", address}}`, or `:error`.
     def location(at), do: located_word(word?(at), at)
 
-    # The point a global's own rules read, `:error` for none. RV-31's review (F1),
-    # provisional (`PLAN.md`'s RV-31, question 5): a location not in its one spelling,
+    # The point a global's own rules read, `:error` for none. RV-31's review (F1), taken
+    # by decision 588: a location not in its one spelling,
     # `panel.I.0` or `panel.i.00`, is the point it names, `panel.i.0`, for the global's
     # value, list and `retain`, so that one call is told the point's line beside the
     # spelling's, the one refusal decision 576 asks for, where read as no point it was told
@@ -962,8 +973,7 @@ defmodule Logex.Configuration do
     def spelling({device, io, fields}),
       do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
 
-    defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: Logex.Lexer.inspected(name)
+    defp label(name), do: Logex.Lexer.quoted_text(name)
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
@@ -995,7 +1005,7 @@ defmodule Logex.Configuration do
   defp takes(other),
     do:
       "Logex.Configuration.new!/1 takes a keyword list of " <>
-        "name:, programs:, tasks:, globals:, instances: and connections:, got: #{inspect(other)}"
+        "name:, programs:, tasks:, globals:, instances: and connections:, got: #{Logex.Lexer.inspected(other)}"
 
   defp keyword?([]), do: true
   defp keyword?([{key, _} | rest]) when is_atom(key), do: keyword?(rest)
@@ -1051,7 +1061,7 @@ defmodule Logex.Configuration do
   defp unline_whole(true, %{line: line} = item, {items, lined}) when line != nil,
     do:
       {[%{item | line: nil} | items],
-       ["#{describe(item)} from Elixir has no line, got: #{inspect(line)}" | lined]}
+       ["#{describe(item)} from Elixir has no line, got: #{Logex.Lexer.inspected(line)}" | lined]}
 
   defp unline_whole(_whole, item, {items, lined}), do: {[item | items], lined}
 
@@ -1068,7 +1078,7 @@ defmodule Logex.Configuration do
 
   defp unknown_field(key),
     do:
-      "#{inspect(key)} is not a field of a configuration: its fields are " <>
+      "#{Logex.Lexer.inspected(key)} is not a field of a configuration: its fields are " <>
         "name:, programs:, tasks:, globals:, instances: and connections:"
 
   # The programs, given as a list, keyed by name: a program is named once, and an unnamed
@@ -1094,7 +1104,7 @@ defmodule Logex.Configuration do
       {programs,
        [
          "programs: must be a list of %Logex.Program{} from Logex.compile/2, " <>
-           "got: #{inspect(list)}"
+           "got: #{Logex.Lexer.inspected(list)}"
          | problems
        ]}
 
@@ -1118,7 +1128,10 @@ defmodule Logex.Configuration do
   defp program_from(other, {programs, problems}),
     do:
       {programs,
-       ["programs: #{inspect(other)} is not a %Logex.Program{} from Logex.compile/2" | problems]}
+       [
+         "programs: #{Logex.Lexer.inspected(other)} is not a %Logex.Program{} from Logex.compile/2"
+         | problems
+       ]}
 
   defp program_named(false, %{name: name} = program, {programs, problems}),
     do: {Map.put(programs, name, program), problems}
@@ -1189,7 +1202,7 @@ defmodule Logex.Configuration do
     do:
       raise(
         ArgumentError,
-        "Logex.Configuration.compile/3 takes source text as a binary, got: #{inspect(source)}"
+        "Logex.Configuration.compile/3 takes source text as a binary, got: #{Logex.Lexer.inspected(source)}"
       )
 
   # Decision 227: a configuration that compiles is told each real initial value its line
@@ -1374,7 +1387,7 @@ defmodule Logex.Configuration do
     do:
       raise(
         ArgumentError,
-        "Logex.Configuration.compile_file/1 takes a path as a binary, got: #{inspect(path)}"
+        "Logex.Configuration.compile_file/1 takes a path as a binary, got: #{Logex.Lexer.inspected(path)}"
       )
 
   # The extension says what a file is (decision 35), and a file named only `.logex` reads
@@ -1884,9 +1897,9 @@ defmodule Logex.Configuration do
     do:
       named(task) ++
         trigger_word(task.single, name) ++
-        counted(task.interval, interval_rule(name)) ++
-        counted(task.priority, priority_rule(name)) ++
-        counted(task.watchdog, watchdog_rule(name)) ++ flag(task.continuous, name)
+        counted(task.interval, fn -> interval_rule(name) end) ++
+        counted(task.priority, fn -> priority_rule(name) end) ++
+        counted(task.watchdog, fn -> watchdog_rule(name) end) ++ flag(task.continuous, name)
 
   # A global's, every rule of the one global, the one judge's (decision 577), which
   # `Global.new!/3` reads too.
@@ -1897,19 +1910,22 @@ defmodule Logex.Configuration do
       named(instance) ++
         of_word(
           word?(type),
-          "#{describe(instance)}: its type is a program's name, found #{shown(type)}"
+          fn ->
+            "#{describe(instance)}: its type is a program's name, found #{shown(type)}"
+          end
         ) ++
         instance_task(task, instance)
 
   defp said(%Connection{} = connection),
     do:
-      of_word(ends?(connection), ends_rule(connection)) ++
-        of_word(other_end(connection.to) != :junk, other_end_rule(connection))
+      of_word(ends?(connection), fn -> ends_rule(connection) end) ++
+        of_word(other_end(connection.to) != :junk, fn -> other_end_rule(connection) end)
 
-  defp named(%{name: name} = element), do: of_word(word?(name), cannot_name(element))
+  defp named(%{name: name} = element), do: of_word(word?(name), fn -> cannot_name(element) end)
 
+  # The message made only where it is told, as the judge's of_word/2.
   defp of_word(true, _message), do: []
-  defp of_word(false, message), do: [message]
+  defp of_word(false, message), do: [message.()]
 
   defp cannot_name(element), do: Judge.cannot_name(element)
 
@@ -1920,12 +1936,14 @@ defmodule Logex.Configuration do
     do:
       of_word(
         word?(single),
-        "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
-          "found #{shown(single)}"
+        fn ->
+          "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
+            "found #{shown(single)}"
+        end
       )
 
   defp counted(value, _rule) when value == nil or is_integer(value), do: []
-  defp counted(value, rule), do: [rule <> ", found #{shown(value)}"]
+  defp counted(value, rule), do: [rule.() <> ", found #{shown(value)}"]
 
   defp interval_rule(name), do: "task #{label(name)}: an interval is 1 to 2147483647 ms"
   defp watchdog_rule(name), do: "task #{label(name)}: a watchdog is 1 to 2147483647 ms"
@@ -1945,7 +1963,9 @@ defmodule Logex.Configuration do
     do:
       of_word(
         word?(task),
-        "#{describe(instance)}: its task is a task's name, or nil for none, found #{shown(task)}"
+        fn ->
+          "#{describe(instance)}: its task is a task's name, or nil for none, found #{shown(task)}"
+        end
       )
 
   # A connection's line writes its instance and member as one path, `m1.start`, whose
@@ -2044,8 +2064,7 @@ defmodule Logex.Configuration do
   defp describe(%Connection{instance: instance, member: member}),
     do: "the connection of #{path(instance, member)}"
 
-  defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: shown(name)
+  defp label(name), do: Logex.Lexer.quoted_text(name)
 
   defp path(instance, member) when is_binary(instance) and is_binary(member),
     do: "`#{instance}.#{member}`"
@@ -2550,7 +2569,7 @@ defmodule Logex.Configuration do
         ArgumentError,
         "expected a %Logex.Configuration.Global{} whose initial value is an integer, a real's a " <>
           "number, or nil, " <>
-          "got: #{inspect(other)}"
+          "got: #{Logex.Lexer.inspected(other)}"
       )
 
   defp sizes_said?(dims), do: Judge.sized?(dims)
@@ -2591,7 +2610,7 @@ defmodule Logex.Configuration do
       raise(
         ArgumentError,
         "expected an initial list of #{Logex.Array.size(elem(array, 2))} values for " <>
-          "#{Declarations.a_type(array)}, got: #{inspect(initial, charlists: :as_lists)}"
+          "#{Declarations.a_type(array)}, got: #{Logex.Lexer.inspected(initial, charlists: :as_lists)}"
       )
 
   defp element_held?(type, value) when type in @reals and value === -0.0, do: false
@@ -2604,7 +2623,7 @@ defmodule Logex.Configuration do
       raise(
         ArgumentError,
         "expected an initial list of values for #{Declarations.a_type(array)}, each a value " <>
-          "#{Declarations.a_type(type)} holds, got: #{inspect(initial, charlists: :as_lists)}"
+          "#{Declarations.a_type(type)} holds, got: #{Logex.Lexer.inspected(initial, charlists: :as_lists)}"
       )
 
   defp real_initial(true, %Global{type: type, initial: initial}),
@@ -2620,7 +2639,7 @@ defmodule Logex.Configuration do
       raise(
         ArgumentError,
         "global #{label(name)} is #{Declarations.a_type(type)}: " <>
-          Declarations.literal_misfit(type, initial, "`#{inspect(initial)}`")
+          Declarations.literal_misfit(type, initial, Logex.Lexer.quoted_number(initial))
       )
 
   @doc """
@@ -2648,7 +2667,7 @@ defmodule Logex.Configuration do
       raise(
         ArgumentError,
         "expected a %Logex.Configuration.Task{} whose watchdog is 1 to 2147483647 ms or " <>
-          "nil, got: " <> inspect(other)
+          "nil, got: " <> Logex.Lexer.inspected(other)
       )
 
   @doc """

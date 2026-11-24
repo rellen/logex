@@ -904,8 +904,8 @@ defmodule Logex.ScriptsTest do
   describe "CI's Dialyzer step and scripts/dialyzer.sh (decision 515 (c))" do
     # RV-24's review (F5): the key names the script, whose list of applications names the
     # PLT, and the step restores no other key, its lines taken whole to the next step's.
-    test "the step runs scripts/dialyzer.sh after the suite, its PLT cached by the " <>
-           "toolchain's versions and the script alone, apart from _build's cache" do
+    test "the step runs scripts/dialyzer.sh, its PLT cached under a key of the toolchain's " <>
+           "versions and the script alone, and _build's cache's paths end in !_build/dialyzer" do
       lines = ci_lines()
       cached = Enum.drop_while(lines, &(&1 != "      - name: Cache the Dialyzer PLT"))
 

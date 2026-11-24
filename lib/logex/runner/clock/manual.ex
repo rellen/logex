@@ -141,7 +141,7 @@ defmodule Logex.Runner.Clock.Manual do
   end
 
   defp gone!(false, clock, _reason),
-    do: raise(ArgumentError, "the manual clock #{inspect(clock)} is not running")
+    do: raise(ArgumentError, "the manual clock #{Logex.Lexer.inspected(clock)} is not running")
 
   defp gone!(true, _clock, reason), do: exit(reason)
 
@@ -166,7 +166,7 @@ defmodule Logex.Runner.Clock.Manual do
   # with its message, or one that is no OTP process, never only the second.
   defp unanswered(pid, message, wait),
     do:
-      "the manual clock waited #{wait} ms for #{inspect(pid)} to handle #{inspect(message)}: " <>
+      "the manual clock waited #{wait} ms for #{Logex.Lexer.inspected(pid)} to handle #{Logex.Lexer.inspected(message)}: " <>
         "a receiver of its timers answers :sys once it has handled what it was sent, as a " <>
         "GenServer does, and this one did not within wait:, still busy with it or no OTP " <>
         "process"
@@ -250,12 +250,17 @@ defmodule Logex.Runner.Clock.Manual do
   end
 
   defp takes(opts),
-    do: "the manual clock takes a keyword list of options, now: and wait:, got: #{inspect(opts)}"
+    do:
+      "the manual clock takes a keyword list of options, now: and wait:, got: #{Logex.Lexer.inspected(opts)}"
 
   defp known!([]), do: :ok
 
   defp known!([key | _]),
-    do: raise(ArgumentError, "the manual clock takes now: and wait:, got: #{inspect(key)}")
+    do:
+      raise(
+        ArgumentError,
+        "the manual clock takes now: and wait:, got: #{Logex.Lexer.inspected(key)}"
+      )
 
   # A key given twice, as `Logex.Runner.start_link/1` tells one (M5-13's review): which of
   # two values was meant is the caller's to say.
@@ -265,7 +270,7 @@ defmodule Logex.Runner.Clock.Manual do
     do:
       raise(
         ArgumentError,
-        "the manual clock takes each option once, got #{inspect(key)} more than once"
+        "the manual clock takes each option once, got #{Logex.Lexer.inspected(key)} more than once"
       )
 
   defp now!(now) when is_integer(now), do: now
@@ -274,7 +279,7 @@ defmodule Logex.Runner.Clock.Manual do
     do:
       raise(
         ArgumentError,
-        "the manual clock's now: is a whole number of milliseconds, got: #{inspect(other)}"
+        "the manual clock's now: is a whole number of milliseconds, got: #{Logex.Lexer.inspected(other)}"
       )
 
   defp wait!(wait) when wait in 1..@longest, do: wait
@@ -284,7 +289,7 @@ defmodule Logex.Runner.Clock.Manual do
       raise(
         ArgumentError,
         "the manual clock's wait: is a whole number of milliseconds, 1 to #{@longest}, the " <>
-          "longest the VM waits, got: " <> inspect(other)
+          "longest the VM waits, got: " <> Logex.Lexer.inspected(other)
       )
 
   defp span!(ms, _function) when is_integer(ms) and ms >= 0, do: ms
@@ -294,7 +299,7 @@ defmodule Logex.Runner.Clock.Manual do
       raise(
         ArgumentError,
         "#{function} moves the clock on by a whole number of milliseconds, 0 or more, got: " <>
-          inspect(other)
+          Logex.Lexer.inspected(other)
       )
 
   # A manual clock is a process this module started, by its pid: one that is down, or is
@@ -306,12 +311,12 @@ defmodule Logex.Runner.Clock.Manual do
     do: ours!(List.keyfind(dictionary, :"$initial_call", 0), clock)
 
   defp started!(nil, clock),
-    do: raise(ArgumentError, "the manual clock #{inspect(clock)} is not running")
+    do: raise(ArgumentError, "the manual clock #{Logex.Lexer.inspected(clock)} is not running")
 
   defp ours!({_key, {__MODULE__, :init, 1}}, clock), do: clock
   defp ours!(_other, clock), do: raise(ArgumentError, expected(clock) <> ", another process")
 
   defp expected(other),
     do:
-      "expected a manual clock from Logex.Runner.Clock.Manual.start_link/1, got: #{inspect(other)}"
+      "expected a manual clock from Logex.Runner.Clock.Manual.start_link/1, got: #{Logex.Lexer.inspected(other)}"
 end

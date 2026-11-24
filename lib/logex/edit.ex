@@ -560,7 +560,7 @@ defmodule Logex.Edit do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(other)}"
+        "expected a %Logex.Program{} from Logex.compile/2, got: #{Logex.Lexer.inspected(other)}"
       )
 
   defp computable!([]), do: :ok
@@ -576,8 +576,11 @@ defmodule Logex.Edit do
           "an edit keeps the program's name"
       )
 
+  # A program's name is the host's, a program edited by hand may hold anything there, so
+  # it is quoted through the cut: text whole, anything else as `inspect/1` shows it, a
+  # long number cut (RV-32's review, F1).
   defp named(nil), do: "an unnamed program"
-  defp named(name), do: "`#{name}`"
+  defp named(name), do: Logex.Lexer.quoted_text(name)
 
   defp edit!(%__MODULE__{} = edit), do: edit
 
@@ -585,7 +588,7 @@ defmodule Logex.Edit do
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Edit{} from Logex.Edit.accept/3, got: #{inspect(other)}"
+        "expected a %Logex.Edit{} from Logex.Edit.accept/3, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # The runtime's checks, and so its messages: put_inputs/3 with no inputs checks the

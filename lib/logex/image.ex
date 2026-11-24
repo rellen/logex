@@ -136,7 +136,7 @@ defmodule Logex.Image do
         ArgumentError,
         [
           message:
-            "the retained image reaches the retained path #{inspect(path)}, which the " <>
+            "the retained image reaches the retained path #{Logex.Lexer.inspected(path)}, which the " <>
               "program's tags do not give: the program was edited by hand after it was " <>
               "handed in and checked"
         ],
@@ -282,7 +282,7 @@ defmodule Logex.Image do
       raise(
         ArgumentError,
         "a resource's retained image is a map of `configuration`, `globals`, `instances` " <>
-          "and `triggers`, as Logex.Runtime.retained/1 gives one, got: #{inspect(other)}"
+          "and `triggers`, as Logex.Runtime.retained/1 gives one, got: #{Logex.Lexer.inspected(other)}"
       )
 
   # Decision 313: a retained `single`'s last sample, by its global's name, a bool's value,
@@ -360,7 +360,7 @@ defmodule Logex.Image do
 
   defp sample_lines(sample, name),
     do: [
-      "`triggers` holds #{inspect(name)} at #{inspect(sample)}, which is no last sample of " <>
+      "`triggers` holds #{Logex.Lexer.inspected(name)} at #{Logex.Lexer.inspected(sample)}, which is no last sample of " <>
         "a trigger, a bool's value"
     ]
 
@@ -377,18 +377,17 @@ defmodule Logex.Image do
   defp configuration_line(name, config),
     do: [
       "the retained image is of configuration #{quoted(name)}, and this configuration is " <>
-        "`#{config}`: an image starts only the configuration it was taken from"
+        "#{quoted(config)}: an image starts only the configuration it was taken from"
     ]
 
-  defp quoted(name) when is_binary(name), do: "`#{name}`"
-  defp quoted(name), do: inspect(name)
+  defp quoted(name), do: Logex.Lexer.quoted_text(name)
 
   defp program_line(%{program: name}, name), do: []
 
   defp program_line(%{program: name}, program) when is_binary(name),
     do: [
-      "the retained image is of program `#{name}`, and this program is `#{program}`: an " <>
-        "image starts only an instance of the program it was taken from"
+      "the retained image is of program #{quoted(name)}, and this program is " <>
+        "#{quoted(program)}: an image starts only an instance of the program it was taken from"
     ]
 
   defp program_line(_image, _program), do: []
@@ -399,15 +398,17 @@ defmodule Logex.Image do
     do: map |> Enum.sort() |> Enum.flat_map(fn {key, value} -> fun.(key, value) end)
 
   defp map_lines(other, what, _fun),
-    do: ["the retained image's `#{what}` are no map, got: #{inspect(other)}"]
+    do: ["the retained image's `#{what}` are no map, got: #{Logex.Lexer.inspected(other)}"]
 
   defp global_lines(name, entry),
-    do: name_lines(name, "globals") ++ entry_lines(entry, "`globals` holds #{inspect(name)}")
+    do:
+      name_lines(name, "globals") ++
+        entry_lines(entry, "`globals` holds #{Logex.Lexer.inspected(name)}")
 
   defp instance_lines(name, image),
     do:
       name_lines(name, "instances") ++
-        lone_lines(image, "instance #{inspect(name)}: ")
+        lone_lines(image, "instance #{Logex.Lexer.inspected(name)}: ")
 
   defp name_lines(name, what) do
     named(Declarations.name?(name), name, what)
@@ -416,7 +417,7 @@ defmodule Logex.Image do
   defp named(true, _name, _what), do: []
 
   defp named(false, name, what),
-    do: ["`#{what}` holds #{inspect(name)}, which names no #{singular(what)}"]
+    do: ["`#{what}` holds #{Logex.Lexer.inspected(name)}, which names no #{singular(what)}"]
 
   defp singular("globals"), do: "global"
   defp singular("instances"), do: "instance"
@@ -437,7 +438,7 @@ defmodule Logex.Image do
   defp lone_lines(other, at),
     do: [
       "#{at}a retained image is a map of `program`, `kinds` and `values`, as " <>
-        "Logex.Runtime.retained/2 gives one, got: #{inspect(other)}"
+        "Logex.Runtime.retained/2 gives one, got: #{Logex.Lexer.inspected(other)}"
     ]
 
   # Decision 312: two entries whose paths name one element by its value, `tl[01].acc` and
@@ -465,12 +466,14 @@ defmodule Logex.Image do
   defp program_named(true, _program, _at), do: []
 
   defp program_named(false, program, at),
-    do: ["#{at}the image's `program` is #{inspect(program)}, which names no program"]
+    do: [
+      "#{at}the image's `program` is #{Logex.Lexer.inspected(program)}, which names no program"
+    ]
 
   defp kind_lines({path, kind}, kinds, at), do: kind_at(parsed(path), path, kind, kinds, at)
 
   defp kind_at({:error, _}, path, _kind, _kinds, at),
-    do: ["#{at}`kinds` holds #{inspect(path)}, which is no path"]
+    do: ["#{at}`kinds` holds #{Logex.Lexer.inspected(path)}, which is no path"]
 
   defp kind_at(segments, path, kind, kinds, at),
     do:
@@ -490,7 +493,7 @@ defmodule Logex.Image do
 
   defp kind_word(false, kind, path, at),
     do: [
-      "#{at}`kinds` holds `#{path}` as #{inspect(kind)}, which is no kind of instance: a " <>
+      "#{at}`kinds` holds `#{path}` as #{Logex.Lexer.inspected(kind)}, which is no kind of instance: a " <>
         "built-in's or a block's name, or {:array, name, sizes}"
     ]
 
@@ -498,7 +501,7 @@ defmodule Logex.Image do
     do: value_at(parsed(path), path, entry, kinds, at)
 
   defp value_at({:error, _}, path, _entry, _kinds, at),
-    do: ["#{at}`values` holds #{inspect(path)}, which is no path"]
+    do: ["#{at}`values` holds #{Logex.Lexer.inspected(path)}, which is no path"]
 
   defp value_at(segments, path, entry, kinds, at),
     do:
@@ -509,13 +512,15 @@ defmodule Logex.Image do
         above_lines(segments, kinds, {path, "`values`"}, at)
 
   defp entry_lines({type, _value}, at), do: type_lines(type?(type), type, at)
-  defp entry_lines(other, at), do: ["#{at} as #{inspect(other)}, which is no {type, value}"]
+
+  defp entry_lines(other, at),
+    do: ["#{at} as #{Logex.Lexer.inspected(other)}, which is no {type, value}"]
 
   defp type_lines(true, _type, _at), do: []
 
   defp type_lines(false, type, at),
     do: [
-      "#{at} of the type #{inspect(type)}, which is no type of a retained value: an " <>
+      "#{at} of the type #{Logex.Lexer.inspected(type)}, which is no type of a retained value: an " <>
         "elementary type's atom, or {:array, type, sizes}"
     ]
 
