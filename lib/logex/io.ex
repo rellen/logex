@@ -238,11 +238,14 @@ defmodule Logex.IO do
   # A device's problems: its points and its binding, each found or not; `sorted` is the
   # devices' names, sorted once a call, among which a did-you-mean is looked for.
   defp device(name, {:ok, points}, :error, _sorted),
-    do: ["no adapter is bound to the device `#{name}`, which " <> at(name, points)]
+    do: [
+      "no adapter is bound to the device #{Logex.Lexer.quoted_text(name)}, which " <>
+        at(name, points)
+    ]
 
   defp device(name, :error, {:ok, _binding}, sorted),
     do: [
-      "the device `#{name}` is bound, but no point is at it" <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound, but no point is at it" <>
         Declarations.suggest(name, sorted, & &1, "devices")
     ]
 
@@ -303,7 +306,7 @@ defmodule Logex.IO do
 
   defp adapter(name, other, _points),
     do: [
-      "the device `#{name}` is bound to #{Logex.Lexer.inspected(other)}: an adapter is a module that " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{Logex.Lexer.inspected(other)}: an adapter is a module that " <>
         "implements Logex.IO, or {module, options}"
     ]
 
@@ -328,11 +331,15 @@ defmodule Logex.IO do
   defp told(name, module, lines), do: lines(name, module, lines, messages?(lines))
 
   defp lines(name, _module, lines, true),
-    do: for(line <- lines, do: "the device `#{name}`'s adapter options: #{line}")
+    do:
+      for(
+        line <- lines,
+        do: "the device #{Logex.Lexer.quoted_text(name)}'s adapter options: #{line}"
+      )
 
   defp lines(name, module, other, false),
     do: [
-      "the device `#{name}` is bound to `#{Logex.Lexer.inspected(module)}`, whose check/3 gives a list of " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, whose check/3 gives a list of " <>
         "messages, got: #{Logex.Lexer.inspected(other)}"
     ]
 
@@ -342,14 +349,14 @@ defmodule Logex.IO do
 
   defp unlisted(name, opts),
     do: [
-      "the device `#{name}`'s adapter options are a keyword list, got: #{Logex.Lexer.inspected(opts)}"
+      "the device #{Logex.Lexer.quoted_text(name)}'s adapter options are a keyword list, got: #{Logex.Lexer.inspected(opts)}"
     ]
 
   defp implemented(name, module), do: lacking(name, module, Code.ensure_loaded?(module))
 
   defp lacking(name, module, false),
     do: [
-      "the device `#{name}` is bound to `#{Logex.Lexer.inspected(module)}`, which is no module"
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which is no module"
     ]
 
   defp lacking(name, module, true),
@@ -364,7 +371,7 @@ defmodule Logex.IO do
 
   defp missing(name, module, callbacks),
     do: [
-      "the device `#{name}` is bound to `#{Logex.Lexer.inspected(module)}`, which does not implement " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which does not implement " <>
         "Logex.IO: it has no " <> either(callbacks)
     ]
 

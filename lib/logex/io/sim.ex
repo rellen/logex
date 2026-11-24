@@ -295,12 +295,17 @@ defmodule Logex.IO.Sim do
   # text, as the test wrote it.
   defp set!(:renamed, sim, taken), do: setting(sim, taken)
 
+  # RV-32's review, F2: the sim's own count, which `inputs:` gave and may be long, is
+  # quoted through the cut as the address is. Where a runner has opened the sim an
+  # address is the configuration's text, which names no number past the cut, so a count
+  # past it is never reached there.
   defp set!({:past, address, size, nil}, _sim, _taken),
     do:
       raise(
         ArgumentError,
-        "the sim has #{size} #{noun(:input, size)}, at the addresses [0] to [#{size - 1}], " <>
-          "got: #{Logex.Lexer.inspected(address, charlists: :as_lists)}"
+        "the sim has #{Logex.Lexer.shown_number(size)} #{noun(:input, size)}, at the " <>
+          "addresses [0] to [#{Logex.Lexer.shown_number(size - 1)}], got: " <>
+          Logex.Lexer.inspected(address, charlists: :as_lists)
       )
 
   defp set!({:past, address, size, named}, _sim, _taken),

@@ -145,7 +145,64 @@ defmodule Logex.Lexer do
     do: inspect(value, [inspect_fun: &inspected_part/2] ++ options)
 
   defp inspected_part(n, _options) when is_long(n), do: Inspect.Algebra.string(shown_number(n))
+
+  defp inspected_part(%_{} = struct, options),
+    do: struct_part(Inspect.impl_for(struct), struct, options)
+
   defp inspected_part(value, options), do: Inspect.inspect(value, options)
+
+  # RV-32's review, F3: a struct that shows itself, a `Date`, a `Time` or a `Version`,
+  # writes its integers out whole, never through `inspect_fun`, so one that holds a long
+  # integer in its first `@looked` terms, or has more, is shown field by field, as
+  # `inspect/1` shows a struct with no `Inspect` of its own, each field through the cut,
+  # `%Date{year: 100000000000000000000000… (100001 characters), month: 1, ...}`; a struct
+  # with none, as every struct of logex's, is shown so already.
+  @looked 200
+
+  defp struct_part(Inspect.Any, struct, options), do: Inspect.inspect(struct, options)
+
+  defp struct_part(_own, struct, options),
+    do: own_part(long_within?([Map.delete(struct, :__struct__)], @looked), struct, options)
+
+  defp own_part(false, struct, options), do: Inspect.inspect(struct, options)
+
+  defp own_part(true, struct, options), do: Inspect.Any.inspect(struct, options)
+
+  # Whether a long integer is among `terms`, at any depth, or more than `left` terms are
+  # there to look at: a list taken an element at a time, and a tuple or a map larger than
+  # what is left never taken apart, so the look costs at most `@looked` terms.
+  defp long_within?(_terms, 0), do: true
+  defp long_within?([], _left), do: false
+  defp long_within?([n | _terms], _left) when is_long(n), do: true
+  defp long_within?([[] | terms], left), do: long_within?(terms, left - 1)
+
+  defp long_within?([[head | tail] | terms], left),
+    do: long_within?([head, tail | terms], left - 1)
+
+  defp long_within?([term | _terms], left) when is_tuple(term) and tuple_size(term) >= left,
+    do: true
+
+  defp long_within?([term | terms], left) when is_tuple(term),
+    do: long_within?(Tuple.to_list(term) ++ terms, left - 1)
+
+  defp long_within?([term | _terms], left) when is_map(term) and map_size(term) * 2 >= left,
+    do: true
+
+  defp long_within?([term | terms], left) when is_map(term),
+    do: long_within?(Map.keys(term) ++ Map.values(term) ++ terms, left - 1)
+
+  defp long_within?([_term | terms], left), do: long_within?(terms, left - 1)
+
+  @doc false
+  # A name or a location as a message quotes it: text whole, in backquotes, as decision
+  # 585 has it, and a binary that is no text, not UTF-8, or any other value, as
+  # `inspected/2` shows it, so that a refusal is text however a host's name is made
+  # (RV-32's review, F1 and F4).
+  def quoted_text(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
+  def quoted_text(other), do: inspected(other)
+
+  defp quoted_text(true, text), do: "`" <> text <> "`"
+  defp quoted_text(false, bytes), do: inspected(bytes)
 
   defp cut_shown({start, count}), do: "#{start} (#{count} characters)"
   defp cut_quoted({start, count}), do: "`#{start}` (#{count} characters)"

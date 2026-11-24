@@ -273,11 +273,11 @@ defmodule Logex.Runtime do
   type, a misfit a line by the element's name, `w[1,2]`, and since decision 222 one element
   alone may be set by its name, `%{"steps[3]" => 5}`, every other kept, one subscript a
   dimension, each a number within it, and one call setting an array whole or by its
-  elements, each once; and an array var_output is given as such a list. Every input problem in one call
-  comes in one raise, a line each, in key order, however many there are, each value
-  through the one cut (decision 586; provisional: `PLAN.md`'s RV-32, question 1). Inputs
-  merge into the instance, so a host
-  sends only what changed. Outputs are every `var_output`.
+  elements, each once; and an array var_output is given as such a list. Every input
+  problem in one call comes in one raise, a line each, in key order, however many there
+  are, each value through the one cut (decision 586; provisional: `PLAN.md`'s RV-32,
+  question 1). Inputs merge into the instance, so a host sends only what changed. Outputs
+  are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
@@ -2102,8 +2102,11 @@ defmodule Logex.Runtime do
   defp owner!(%Instance{type: type}, %Program{name: name}),
     do: raise(ArgumentError, "this state is an instance of #{named(type)}, not of #{named(name)}")
 
+  # A program's name is the host's, a program edited by hand may hold anything there, so
+  # it is quoted through the cut: text whole, anything else as `inspect/1` shows it, a
+  # long number cut (RV-32's review, F1).
   defp named(nil), do: "an unnamed program"
-  defp named(name), do: "`#{name}`"
+  defp named(name), do: Logex.Lexer.quoted_text(name)
 
   # Decision 171: no value outside its tag's type reaches a scan. An integer a state holds
   # for a tag, or for a member of an instance it holds, at any depth, must fit the tag's or
@@ -2224,9 +2227,13 @@ defmodule Logex.Runtime do
     do: [described(Declarations.a_type(:clock), unfitting(:clock, :clock, value), path) | acc]
 
   defp later(value, now),
-    do:
-      "#{Logex.Lexer.shown_number(value)} is later than the instance's now, " <>
-        Logex.Lexer.shown_number(now)
+    do: later(Logex.Lexer.shown_number(value), Logex.Lexer.shown_number(now), value - now)
+
+  # RV-32's review, F8: two long numbers whose cuts read alike are told apart by how far.
+  defp later(same, same, by),
+    do: "#{same} is later than the instance's now, #{same}, by #{Logex.Lexer.shown_number(by)}"
+
+  defp later(value, now, _by), do: "#{value} is later than the instance's now, #{now}"
 
   # Its shape is looked at only where an element does not fit, so a state whose every
   # element fits is walked once (M5-11's review).
@@ -2441,8 +2448,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "time went backwards: this scan is at #{Logex.Lexer.shown_number(now)} ms, " <>
-          "but the instance was last scanned at #{Logex.Lexer.shown_number(last)} ms"
+        backwards(Logex.Lexer.shown_number(now), Logex.Lexer.shown_number(last), last - now)
       )
 
   defp scan!(%Scan{first: first} = scan, %Instance{first: first}), do: scan
@@ -2463,6 +2469,17 @@ defmodule Logex.Runtime do
 
   defp scan!(other, _state),
     do: raise(ArgumentError, "expected a %Logex.Scan{}, got: #{Logex.Lexer.inspected(other)}")
+
+  # RV-32's review, F8: two long times whose cuts read alike are told apart by how far.
+  defp backwards(same, same, by),
+    do:
+      "time went backwards: this scan is at #{same} ms, but the instance was last " <>
+        "scanned at #{same} ms, #{Logex.Lexer.shown_number(by)} ms later"
+
+  defp backwards(now, last, _by),
+    do:
+      "time went backwards: this scan is at #{now} ms, but the instance was last scanned " <>
+        "at #{last} ms"
 
   defp elapsed!(ms) when is_integer(ms) and ms >= 0, do: ms
 
@@ -3199,10 +3216,10 @@ defmodule Logex.Runtime do
 
   defp global_line(%Configuration.Global{line: nil}), do: ""
 
-  defp global_line(%Configuration.Global{line: line}) when is_integer(line),
-    do: " (line #{Logex.Lexer.shown_number(line)})"
-
-  defp global_line(%Configuration.Global{line: line}), do: " (line #{line})"
+  # A global's line, an integer `start/1` checked, through the one cut; one clause, where a
+  # third that wrote any other value raw was never reached (RV-32's review, F9).
+  defp global_line(%Configuration.Global{line: line}),
+    do: " (line #{Logex.Lexer.inspected(line)})"
 
   defp imaged([], {globals, %{reals: nil, elements: nil}, _written}, inputs),
     do: Map.merge(globals, inputs)

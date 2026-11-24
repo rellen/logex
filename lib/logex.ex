@@ -75,7 +75,11 @@ defmodule Logex do
   takes source text as a binary, got: 100000000000000000000000… (100001 characters)", in
   a few milliseconds, where it quoted a hundred thousand digits. So does every refusal of
   the host contract, `Logex.Runtime`'s, `Logex.Runner`'s, the edits', `Logex.IO`'s and
-  `Logex.Configuration`'s among them.
+  `Logex.Configuration`'s among them. A name or a location that is text is quoted whole,
+  in backquotes; one that is no UTF-8 text, or no text at all, is quoted as `inspect/1`
+  shows it, `<<97, 98, 255, 99>>`, so that a refusal's message is always text; and a
+  struct that shows itself, a `Date` or a `Version`, is shown field by field where it
+  holds a long number, which its own `inspect/1` would write out whole (RV-32's review).
   """
 
   # Decision 515 (c), RV-24: what a compile hands back, the host contract's types.

@@ -171,6 +171,25 @@ defmodule Logex.QuotedTest do
 
     test("Logex.IO.Sim's, the clocks' and Logex.Tag's", ctx, do: told(tools_rows(ctx)))
 
+    # RV-32's review, F1 to F4, F6 and F8: a program's name, a struct that shows itself, the
+    # sim's own count, a name that is no text, and two long numbers that cut alike.
+    test("what the review of RV-32 found", ctx, do: told(review_rows(ctx)))
+
+    # RV-32's review, F3: a struct that writes itself out with more terms than the cut
+    # looks through, `@looked`, is shown field by field whatever it holds, so that a long
+    # number past them is never written whole; `inspect/1`'s limit shows 196 of its list.
+    test "a struct too large to look through is shown field by field", %{big: big} do
+      pre = List.duplicate(0, 300) ++ [big]
+      version = opaque(%{__struct__: Version, major: 1, minor: 0, patch: 0, pre: pre, build: nil})
+
+      shown =
+        "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:, " <>
+          "globals:, instances: and connections:, got: %Version{major: 1, minor: 0, " <>
+          "patch: 0, pre: [#{Enum.join(List.duplicate("0", 196), ", ")}, ...], ...}"
+
+      assert_raise ArgumentError, shown, fn -> Configuration.new!(version) end
+    end
+
     # A line a program edited by hand gives that is no integer, a tuple or a text, is
     # quoted as `inspect/1` shows it, where `"#{line}"` raised Protocol.UndefinedError out
     # of the refusal for a tuple (provisional: `PLAN.md`'s RV-32, question 3).
@@ -192,6 +211,140 @@ defmodule Logex.QuotedTest do
            "a var_input is set from outside"}
       ])
     end
+  end
+
+  # What RV-32's review found quoted whole, written raw or raised: F1, a program's name, a
+  # number or a tuple, which `"#{name}"` wrote whole or raised Protocol.UndefinedError
+  # for; F2, the sim's own count; F3, a struct that shows itself, its integers written
+  # whole; F4, a name that is no UTF-8 text, written raw; F6, the refusals no row reached;
+  # F8, two long numbers whose cuts read alike, told apart by how far.
+  defp review_rows(%{big: big, p: p, s: s, scan: scan, c: c, rt: rt}) do
+    o = &opaque/1
+    bad = o.("ab" <> <<255>> <> "c")
+    date = o.(%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO})
+    {:ok, tally} = Logex.compile(@tally, name: "tally")
+
+    time =
+      o.(%{
+        __struct__: Time,
+        hour: big,
+        minute: 0,
+        second: 0,
+        microsecond: {0, 0},
+        calendar: Calendar.ISO
+      })
+
+    version = o.(%{__struct__: Version, major: 1, minor: 0, patch: 0, pre: [big], build: nil})
+    takes = "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:, "
+    dated = "%Date{year: #{@cut}, month: 1, day: 1, calendar: Calendar.ISO}"
+    by_hand = "where its tags do not hold it: `p` was edited by hand after it compiled\n"
+
+    kept =
+      "`p`'s retained paths do not hold `kept`, where its tags hold it: `p` was edited by " <>
+        "hand after it compiled"
+
+    [
+      {"F1 put_inputs/3 a program's name",
+       fn -> Runtime.put_inputs(%{p | name: o.(big)}, s, %{"start" => 1}) end,
+       "this state is an instance of `p`, not of #{@cut}"},
+      {"F1 call/4 a program's name that is a tuple",
+       fn -> Runtime.call(%{p | name: o.({:a, big})}, s, %{}, scan) end,
+       "this state is an instance of `p`, not of {:a, #{@cut}}"},
+      {"F1 restart/3 a program's name", fn -> Runtime.restart(%{p | name: o.(big)}, s, :cold) end,
+       "this state is an instance of `p`, not of #{@cut}"},
+      {"F1 Edit.accept/3 the running program's name",
+       fn -> Logex.Edit.accept(%{p | name: o.(big)}, p, s) end,
+       "the candidate is `p`, but the running program is #{@cut}: an edit keeps the " <>
+         "program's name"},
+      {"F1 Edit.accept/3 the candidate's name that is a tuple",
+       fn -> Logex.Edit.accept(p, %{p | name: o.({:a, big})}, s) end,
+       "the candidate is {:a, #{@cut}}, but the running program is `p`: an edit keeps " <>
+         "the program's name"},
+      {"F2 Sim.set/3 past a long count",
+       fn -> Sim.set(elem(Sim.start_link(inputs: o.(big)), 1), [2 * big], 1) end,
+       "the sim has #{@cut} inputs, at the addresses [0] to [#{@nines}], got: " <>
+         "[200000000000000000000000… (100001 characters)]"},
+      {"F6 Sim.set/3 a long address past a short count",
+       fn -> Sim.set(elem(Sim.start_link(inputs: 2), 1), [o.(big)], 1) end,
+       "the sim has 2 inputs, at the addresses [0] to [1], got: [#{@cut}]"},
+      {"F3 new!/1 a Date", fn -> Configuration.new!(date) end,
+       takes <> "globals:, instances: and connections:, got: #{dated}"},
+      {"F3 new!/1 a Time, which raised Inspect.Error", fn -> Configuration.new!(time) end,
+       takes <>
+         "globals:, instances: and connections:, got: %Time{hour: #{@cut}, minute: 0, " <>
+         "second: 0, microsecond: {0, 0}, calendar: Calendar.ISO}"},
+      {"F3 put_inputs/3 a Date", fn -> Runtime.put_inputs(p, s, %{"start" => date}) end,
+       "input `start` is a bool: only 0 or 1 fit, found #{dated}"},
+      {"F3 Logex.compile/2 a Version in a list", fn -> Logex.compile([version], name: "p") end,
+       "Logex.compile/2 takes source text as a binary, got: [%Version{major: 1, minor: " <>
+         "0, patch: 0, pre: [#{@cut}], build: nil}]"},
+      {"F4 Global.new!/3 a name and a type", fn -> Global.new!(bad, o.("x")) end,
+       "<<97, 98, 255, 99>> cannot name a global: a name is a letter or `_`, then " <>
+         "letters, digits or `_`\nglobal <<97, 98, 255, 99>> has type \"x\": a global " <>
+         "is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, " <>
+         ":lreal, :byte, :word, :dword or :lword, or an array of one of them, as in " <>
+         "`{:array, :int, [8]}`, its sizes a list of one integer a dimension"},
+      {"F4 Global.new!/3 a location", fn -> Global.new!("g", :bool, at: bad) end,
+       "global `g` is at <<97, 98, 255, 99>>, which is not a location: a location is a " <>
+         "device, `i` for an input or `q` for an output, then an address, as in " <>
+         "`panel.i.0` or `panel.q.3`"},
+      {"F4 Tag.new!/5 the options of a name",
+       fn -> Logex.Tag.new!(bad, :bool, :var, nil, o.(:x)) end,
+       "the options of <<97, 98, 255, 99>> are a keyword list, `retain: true` or " <>
+         "`non_retain: true`, found :x"},
+      {"F4 compile/3 a type's key",
+       fn -> Configuration.compile("plant", @config, %{bad => tally}) end,
+       "the program under <<97, 98, 255, 99>> is named `tally`"},
+      {"F4 IO.bind!/2 a device's name", fn -> Logex.IO.bind!(c, %{bad => Sim}) end,
+       "the device <<97, 98, 255, 99>> is bound, but no point is at it\nno adapter is " <>
+         "bound to the device `panel`, which `eye_1` (panel.i.0) and `temps[0]` to " <>
+         "`temps[1]` (panel.i.1 to panel.i.2) are at"},
+      {"F4 instance/2 an image's program",
+       fn -> Runtime.instance(p, %{Runtime.retained(p, s) | program: bad}) end,
+       "the image's `program` is <<97, 98, 255, 99>>, which names no program\nthe " <>
+         "retained image is of program <<97, 98, 255, 99>>, and this program is `p`: an " <>
+         "image starts only an instance of the program it was taken from"},
+      {"F4 check/1 a task's name, quoted beside a global's line",
+       fn -> Configuration.check(%{c | tasks: [%Task{name: bad, interval: 10, line: 1}]}) end,
+       "<<97, 98, 255, 99>> cannot name a task: a name is a letter or `_`, then " <>
+         "letters, digits or `_`\nglobal `eye_1` is on line 1, as task <<97, 98, 255, " <>
+         "99>> is: a configuration's lines are all nil, as from Elixir, or rise in each " <>
+         "list, one element a line"},
+      {"F4 instance/1 a program's name that is no text, its retained paths edited",
+       fn -> Runtime.instance(%{p | name: bad, retained: []}) end,
+       "<<97, 98, 255, 99>>'s retained paths do not hold `kept`, where its tags hold it: " <>
+         "<<97, 98, 255, 99>> was edited by hand after it compiled"},
+      {"F4 instance/1 a program's name that is no text, a tag retyped",
+       fn -> Runtime.instance(retyped(%{p | name: bad}, "total", :bool)) end,
+       "<<97, 98, 255, 99>>'s `add` on line 13 computes in the type of `total`, a bool, " <>
+         "which is no integer type: <<97, 98, 255, 99>> was edited by hand after it compiled"},
+      {"F4 put_inputs/3 a state's type", fn -> Runtime.put_inputs(p, %{s | type: bad}, %{}) end,
+       "this state is an instance of <<97, 98, 255, 99>>, not of `p`"},
+      {"F4 instance/1 a retained path that is no text, of a program edited by hand",
+       fn -> Runtime.instance(%{p | retained: [bad]}) end,
+       "`p`'s retained paths hold <<97, 98, 255, 99>>, " <> by_hand <> kept},
+      {"F3 instance/1 a retained path that is a Date, of a program edited by hand",
+       fn -> Runtime.instance(%{p | retained: [date]}) end,
+       "`p`'s retained paths hold #{dated}, " <> by_hand <> kept},
+      {"F6 and F8 call/4 a timer's last and the instance's now, both long",
+       fn ->
+         state = %{put_in(s.env["t1"]["last"], o.(big + 5)) | now: o.(big)}
+         Runtime.call(p, state, %{}, %{scan | now: big})
+       end,
+       "state.env holds `t1.last` outside its type: it is a clock, and #{@cut} is " <>
+         "later than the instance's now, #{@cut}, by 5"},
+      {"F8 call/4 a scan's time gone backwards, both long",
+       fn -> Runtime.call(p, %{s | now: o.(big + 5)}, %{}, %{scan | now: o.(big)}) end,
+       "time went backwards: this scan is at #{@cut} ms, but the instance was last " <>
+         "scanned at #{@cut} ms, 5 ms later"},
+      {"F6 Configuration.Edit.test/3 the resource's generation",
+       fn ->
+         {:ok, edit, _report} = Configuration.Edit.accept(rt, c)
+         Configuration.Edit.test(edit, %{rt | generation: o.(big)})
+       end,
+       "this edit expects the resource at generation 0, but it is at generation " <>
+         "#{@cut}: the edit has ended, or another edit has stepped since"}
+    ]
   end
 
   # the refusals of `Logex` and `Logex.Configuration`.
@@ -786,6 +939,194 @@ defmodule Logex.QuotedTest do
     ]
   end
 
+  describe "a hostile value wherever the host contract takes one (RV-32's review, F7)" do
+    # A walk over the host contract's arguments and the fields of the structs it checks,
+    # each given in turn a long number, a tuple, a list and a struct that hold one, a
+    # `Date` and a `Time` that write one out themselves, and a name that is no UTF-8
+    # text: every refusal an ArgumentError, its message text and under 5,000 bytes, so
+    # that an integer or a name a refusal writes out itself, `"#{n}"`, which no walk of
+    # the syntax trees can tell from a word, is found here wherever a host can reach it.
+    # A program built or edited by hand is outside the contract but where a check names it
+    # (`Logex.Runtime`'s moduledoc), so its fields are walked at `instance/1` alone, and
+    # what escapes there is listed in `@outside` with its reason.
+    @outside %{
+      # A field a program edited by hand holds that the shape check takes for a map,
+      # a struct, which the program's own check then walks as a map.
+      {"instance/1 program.blocks", :date} => Protocol.UndefinedError,
+      {"instance/1 program.tags", :date} => Protocol.UndefinedError,
+      {"instance/1 program.blocks", :time} => Protocol.UndefinedError,
+      {"instance/1 program.tags", :time} => Protocol.UndefinedError
+    }
+
+    # The fields the walk gives a value that nothing reads where it is walked: a
+    # program's name is the instance's type, taken as it is; its file, source and warnings
+    # and a configuration's warnings are what the compile gave, read by no check.
+    @unread [
+      "check/1 configuration.warnings",
+      "instance/1 program.file",
+      "instance/1 program.name",
+      "instance/1 program.source",
+      "instance/1 program.warnings"
+    ]
+
+    defp hostile(big) do
+      [
+        long: big,
+        negative: -big,
+        tuple: {:a, big},
+        listed: [big],
+        no_text: "ab" <> <<255>> <> "c",
+        date: %{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO},
+        time: %{
+          __struct__: Time,
+          hour: big,
+          minute: 0,
+          second: 0,
+          microsecond: {0, 0},
+          calendar: Calendar.ISO
+        },
+        in_list: [%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO}]
+      ]
+    end
+
+    defp fielded(struct, call),
+      do:
+        for(
+          field <- Map.keys(Map.from_struct(struct)),
+          do: {field, &call.(Map.put(struct, field, &1))}
+        )
+
+    defp callers(%{p: p, s: s, scan: scan, c: c, rt: rt}) do
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+      global = hd(c.globals)
+      task = %Task{name: "main", interval: 10, line: 1}
+      checked = &Configuration.check/1
+
+      [
+        {"Global.new!/3 name", &Global.new!(&1, :bool)},
+        {"Global.new!/3 name and type", &Global.new!(&1, "x")},
+        {"Global.new!/3 type", &Global.new!("g", &1)},
+        {"Global.new!/3 location", &Global.new!("g", :bool, at: &1)},
+        {"Global.new!/3 initial", &Global.new!("g", :dint, initial: &1)},
+        {"Tag.new!/5 name", &Logex.Tag.new!(&1, :bool)},
+        {"Tag.new!/5 name and options", &Logex.Tag.new!(&1, :bool, :var, nil, :x)},
+        {"Tag.new!/5 type", &Logex.Tag.new!("x", &1)},
+        {"Tag.new!/5 initial", &Logex.Tag.new!("x", :dint, :var, &1)},
+        {"compile/2 source", &Logex.compile(&1, name: "p")},
+        {"compile/2 name", &Logex.compile(@source, name: &1)},
+        {"compile/2 a type's key", &Logex.compile(@source, name: "p", types: %{&1 => tally})},
+        {"compile_file/1", &Logex.compile_file/1},
+        {"Configuration.compile/3 name",
+         &Configuration.compile(&1, @config, %{"tally" => tally})},
+        {"Configuration.compile/3 text",
+         &Configuration.compile("plant", &1, %{"tally" => tally})},
+        {"Configuration.compile/3 a type's key",
+         &Configuration.compile("plant", @config, %{&1 => tally})},
+        {"Configuration.compile_file/1", &Configuration.compile_file/1},
+        {"put_inputs/3 a key", &Runtime.put_inputs(p, s, %{&1 => 1})},
+        {"put_inputs/3 a value", &Runtime.put_inputs(p, s, %{"start" => &1})},
+        {"put_inputs/3 a program's name", &Runtime.put_inputs(%{p | name: &1}, s, %{})},
+        {"call/4 a program's name", &Runtime.call(%{p | name: &1}, s, %{}, scan)},
+        {"restart/3 a program's name", &Runtime.restart(%{p | name: &1}, s, :cold)},
+        {"restart/3 mode", &Runtime.restart(p, s, &1)},
+        {"instance/2 image", &Runtime.instance(p, &1)},
+        {"instance/2 an image's program",
+         &Runtime.instance(p, %{Runtime.retained(p, s) | program: &1})},
+        {"cycle/3 a key", &Runtime.cycle(rt, 0, %{&1 => 1})},
+        {"cycle/3 a value", &Runtime.cycle(rt, 0, %{"eye_1" => &1})},
+        {"get/2", &Runtime.get(rt, &1)},
+        {"get!/2", &Runtime.get!(rt, &1)},
+        {"Edit.accept/3 the running program's name", &Logex.Edit.accept(%{p | name: &1}, p, s)},
+        {"Edit.accept/3 the candidate's name", &Logex.Edit.accept(p, %{p | name: &1}, s)},
+        {"IO.bind!/2 a device's name", &Logex.IO.bind!(c, %{&1 => Sim})},
+        {"IO.bind!/2 an adapter's options", &Logex.IO.bind!(c, %{"panel" => {Sim, &1}})},
+        {"Sim.set/3 a value", &Sim.set(elem(Sim.start_link(), 1), [0], &1)},
+        {"Sim.set/3 an address", &Sim.set(elem(Sim.start_link(inputs: 2), 1), &1, 1)},
+        {"Sim.start_link/1 inputs", &Sim.start_link(inputs: &1)}
+      ] ++
+        for(
+          {field, call} <- fielded(s, &Runtime.call(p, &1, %{}, scan)),
+          do: {"call/4 state.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(scan, &Runtime.call(p, s, %{}, &1)),
+          do: {"call/4 scan.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(p, &Runtime.instance/1),
+          do: {"instance/1 program.#{field}", call}
+        ) ++
+        for({field, call} <- fielded(c, checked), do: {"check/1 configuration.#{field}", call}) ++
+        for(
+          {field, call} <- fielded(global, &checked.(%{c | globals: [&1 | tl(c.globals)]})),
+          do: {"check/1 global.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(hd(c.instances), &checked.(%{c | instances: [&1]})),
+          do: {"check/1 instance.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(hd(c.connections), &checked.(%{c | connections: [&1]})),
+          do: {"check/1 connection.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(task, &checked.(%{c | tasks: [&1]})),
+          do: {"check/1 task.#{field}", call}
+        )
+    end
+
+    # One call in a process of its own, which a sim or a runner it starts is linked to.
+    defp outcome(call, value) do
+      {pid, ref} =
+        spawn_monitor(fn ->
+          Process.flag(:trap_exit, true)
+          exit({:told, told(call, value)})
+        end)
+
+      receive do
+        {:DOWN, ^ref, :process, ^pid, {:told, outcome}} -> outcome
+      after
+        60_000 -> {:no_answer, Process.exit(pid, :kill)}
+      end
+    end
+
+    defp told(call, value) do
+      call.(value)
+      :taken
+    rescue
+      error -> {error.__struct__, Exception.message(error)}
+    end
+
+    test "every refusal an ArgumentError whose message is short text", ctx do
+      outcomes =
+        for {label, call} <- callers(ctx), {kind, value} <- hostile(ctx.big) do
+          {label, kind, outcome(call, opaque(value))}
+        end
+
+      refused =
+        for {label, kind, {ArgumentError, message}} <- outcomes, do: {label, kind, message}
+
+      for {label, kind, message} <- refused do
+        assert {label, kind, String.valid?(message)} == {label, kind, true}
+        assert {label, kind, byte_size(message) < 5_000} == {label, kind, true}
+      end
+
+      escaped =
+        for {label, kind, {module, _message}} <- outcomes,
+            module != ArgumentError,
+            into: %{},
+            do: {{label, kind}, module}
+
+      assert escaped == @outside
+
+      # Its reach: every caller refuses some hostile value, and most of what it is given.
+      refusing = MapSet.new(for {label, _kind, _message} <- refused, do: label)
+      callers = MapSet.new(for {label, _call} <- callers(ctx), do: label)
+      assert MapSet.difference(callers, refusing) == MapSet.new(@unread)
+      assert length(refused) > 500
+    end
+  end
+
   describe "a refusal of a huge value costs no more than a small one's and the cut's" do
     # Counted in reductions, the least of three, a refusal of 10 ** 1_000_000 and of a
     # list of a million elements against one of -7, in the same run, each bound the small
@@ -857,8 +1198,12 @@ defmodule Logex.QuotedTest do
     # Every `inspect/1,2` lib/ calls, by its syntax trees: none but the cut's own, in
     # `Logex.Lexer.inspected/2`, so that a refusal written from now on quotes a value
     # through it or is red here, outside the host contract too (provisional: `PLAN.md`'s
-    # RV-32, question 2).
-    defp inspects({:def, _, [{:inspected, _, _} | _]}, acc, _file), do: {nil, acc}
+    # RV-32, question 2). Since RV-32's review, F7: only `Logex.Lexer`'s own `inspected` is
+    # passed over, and `inspect` reached through `apply/3`, `Function.capture/3` or the
+    # `Inspect` protocol's modules is found as a call of it is.
+    @lexer "lib/logex/lexer.ex"
+
+    defp inspects({:def, _, [{:inspected, _, _} | _]}, acc, @lexer), do: {nil, acc}
 
     defp inspects({:inspect, meta, args} = node, acc, file) when is_list(args),
       do: {node, [{file, meta[:line]} | acc]}
@@ -866,34 +1211,73 @@ defmodule Logex.QuotedTest do
     defp inspects({{:., _, [Kernel, :inspect]}, meta, _args} = node, acc, file),
       do: {node, [{file, meta[:line]} | acc]}
 
+    defp inspects(
+           {{:., _, [{:__aliases__, _, [:Kernel]}, :inspect]}, meta, _args} = node,
+           acc,
+           file
+         ),
+         do: {node, [{file, meta[:line]} | acc]}
+
+    defp inspects(
+           {{:., _, [{:__aliases__, _, [:Inspect | _]}, _fun]}, meta, _args} = node,
+           acc,
+           file
+         )
+         when file != @lexer,
+         do: {node, [{file, meta[:line]} | acc]}
+
     defp inspects({:/, _, [{:inspect, meta, context}, arity]} = node, acc, file)
          when is_atom(context) and is_integer(arity),
          do: {node, [{file, meta[:line]} | acc]}
 
+    defp inspects({call, meta, args} = node, acc, file) when is_list(args) and call != :.,
+      do: {node, applied(Enum.any?(args, &kernel?/1) and :inspect in args, meta, acc, file)}
+
     defp inspects(node, acc, _file), do: {node, acc}
+
+    defp kernel?({:__aliases__, _, [:Kernel]}), do: true
+    defp kernel?(Kernel), do: true
+    defp kernel?(_arg), do: false
+
+    defp applied(true, meta, acc, file), do: [{file, meta[:line]} | acc]
+    defp applied(false, _meta, acc, _file), do: acc
+
+    defp found(source, file) do
+      {:ok, ast} = Code.string_to_quoted(source)
+      {_ast, found} = Macro.prewalk(ast, [], &inspects(&1, &2, file))
+      found
+    end
 
     test "no inspect/1 in lib/ but Logex.Lexer.inspected/2's" do
       called =
         for file <- Path.wildcard("lib/**/*.ex"),
-            {:ok, ast} = Code.string_to_quoted(File.read!(file)),
-            {_ast, found} = Macro.prewalk(ast, [], &inspects(&1, &2, file)),
-            hit <- found,
+            hit <- found(File.read!(file), file),
             do: hit
 
       assert called == []
 
       # The cut's own call is there, and the walk would find a call outside it.
-      {:ok, lexer} = Code.string_to_quoted(File.read!("lib/logex/lexer.ex"))
-      assert {_, []} = Macro.prewalk(lexer, [], &inspects(&1, &2, "lexer"))
+      assert found(File.read!(@lexer), @lexer) == []
 
-      assert File.read!("lib/logex/lexer.ex") =~
+      assert File.read!(@lexer) =~
                "do: inspect(value, [inspect_fun: &inspected_part/2] ++ options)"
 
-      {:ok, planted} = Code.string_to_quoted("def f(x), do: raise(ArgumentError, inspect(x))")
-      assert {_, [{"planted", 1}]} = Macro.prewalk(planted, [], &inspects(&1, &2, "planted"))
+      for {planted, source} <- [
+            {"called", "def f(x), do: raise(ArgumentError, inspect(x))"},
+            {"captured", "Enum.map(xs, &inspect/1)"},
+            {"remote", "def f(x), do: Kernel.inspect(x)"},
+            {"applied", "def f(x), do: apply(Kernel, :inspect, [x])"},
+            {"applied by Erlang", "def f(x), do: :erlang.apply(Kernel, :inspect, [x])"},
+            {"captured by name", "def f, do: Function.capture(Kernel, :inspect, 1)"},
+            {"the protocol", "def f(x), do: Inspect.inspect(x, %Inspect.Opts{})"},
+            {"an algebra", "def f(x), do: Inspect.Algebra.to_doc(x, %Inspect.Opts{})"}
+          ] do
+        assert {planted, [{planted, 1}]} == {planted, found(source, planted)}
+      end
 
-      {:ok, captured} = Code.string_to_quoted("Enum.map(xs, &inspect/1)")
-      assert {_, [{"captured", 1}]} = Macro.prewalk(captured, [], &inspects(&1, &2, "captured"))
+      # Another module's own `inspected` is no cut: only the lexer's is passed over.
+      assert [{"other", 1}] ==
+               found("def inspected(x), do: inspect(x)", "other")
     end
   end
 end

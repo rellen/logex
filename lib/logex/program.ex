@@ -817,7 +817,8 @@ defmodule Logex.Program do
         MapSet.member?(given, path) != MapSet.member?(wanted, path),
         do:
           "#{owner(where)} retained paths #{retained_given(MapSet.member?(given, path))} " <>
-            "`#{path}`, where its tags #{retained_given(MapSet.member?(wanted, path))} it: " <>
+            "#{Logex.Lexer.quoted_text(path)}, where its tags " <>
+            "#{retained_given(MapSet.member?(wanted, path))} it: " <>
             "#{named(elem(where, 0))} was edited by hand after it compiled"
   end
 
@@ -896,11 +897,10 @@ defmodule Logex.Program do
   defp table(units), do: units
 
   defp owner({nil, nil}), do: "an unnamed program's"
-  defp owner({program, nil}), do: "`#{program}`'s"
-  defp owner({_program, block}), do: "`#{block}`'s body's"
+  defp owner({program, nil}), do: "#{Logex.Lexer.quoted_text(program)}'s"
+  defp owner({_program, block}), do: "#{Logex.Lexer.quoted_text(block)}'s body's"
 
-  defp shown_name(name) when is_binary(name), do: "`#{name}`"
-  defp shown_name(name), do: Logex.Lexer.inspected(name)
+  defp shown_name(name), do: Logex.Lexer.quoted_text(name)
 
   defp unit_given(:error), do: "no unit"
   defp unit_given({:ok, per_ms}), do: "#{Logex.Lexer.inspected(per_ms)} a millisecond"
@@ -925,14 +925,14 @@ defmodule Logex.Program do
   defp of_unit(per_ms, type), do: "#{a(type)} adds #{per_ms} to its `acc` each millisecond"
 
   defp located({nil, nil}), do: "an unnamed program's "
-  defp located({program, nil}), do: "`#{program}`'s "
+  defp located({program, nil}), do: "#{Logex.Lexer.quoted_text(program)}'s "
   defp located({_program, _block}), do: ""
 
   defp within({_program, nil}), do: ""
-  defp within({_program, block}), do: " of `#{block}`'s body"
+  defp within({_program, block}), do: " of #{Logex.Lexer.quoted_text(block)}'s body"
 
   defp named(nil), do: "the program"
-  defp named(program), do: "`#{program}`"
+  defp named(program), do: Logex.Lexer.quoted_text(program)
 
   defp written(destination, :undeclared, where),
     do: "#{shown(destination)}, which #{declarer(where)} does not declare"
@@ -972,20 +972,23 @@ defmodule Logex.Program do
   defp declarer({program, nil}), do: named(program)
   defp declarer({_program, _block}), do: "the body"
 
-  defp shown({:name, _, name}), do: "`#{name}`"
+  defp shown({:name, _, name}), do: Logex.Lexer.quoted_text(name)
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
 
   defp shown({:member, _, element, members}),
     do: "`#{Enum.join([elem(element, tuple_size(element) - 1) | members], ".")}`"
 
-  defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
-  defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
-  defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
-  defp shown({:element_at, _, _array, _index, _dims, name}), do: "`#{name}`"
+  defp shown({:bit, _, _path, _n, _mask, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:bit_at, _, _path, _index, _width, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:element, _, _array, _index, name}), do: Logex.Lexer.quoted_text(name)
+  defp shown({:element_at, _, _array, _index, _dims, name}), do: Logex.Lexer.quoted_text(name)
   defp shown(other), do: "`#{Logex.Lexer.inspected(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)
-  defp a({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
+
+  defp a({:block, name}) when is_binary(name),
+    do: "an instance of #{Logex.Lexer.quoted_text(name)}"
+
   defp a(type) when is_atom(type), do: Logex.Declarations.a_type(type)
   defp a(type) when is_array(type), do: Logex.Declarations.a_type(type)
   defp a(other), do: Logex.Lexer.inspected(other)

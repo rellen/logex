@@ -2054,8 +2054,7 @@ defmodule Logex.Declarations do
 
   defp initial_of_literal(type, _v, shown), do: initial_misfit(type, shown)
 
-  defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: shown(name)
+  defp label(name), do: Logex.Lexer.quoted_text(name)
 
   # A value a refusal shows, as `inspect/2` does, each long number in it cut (decision
   # 583, `Logex.Lexer.inspected/2`).

@@ -155,9 +155,12 @@ defmodule Logex.Configuration do
   value that is no number as `inspect/1` shows it, with its limits, each long number in
   it cut (decision 585). Since decision 586 every refusal of this module quotes a host's
   value so: `new!/1`'s own, of what is no keyword list and of an element brought with a
-  line, `%Global{line: 10 ** 1_000_000}` told in under 100 ms and 152 bytes where it took
-  9 s and a megabyte, `compile/3`'s and `compile_file/1`'s of an argument that is
-  no text, and `initial/1`'s and `watchdog/1`'s.
+  line, `%Global{line: 10 ** 1_000_000}` told in 152 bytes and some 37,000 reductions
+  where it took a megabyte and 32 million, `compile/3`'s and `compile_file/1`'s of an
+  argument that is no text, and `initial/1`'s and `watchdog/1`'s. A name or a location
+  that is text is quoted whole, in backquotes; one that is no UTF-8 text, as `inspect/1`
+  shows it, `<<97, 98, 255, 99>>`; and a struct that writes itself out, a `Date` among
+  them, field by field where it holds a long number (RV-32's review).
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -441,8 +444,7 @@ defmodule Logex.Configuration do
         "the options of #{label(name)} are a keyword list of `initial:`, `at:`, " <>
           "`retain: true` or `non_retain: true`, found #{Logex.Lexer.inspected(options)}"
 
-    defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: Logex.Lexer.inspected(name)
+    defp label(name), do: Logex.Lexer.quoted_text(name)
 
     @typedoc "A global's type: an elementary type, or an array of one."
     @type type ::
@@ -966,8 +968,7 @@ defmodule Logex.Configuration do
     def spelling({device, io, fields}),
       do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
 
-    defp label(name) when is_binary(name), do: "`#{name}`"
-    defp label(name), do: Logex.Lexer.inspected(name)
+    defp label(name), do: Logex.Lexer.quoted_text(name)
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
@@ -2051,8 +2052,7 @@ defmodule Logex.Configuration do
   defp describe(%Connection{instance: instance, member: member}),
     do: "the connection of #{path(instance, member)}"
 
-  defp label(name) when is_binary(name), do: "`#{name}`"
-  defp label(name), do: shown(name)
+  defp label(name), do: Logex.Lexer.quoted_text(name)
 
   defp path(instance, member) when is_binary(instance) and is_binary(member),
     do: "`#{instance}.#{member}`"

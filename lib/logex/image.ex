@@ -377,18 +377,17 @@ defmodule Logex.Image do
   defp configuration_line(name, config),
     do: [
       "the retained image is of configuration #{quoted(name)}, and this configuration is " <>
-        "`#{config}`: an image starts only the configuration it was taken from"
+        "#{quoted(config)}: an image starts only the configuration it was taken from"
     ]
 
-  defp quoted(name) when is_binary(name), do: "`#{name}`"
-  defp quoted(name), do: Logex.Lexer.inspected(name)
+  defp quoted(name), do: Logex.Lexer.quoted_text(name)
 
   defp program_line(%{program: name}, name), do: []
 
   defp program_line(%{program: name}, program) when is_binary(name),
     do: [
-      "the retained image is of program `#{name}`, and this program is `#{program}`: an " <>
-        "image starts only an instance of the program it was taken from"
+      "the retained image is of program #{quoted(name)}, and this program is " <>
+        "#{quoted(program)}: an image starts only an instance of the program it was taken from"
     ]
 
   defp program_line(_image, _program), do: []

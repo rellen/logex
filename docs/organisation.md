@@ -16223,16 +16223,21 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as built, the three refusals decision 583 names alone. Elixir cuts through
      `inspect/1` wherever it shows a value; Logix has no host API to compare. RV-32 builds
      it.
-     *(Landed with RV-32, 2026-11-23, `b6c4600` and `7139745`: every call of `inspect/1` in `lib/` goes
-     through `Logex.Lexer.inspected/2`, the cut, and every integer a refusal writes out
-     itself through `shown_number/1`; `quoted_test.exs` reaches 144 refusals across the
-     host contract with `10 ** 100_000`, each message pinned whole, holds a sample's cost
-     at `10 ** 1_000_000` and a list of a million elements to a small refusal's and the
-     cut's own, and reads `lib/`'s syntax trees for any other `inspect/1`. `new!/1` of a
-     global brought with `line: 10 ** 1_000_000` is told in under 100 ms and 152 bytes,
-     where it took 9 s and a megabyte; a line of a program edited by hand that is a
-     tuple is told, where it raised `Protocol.UndefinedError`. Provisional: `PLAN.md`'s
-     "RV-32 as built", questions 1 to 3.)*
+     *(Landed with RV-32, 2026-11-23, `b6c4600` and `7139745`: every call of `inspect/1`
+     in `lib/` goes through `Logex.Lexer.inspected/2`, the cut, and every integer a
+     refusal writes out itself through `shown_number/1`; `quoted_test.exs` reaches 144
+     refusals across the host contract with `10 ** 100_000`, each message pinned whole,
+     holds a sample's cost at `10 ** 1_000_000` and a list of a million elements to a
+     small refusal's and the cut's own, and reads `lib/`'s syntax trees for any other
+     `inspect/1`. `new!/1` of a global brought with `line: 10 ** 1_000_000` is told in
+     152 bytes, where it took 9 s and a megabyte; a line of a program edited by hand that
+     is a tuple is told, where it raised `Protocol.UndefinedError`. With RV-32's review,
+     2026-11-24: a program's name, the sim's own count, a struct that writes itself out, a
+     `Date` or a `Time`, and a name that is no UTF-8 text, each quoted through the cut,
+     where they were written whole or raw; and a walk of every argument and checked field
+     of the host contract with such values, every refusal an `ArgumentError` whose message
+     is text under 5,000 bytes. Provisional: `PLAN.md`'s "RV-32 as built", questions 1 to
+     3, and its review's questions.)*
 
 587. **A test's name made true (RV-31),** RV-31's question 4: `scripts_test.exs`'s test of
      the PLT's cache is named for what the workflow's comment said before decision 580.

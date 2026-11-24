@@ -196,8 +196,20 @@ changed after its last item was written, under "The host's API".
   quoted as before. A line of a program edited by hand that is no integer is quoted as
   `inspect/1` shows it, `"7"` with its quotes where it was written bare, and a tuple is
   told in the refusal where `Logex.Runtime.put_inputs/3`, `call/4` and `instance/1`
-  raised `Protocol.UndefinedError`. Look for: code that reads a number back out of such
-  a message.
+  raised `Protocol.UndefinedError`. So is a program's name a refusal quotes, where a
+  number was written whole and a tuple raised `Protocol.UndefinedError` out of
+  `put_inputs/3`, `call/4`, `restart/3` and `Logex.Edit.accept/3`, and a sim's own count
+  of inputs, which `inputs:` gave. A struct that writes itself out, a `Date`, a `Time` or
+  a `Version`, holding a long number is shown field by field, `%Date{year:
+  100000000000000000000000… (100001 characters), month: 1, ...}`, where its own text
+  wrote the number whole, 8 s and a megabyte at a million digits, and a `Time` raised
+  `Inspect.Error` inside the message. Where two long numbers a refusal compares cut
+  alike, a timer's `last` and the instance's `now`, a scan's time and the instance's,
+  the refusal says by how much they differ. A name, a location, a device, a program's
+  name or a path that is no UTF-8 text is quoted as `inspect/1` shows it, `<<97, 98,
+  255, 99>>`, where its bytes were written raw and the message was no text. Look for:
+  code that reads a number back out of such a message, or matches a name in backquotes
+  in one.
 
 ### What it carries, by the work that built it
 
