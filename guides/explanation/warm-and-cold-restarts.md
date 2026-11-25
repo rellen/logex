@@ -267,12 +267,14 @@ warm, unless the host gives the option `start: :cold`.
 
 logex takes the qualifiers `retain` and `non_retain` from
 [IEC 61131-3](../reference/glossary.md#iec-61131-3). A
-[Logix](../reference/glossary.md#logix) controller has no qualifier: it keeps its
-memory, and its prescan resets some instructions before the first scan.
+[Logix](../reference/glossary.md#logix) controller has no qualifier. Its prescan resets
+some instructions before the first scan (1756-RM018A, pages 73 to 134, and 1756-RM094N,
+page 47). No publication that logex cites says in 1 sentence that its tags keep their
+values through a loss of power.
 
 | Subject | IEC 61131-3 | Logix | logex |
 |---|---|---|---|
-| A tag with no qualifier at a warm restart | The implementer decides | Kept, then the prescan resets some instructions | Initial value |
+| A tag with no qualifier at a warm restart | The implementer decides | Not recorded. The prescan resets some instructions | Initial value |
 | `retain` on an input | Yes | No qualifier | Refused. Each restart keeps the value of the host |
 | A prescan | None | Yes | None |
 | A bit for the first scan | None | `S:FS` | None. A program can make its own bit |

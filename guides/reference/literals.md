@@ -99,7 +99,7 @@ Wrong texts 1 to 6 show the [diagnostics](#the-diagnostics) of these rules.
 > logex does not change the value of a based integer literal for a signed type. The
 > literal `16#ffff` is 65535, and the largest value of an `int` is 32767. Thus
 > `move 16#ffff trim` is an error if `trim` is an `int`. A Logix controller writes -1
-> for the same text. In logex, `move -1 trim` writes the same 16 bits into the `int`.
+> for the same text (1756-RM018A, page 869). In logex, `move -1 trim` writes the same 16 bits into the `int`.
 > `move 16#ffff count` is correct if `count` is a `uint`, and it writes 65535.
 
 [Use bit strings](../howto/use-bit-strings.md) shows how to write a pattern of bits to a

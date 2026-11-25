@@ -154,13 +154,12 @@ emergency stop button that stays pressed until a person releases it holds its si
 ## How it compares with IEC 61131-3 and Logix
 
 [IEC 61131-3](../reference/glossary.md#iec-61131-3) does not say when a controller reads
-the signals of its [plant](../reference/glossary.md#plant). In a
-[Logix](../reference/glossary.md#logix) controller, the data of an I/O module changes
-while the logic runs. In logex, a round takes the value of each input point 1 time, when
+the signals of its [plant](../reference/glossary.md#plant). In logex, a round takes the value of each input point 1 time, when
 it starts. Thus the value of an input point does not change during a round.
 
-An input module of a Logix controller sends its data at an interval, and it can also
-send its data at a change. logex does the same. The runner reads each device at an
+An input module of a [Logix](../reference/glossary.md#logix) controller sends its data
+at an interval, and it can also send its data at a change. The source is 1756-PM005M,
+page 42. logex does the same. The runner reads each device at an
 interval, and a device can also report a change.
 
 ## Why logex does it this way

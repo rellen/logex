@@ -224,12 +224,13 @@ A runner has 3 rules for the time:
   from the first to the last, as logex does. The standard does not say where a timer
   gets its time.
 - A timer of a [Logix](../reference/glossary.md#logix) controller adds the time since
-  the last scan of its instruction, as a timer of logex does.
+  the last scan of its instruction, as a timer of logex does. The source is
+  1756-RM018A, pages 112 and 113.
 - A controller reads its own clock and starts its own scans. In logex, the host does
   these 2 things.
-- IEC 61131-3 and Logix let a program jump back. logex does not.
+- logex does not let a program jump back.
 - A Logix controller does a prescan, a step that prepares each instruction, before its
-  first scan. logex has no prescan. The first scan runs each rung. Only the instructions
+  first scan (1756-RM094N, page 47). logex has no prescan. The first scan runs each rung. Only the instructions
   that look for an edge are different in it.
 
 ## Why logex does it this way

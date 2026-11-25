@@ -148,8 +148,8 @@ comparison, `add` and `sub`.
 - [IEC 61131-3](../reference/glossary.md#iec-61131-3) does not say where a timer gets
   its time. The `ton` of logex has the name of the TON of IEC 61131-3.
 - A timer of a [Logix](../reference/glossary.md#logix) controller counts milliseconds.
-  It adds the time since the last scan of its instruction. A timer of logex does the
-  same.
+  It adds the time since the last scan of its instruction (1756-RM018A, pages 112 and
+  113). A timer of logex does the same.
 - A controller reads its own clock. A timer of logex reads the time that the host gives.
   A runner does this work of a host. It reads a [clock](../reference/glossary.md#clock)
   and gives the time.

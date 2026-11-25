@@ -163,8 +163,8 @@ Thus the plant must do these things with no help from logex:
 
 ## How it compares with IEC 61131-3 and Logix
 
-A [Logix](../reference/glossary.md#logix) controller is hardware with its own operating
-system. logex is a library. The computer and its operating system are the work of the
+A controller, for example a [Logix](../reference/glossary.md#logix) controller, is
+hardware. logex is a library. The computer and its operating system are the work of the
 host. As in a controller, the runner trips after a task runs too long.
 
 logex does not have each part of IEC 61131-3 or of a controller. For example, it has no

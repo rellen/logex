@@ -182,8 +182,8 @@ An operand is 1 tag or 1 literal. logex calculates no expression in an operand:
 
 A [based integer literal](literals.md#based-integer-literal) is a number, not a pattern of
 bits. `16#ffff` is 65535, and thus `move 16#ffff trim` is an error if `trim` is an `int`
-(wrong rung 52). A Logix controller writes -1 for the same text
-([How logex differs from Logix](../explanation/differences-from-logix.md#what-is-different-in-behaviour)).
+(wrong rung 52). A Logix controller writes -1 for the same text (1756-RM018A, page 869,
+[How logex differs from Logix](../explanation/differences-from-logix.md#what-is-different-in-behaviour)).
 To write the 16 bits into an `int`, use `move -1 trim`.
 
 [Wrong rungs 38 to 52](#wrong-rungs-38-to-52-the-literals) show the diagnostics of a

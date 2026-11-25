@@ -210,7 +210,7 @@ input `hz` is a real: 1.0e39 is beyond a real's range, -3.4028234663852886e38 to
 cannot hold it. The [state](../reference/glossary.md#state) does not change.
 
 A [Logix](../reference/glossary.md#logix) controller takes the root of the absolute
-value of a negative source. logex does not: the root of -0.25 is never 0.5.
+value of a negative source (1756-RM018A, page 474). logex does not: the root of -0.25 is never 0.5.
 [Instructions: arithmetic and comparison](../reference/instructions-arithmetic-and-comparison.md)
 gives what each instruction writes for a result that its type cannot hold, and its power
 out.

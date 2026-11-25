@@ -279,19 +279,20 @@ The same:
 - [IEC 61131-3](../reference/glossary.md#iec-61131-3) has the periodic task
   (`INTERVAL`), the event task (`SINGLE`) and the priority.
 - A [Logix](../reference/glossary.md#logix) controller has 1 continuous task at most,
-  and starts it again when a scan of it ends. The runner of logex does the same, at most
+  and starts it again when a scan of it ends (1756-PM005M, page 8). The runner of logex does the same, at most
   1 time in each millisecond of its clock.
-- A Logix controller counts the overlaps of a task, as logex does.
+- A Logix controller counts the overlaps of a task, as logex does (1756-RM018A, the
+  TASK object, page 275).
 
 Different:
 
 - IEC 61131-3 lets a task interrupt a task of a lower priority, and a Logix controller
-  interrupts its continuous task. logex never interrupts a scan. The priority gives only
+  interrupts its continuous task (1756-PM005M, page 13). logex never interrupts a scan. The priority gives only
   the sequence of the tasks in a cycle.
 - IEC 61131-3 makes a missed deadline an error that the system reports. logex reports
   it as an `{:overlap, ...}` event and continues.
 - IEC 61131-3 does not give the sequence of the programs in a task. logex runs them in
-  the sequence of their `program` lines, as a Logix controller does.
+  the sequence of their `program` lines.
 - In IEC 61131-3, `SINGLE` and `INTERVAL` can be a constant or any variable. In logex, a
   trigger is a `bool` global, and an interval is a whole number of milliseconds.
 

@@ -237,7 +237,7 @@ this check also if no rung writes to the array. The time of the check depends on
   [IEC 61131-3](../reference/glossary.md#iec-61131-3). Only logex reads the data of a
   program type. It is not a format of the standard or of a vendor.
 - A [Logix](../reference/glossary.md#logix) controller changes a program while it runs,
-  in steps. An online edit of logex has steps of the same kind. In logex, each step is
+  in steps (the Logix quick start of October 2009, pages 120 to 124). An online edit of logex has steps of the same kind. In logex, each step is
   an operation on data.
 
 ## Why logex does it this way
