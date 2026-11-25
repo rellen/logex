@@ -113,11 +113,11 @@ values of the last round. To start the plant again, follow
 
 ## If it does not work
 
-| What you see | What to do | Cause |
+| What you see | Cause | What to do |
 |---|---|---|
-| `trip` is `nil` | Read the field `status`. A restart is not necessary. | The status is `:running`. The plant did not trip. |
-| `the runner #PID<0.102.0> is not running` | Start a new runner with `Logex.Runner.start_link/1`. | The runner stopped, or it crashed. |
-| `` `k9` is neither a global nor a program instance `` | Give the name of a global, or a path such as `b1.boxes.cv`. | The resource holds no value at this path. |
+| `trip` is `nil` | The status is `:running`. The plant did not trip. | Read the field `status`. A restart is not necessary. |
+| `the runner #PID<0.102.0> is not running` | The runner stopped, or it crashed. | Start a new runner with `Logex.Runner.start_link/1`. |
+| `` `k9` is neither a global nor a program instance `` | The resource holds no value at this path. | Give the name of a global, or a path such as `b1.boxes.cv`. |
 
 The 2 messages come in an `ArgumentError`.
 

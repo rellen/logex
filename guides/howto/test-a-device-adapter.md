@@ -411,7 +411,7 @@ errors of the option `io:`.
 The runner trips. `Logex.Runner.status/1` shows the cause in the field `trip:`, as
 `{:io, "panel", detail}`. The table gives each `detail`.
 
-| The `detail` that you see | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `{:error, reason}` | A callback returned `{:error, reason, state}`. | Correct the device, its cable or its address. |
 | `{:unknown_address, "panel.i.12"}` | `read/1` or `report/2` returned an address that is not an input point of the device. | Return only the addresses of the input points that `init/3` gets. |

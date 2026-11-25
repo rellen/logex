@@ -393,45 +393,45 @@ A line can end with LF or CRLF. If a line is wrong, the runner does not start.
 `Logex.Runner.force/3`, `Logex.Runner.unforce/2` and `Logex.Runner.unforce_all/1` raise
 the error in your process. The forces do not change.
 
-| What you see | Cause and what to do |
-|---|---|
-| ``the runner keeps no forces file, so a force would not survive a crash: start it with forces: a path`` | The runner has no `forces:`. You cannot add it to a runner that runs. Stop the runner, and start it with `forces:`. |
-| ``is an output point, at `panel.q.0`: only an input point is forced`` | The name is of an output point. Force the input point that the program reads. |
-| ``is no input point of `packing` — did you mean `eye`?`` | The name has an error. Use the name that the message gives. |
-| ``is no input point of `packing` `` | The name is an address such as `panel.i.8`, a tag of an instance such as `b1.eye`, or a name with an error. Use the name of the global. |
-| ``a force names an input point by its name, a string, as in "eye_1", got: :eye`` | The name is not a string. Write `"eye"`. |
-| ``is a bool, forced to 0 or 1, got: 2`` | The [type](../reference/glossary.md#type) of the point does not hold the value. Give a value of its type. A `bool` takes 0 or 1, not `true`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| ``the runner keeps no forces file, so a force would not survive a crash: start it with forces: a path`` | The runner has no `forces:`. You cannot add it to a runner that runs. | Stop the runner, and start it with `forces:`. |
+| ``is an output point, at `panel.q.0`: only an input point is forced`` | The name is of an output point. | Force the input point that the program reads. |
+| ``is no input point of `packing` — did you mean `eye`?`` | The name has an error. | Use the name that the message gives. |
+| ``is no input point of `packing` `` | The name is an address such as `panel.i.8`, a tag of an instance such as `b1.eye`, or a name with an error. | Use the name of the global. |
+| ``a force names an input point by its name, a string, as in "eye_1", got: :eye`` | The name is not a string. | Write `"eye"`. |
+| ``is a bool, forced to 0 or 1, got: 2`` | The [type](../reference/glossary.md#type) of the point does not hold the value. | Give a value of its type. A `bool` takes 0 or 1, not `true`. |
 
 ### A call returns an error
 
 The runner option `write_limit:` gives the limit of the write time.
 
-| What you see | Cause and what to do |
-|---|---|
-| `{:error, {:forces, :timeout}}` | The disk did not complete the write in the limit of the write time. The force is not in effect, but the disk can still complete the write. Force or unforce the point again. |
-| `{:error, {:forces, reason}}` from a force or an unforce | The write failed, for example `:eisdir` for a directory in the place of the file. The forces do not change. Correct the path. |
-| `{:error, {:forces, reason}}` from a stop of the runner | The start did not read the file, and the stop did not write the forces of the runner over it. Correct the path, and look at the file before the next start. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `{:error, {:forces, :timeout}}` | The disk did not complete the write in the limit of the write time. The force is not in effect, but the disk can still complete the write. | Force or unforce the point again. |
+| `{:error, {:forces, reason}}` from a force or an unforce | The write failed, for example `:eisdir` for a directory in the place of the file. The forces do not change. | Correct the path. |
+| `{:error, {:forces, reason}}` from a stop of the runner | The start did not read the file, and the stop did not write the forces of the runner over it. | Correct the path, and look at the file before the next start. |
 
 ### The runner does not start
 
 `Logex.Runner.start_link/1` raises an `ArgumentError` with these words:
 
-| What you see | Cause and what to do |
-|---|---|
-| ``is no force: a line holds an input point's name and its value`` | A line of the forces file has a wrong form. The message gives the path, and the number and text of each wrong line. Correct the lines, or delete the file. |
-| ``is an output point, at `panel.q.0`: only an input point is forced`` | A line of the forces file names an output point. Remove the line. |
-| `the runner's forces: is the path of the file its forces are kept in, a string` | `forces:` is not a string, or it is an empty string. Give the path as a string. |
-| `names the forces file of another runner of this VM` | A different runner uses the file. Give each runner its own forces file. |
-| `the forces file cannot be located` | The path is relative, and the runner did not read the working directory. Give a full path. |
+| What you see | Cause | What to do |
+|---|---|---|
+| ``is no force: a line holds an input point's name and its value`` | A line of the forces file has a wrong form. The message gives the path, and the number and text of each wrong line. | Correct the lines, or delete the file. |
+| ``is an output point, at `panel.q.0`: only an input point is forced`` | A line of the forces file names an output point. | Remove the line. |
+| `the runner's forces: is the path of the file its forces are kept in, a string` | `forces:` is not a string, or it is an empty string. | Give the path as a string. |
+| `names the forces file of another runner of this VM` | A different runner uses the file. | Give each runner its own forces file. |
+| `the forces file cannot be located` | The path is relative, and the runner did not read the working directory. | Give a full path. |
 
 [Runner](../reference/runner.md) gives each other message of a start.
 
 ### The status names a problem
 
-| What you see | Cause and what to do |
-|---|---|
-| `forces_unread: {path, :eisdir}` | The start or the restart did not read the file. A fresh start then has no force, and a restart keeps the forces of the runner. Correct the file. The next force or unforce that succeeds writes the forces of the runner over the file, and the key is then `nil`. An orderly stop also writes them. |
-| `forces_unknown: %{"eye" => 1}` | A write did not end in the limit of the write time. The file can hold these forces or the old forces. Force or unforce a point to write the file again. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `forces_unread: {path, :eisdir}` | The start or the restart did not read the file. A fresh start then has no force, and a restart keeps the forces of the runner. | Correct the file. The next force or unforce that succeeds writes the forces of the runner over the file, and the key is then `nil`. An orderly stop also writes them. |
+| `forces_unknown: %{"eye" => 1}` | A write did not end in the limit of the write time. The file can hold these forces or the old forces. | Force or unforce a point to write the file again. |
 
 ## See also
 

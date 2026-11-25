@@ -289,7 +289,7 @@ If the file has an error, the script stops with a `MatchError` that shows
 field `message:` has the words of this table and the field `line:` gives the line of the
 file. A warning does not stop the script.
 
-| What you see in the message | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `unknown configuration line` | A connection has the global first. | Write the tag of the instance first, then the global. |
 | `a location holds one global` | 2 globals are at 1 location. Each element of an array uses 1 location. | Give 1 of the globals a different location. |

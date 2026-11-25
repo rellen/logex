@@ -461,46 +461,46 @@ To get the events of the store as messages, subscribe to `:retain`:
 
 ### `start_link/1` returns an error
 
-| What you see | Cause and what to do |
-|---|---|
-| `{:error, {:retain, :enoent}}` | The directory of the store does not exist. Make the directory. |
-| `{:error, {:retain, :timeout}}` | The disk did not read or write the store in the write limit. Give a longer `write_limit:`, or repair the disk. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `{:error, {:retain, :enoent}}` | The directory of the store does not exist. | Make the directory. |
+| `{:error, {:retain, :timeout}}` | The disk did not read or write the store in the write limit. | Give a longer `write_limit:`, or repair the disk. |
 
 ### `start_link/1` raises an `ArgumentError`
 
 The runner does not start. Each message is longer than the part that this table gives.
 
-| Part of the message | Cause and what to do |
-|---|---|
-| `the runner keeps no store, so retain_period: 1000 has none to write` | `retain_period:` with no `retain:`. Give `retain:`. |
-| `the runner keeps no store, so start: :cold has none to start from` | `start: :cold` with no `retain:`. Give `retain:`. |
-| `a whole number of ms from 100 to 3600000, got: 50` | `retain_period:` is out of its range. Give 100 to 3600000. |
-| `retain: is the path of the file its retained values are kept in, a string, got: ""` | The path is empty or is not a string. Give a path as a string. |
-| `takes each option once, got :start more than once` | The options have `start:` 2 times. Use `Keyword.put/3`. |
-| `is a symbolic link` | The store is a symbolic link. Give the path of the file that the link names. |
-| `the store and the forces file are two files` | `retain:` and `forces:` name 1 file. Give 2 paths. |
-| `names the store of another runner of this VM` | A different runner has the store. Stop that runner, or give a different path. |
-| `the store cannot be read: the disk did not answer within the write limit` | A warm start did not read the store in the write limit. Give a longer `write_limit:`, or repair the disk. |
-| `the store cannot be read: illegal operation on a directory` | The path names a directory. Give the path of a file. |
-| `line 2: the store is of configuration` | The store is of a different configuration. [Recover from a refused store](recover-a-refused-store.md). |
-| `line 1: the store is empty` | The store is empty. [Recover from a refused store](recover-a-refused-store.md). |
-| `is the store's last line, and no end line` | The store is cut short. [Recover from a refused store](recover-a-refused-store.md). |
-| A different message that starts with the path of the store and a line number | A warm start refused the store. [Recover from a refused store](recover-a-refused-store.md). |
+| What you see | Cause | What to do |
+|---|---|---|
+| `the runner keeps no store, so retain_period: 1000 has none to write` | `retain_period:` with no `retain:`. | Give `retain:`. |
+| `the runner keeps no store, so start: :cold has none to start from` | `start: :cold` with no `retain:`. | Give `retain:`. |
+| `a whole number of ms from 100 to 3600000, got: 50` | `retain_period:` is out of its range. | Give 100 to 3600000. |
+| `retain: is the path of the file its retained values are kept in, a string, got: ""` | The path is empty or is not a string. | Give a path as a string. |
+| `takes each option once, got :start more than once` | The options have `start:` 2 times. | Use `Keyword.put/3`. |
+| `is a symbolic link` | The store is a symbolic link. | Give the path of the file that the link names. |
+| `the store and the forces file are two files` | `retain:` and `forces:` name 1 file. | Give 2 paths. |
+| `names the store of another runner of this VM` | A different runner has the store. | Stop that runner, or give a different path. |
+| `the store cannot be read: the disk did not answer within the write limit` | A warm start did not read the store in the write limit. | Give a longer `write_limit:`, or repair the disk. |
+| `the store cannot be read: illegal operation on a directory` | The path names a directory. | Give the path of a file. |
+| `line 2: the store is of configuration` | The store is of a different configuration. | [Recover from a refused store](recover-a-refused-store.md). |
+| `line 1: the store is empty` | The store is empty. | [Recover from a refused store](recover-a-refused-store.md). |
+| `is the store's last line, and no end line` | The store is cut short. | [Recover from a refused store](recover-a-refused-store.md). |
+| A different message that starts with the path of the store and a line number | A warm start refused the store. | [Recover from a refused store](recover-a-refused-store.md). |
 
 ### After a fresh start
 
-| What you see | Cause and what to do |
-|---|---|
-| `the store was written by another program than the one this start was given` in `warning` | The files of the [program](../reference/glossary.md#program) or of the configuration changed. Or an online edit did not get to the files. The runner runs with the values of the store, by name and type. If the files are correct, do nothing. If not, write the edit to the files, then stop and start the runner. That start warns 1 time more. |
-| After a crash, a value is older than before the crash | The crash lost each change since the last write. Give a shorter `retain_period:`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `the store was written by another program than the one this start was given` in `warning` | The files of the [program](../reference/glossary.md#program) or of the configuration changed. Or an online edit did not get to the files. The runner runs with the values of the store, by name and type. | If the files are correct, do nothing. If not, write the edit to the files, then stop and start the runner. That start warns 1 time more. |
+| After a crash, a value is older than before the crash | The crash lost each change since the last write. | Give a shorter `retain_period:`. |
 
 ### While the runner runs
 
-| What you see | Cause and what to do |
-|---|---|
-| `{:retain, {:error, :enoent}}`, and `failed: :enoent` in the status | A write failed. The store keeps the last good write. Repair the disk or the directory. |
-| `{:retain, {:error, :timeout}}`, and `unknown` in the status | A write did not end in the write limit. Give a longer `write_limit:`, or use a faster disk. |
-| A stop gives `{:error, {:retain, :enoent}}` | The write of the stop failed. The runner stopped all the same. Repair the disk. The store holds the last good write. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `{:retain, {:error, :enoent}}`, and `failed: :enoent` in the status | A write failed. The store keeps the last good write. | Repair the disk or the directory. |
+| `{:retain, {:error, :timeout}}`, and `unknown` in the status | A write did not end in the write limit. | Give a longer `write_limit:`, or use a faster disk. |
+| A stop gives `{:error, {:retain, :enoent}}` | The write of the stop failed. The runner stopped all the same. The store holds the last good write. | Repair the disk. |
 
 ## See also
 

@@ -185,8 +185,9 @@ The runner runs with the initial value of each tag that `dropped` names, and the
 stop writes that value to the store. The start also copies the store, with your edit, to
 a numbered copy, for example `packer.retain.dropped.1`. `copy` in the status gives its
 name.
+Each row of the table gives 1 entry of `dropped`.
 
-| `dropped` holds | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `{"s1.place", :misfit}` | The value is not of the type, or out of its range | Stop the runner. Do steps 4 to 8 again, with a value of step 5. |
 | `{"s1.place", {:retyped, :int, :dint}}` | You changed the type word | Stop the runner. Do steps 4 to 8 again, and keep `dint`. |

@@ -589,41 +589,41 @@ of a correct line.
 
 ### Errors of the script
 
-| What you see | What to do |
-|---|---|
-| `` ** (MatchError) no match of right hand side value: `` and a diagnostic of `motor.ld` | No `motor.ld` in the directory where you run `mix run`. Put the file there. |
-| `` ** (KeyError) key :name not found `` for the struct `Task` | `%Task{}` in place of the struct of logex. Write `Configuration.Task`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` ** (MatchError) no match of right hand side value: `` and a diagnostic of `motor.ld` | No `motor.ld` in the directory where you run `mix run`. | Put the file there. |
+| `` ** (KeyError) key :name not found `` for the struct `Task` | `%Task{}` in place of the struct of logex. | Write `Configuration.Task`. |
 
 ### Errors that only Elixir data can have
 
-| What you see | What to do |
-|---|---|
-| `:program is not a field of a configuration` | A key that `new!/1` does not know. Use only the 6 keys of step 6. |
-| `` programs: is a list of %Logex.Program{}, as in programs: [motor] `` | 1 program type with no list. Write `programs: [motor]`. |
-| `` programs: must be a list of %Logex.Program{} `` and the map | A map in `programs:`. Write a list: `programs: [motor]`. |
-| `a configuration needs a name, as in name: "plant"` | No `name:`. Add `name: "plant"`. |
-| `` program instance `m1` from Elixir has no line, got: 3 `` | A struct with `line:`. Remove `line:`. |
-| `` task `fast`: a priority is 0, the highest, to 65535, found 1.5 `` | A number that is not an integer. Write an integer. |
-| `` global `pb_start_1` has type "bool" `` | A type as a string. Write an atom, such as `:bool`. |
-| `` `m1.overtemp` is connected to "0" `` | A number as a string. Write the integer `0`. |
-| `` unknown option :keep for `total` `` | A wrong option of `Global.new!/3`. Use `initial:`, `at:`, `retain:` or `non_retain:`. |
-| `` `retain:` for `total` takes true or false, found "yes" `` | Write `retain: true`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `:program is not a field of a configuration` | A key that `new!/1` does not know. | Use only the 6 keys of step 6. |
+| `` programs: is a list of %Logex.Program{}, as in programs: [motor] `` | 1 program type with no list. | Write `programs: [motor]`. |
+| `` programs: must be a list of %Logex.Program{} `` and the map | A map in `programs:`. | Write a list: `programs: [motor]`. |
+| `a configuration needs a name, as in name: "plant"` | No `name:`. | Add `name: "plant"`. |
+| `` program instance `m1` from Elixir has no line, got: 3 `` | A struct with `line:`. | Remove `line:`. |
+| `` task `fast`: a priority is 0, the highest, to 65535, found 1.5 `` | A number that is not an integer. | Write an integer. |
+| `` global `pb_start_1` has type "bool" `` | A type as a string. | Write an atom, such as `:bool`. |
+| `` `m1.overtemp` is connected to "0" `` | A number as a string. | Write the integer `0`. |
+| `` unknown option :keep for `total` `` | A wrong option of `Global.new!/3`. | Use `initial:`, `at:`, `retain:` or `non_retain:`. |
+| `` `retain:` for `total` takes true or false, found "yes" `` | A string in place of `true` or `false`. | Write `retain: true`. |
 
 ### Errors that a file can also have
 
-| What you see | What to do |
-|---|---|
-| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task or a global. Write the name that the message gives. |
-| `` `m1` runs `motor`, which declares no `mtor` — did you mean `motor`? `` | A spelling error in the name of a tag. Write the name that the message gives. |
-| `` unknown program type `pump`: the types given are `motor` `` | A program type that is not in `programs:`. Compile it and add it to `programs:`. |
-| `` `m1` leaves its var_inputs `overtemp` and `reset` unconnected `` | A `var_input` tag with no connection. Connect each tag that the message names. |
-| `` `m2.motor` is a var_output, which drives a global: it cannot drive the constant `0` `` | An output connected to a number. Connect it to a global. |
-| `` `pb_stop_1` is an input point: `m1.run_lamp`, a var_output, cannot drive it `` | An output connected to an input point. Connect it to an output point, or to a global with no `at:`. |
-| `` `m1.speed_sp` is a dint, but `k1` is a bool `` | A global with a type that does not agree with the tag. Give the global the type of the tag. |
-| `` `k1` is already driven by `m1.motor` `` | 2 outputs that write 1 global. Give each output its own global. |
-| `` `panel.I.0` is not a location as written `` | An uppercase `I` or `Q`, or an address with a leading 0. Write `panel.i.0`. |
-| `` task `fast` needs a priority `` | A periodic task or an event task with no `priority:`. Add `priority:`. |
-| `` `m1.overtemp` is a bool: only 0 or 1 fit, found `2` `` | A number that the type of the tag does not hold. Write a value of the type. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task or a global. | Write the name that the message gives. |
+| `` `m1` runs `motor`, which declares no `mtor` — did you mean `motor`? `` | A spelling error in the name of a tag. | Write the name that the message gives. |
+| `` unknown program type `pump`: the types given are `motor` `` | A program type that is not in `programs:`. | Compile it and add it to `programs:`. |
+| `` `m1` leaves its var_inputs `overtemp` and `reset` unconnected `` | A `var_input` tag with no connection. | Connect each tag that the message names. |
+| `` `m2.motor` is a var_output, which drives a global: it cannot drive the constant `0` `` | An output connected to a number. | Connect it to a global. |
+| `` `pb_stop_1` is an input point: `m1.run_lamp`, a var_output, cannot drive it `` | An output connected to an input point. | Connect it to an output point, or to a global with no `at:`. |
+| `` `m1.speed_sp` is a dint, but `k1` is a bool `` | A global with a type that does not agree with the tag. | Give the global the type of the tag. |
+| `` `k1` is already driven by `m1.motor` `` | 2 outputs that write 1 global. | Give each output its own global. |
+| `` `panel.I.0` is not a location as written `` | An uppercase `I` or `Q`, or an address with a leading 0. | Write `panel.i.0`. |
+| `` task `fast` needs a priority `` | A periodic task or an event task with no `priority:`. | Add `priority:`. |
+| `` `m1.overtemp` is a bool: only 0 or 1 fit, found `2` `` | A number that the type of the tag does not hold. | Write a value of the type. |
 
 A warning does not stop `new!/1`. The configuration holds it in the field `warnings`,
 and the script prints it first. An example is a global that nothing uses:

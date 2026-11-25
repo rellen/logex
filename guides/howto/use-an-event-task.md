@@ -328,37 +328,37 @@ message.
 
 ### The configuration does not compile
 
-| What you see | What to do |
-|---|---|
-| ``the single of `trip`, `sp`, is a dint``, `is an array of 2 bools` or `names an element of` | The trigger is not a `bool` global, or it is an array or an [element](../reference/glossary.md#element). Use a `bool` global that is not an array. |
-| `` no global `estp` `` | No global has this name. Use the name after `did you mean`, or declare the global with `var_global`. |
-| `is a location`, `is a task`, `is an instance`, `is an instance's member` or `names a member of` | The trigger is not the name of a global. Use the name of a `bool` global. For a point, the message gives the name of its global. |
-| `` `single` takes a bool global's name `` or `` `single` is given twice `` | Write `single` 1 time, with the name of the global after it. |
-| ``task `trip` needs an interval or a single`` | The line has no `single`. Add `single` and the trigger. |
-| ``the interval of `trip` is 0`` | Remove `interval 0`. An event task needs no interval. |
-| ``task `trip` needs a priority`` or `a priority is 0 to 65535` | Add `priority` and a number from 0 to 65535. |
-| `goes before` | Write the words in this sequence: `single`, `interval`, `priority`, then `watchdog` if you give one. |
-| ``no task `trp` `` | The `with` of a `program` line names no task. Use the name after `did you mean`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| ``the single of `trip`, `sp`, is a dint``, `is an array of 2 bools` or `names an element of` | The trigger is not a `bool` global, or it is an array or an [element](../reference/glossary.md#element). | Use a `bool` global that is not an array. |
+| `` no global `estp` `` | No global has this name. | Use the name after `did you mean`, or declare the global with `var_global`. |
+| `is a location`, `is a task`, `is an instance`, `is an instance's member` or `names a member of` | The trigger is not the name of a global. | Use the name of a `bool` global. For a point, the message gives the name of its global. |
+| `` `single` takes a bool global's name `` or `` `single` is given twice `` | `single` with no `bool` global after it, or `single` 2 times. | Write `single` 1 time, with the name of the global after it. |
+| ``task `trip` needs an interval or a single`` | The line has no `single`. | Add `single` and the trigger. |
+| ``the interval of `trip` is 0`` | The line of the event task has `interval 0`. | Remove `interval 0`. An event task needs no interval. |
+| ``task `trip` needs a priority`` or `a priority is 0 to 65535` | No priority, or a priority out of the range. | Add `priority` and a number from 0 to 65535. |
+| `goes before` | The words of the task line are not in the correct sequence. | Write the words in this sequence: `single`, `interval`, `priority`, then `watchdog` if you give one. |
+| ``no task `trp` `` | The `with` of a `program` line names no task. | Use the name after `did you mean`. |
 
 ### The configuration compiles with a warning
 
-| What you see | What to do |
-|---|---|
-| `` runs under the event task `trip` `` | Move the timer, counter or one-shot to a program on a periodic task. Read [Keep timers, counters and one-shots out of the program](#keep-timers-counters-and-one-shots-out-of-the-program). |
-| ``task `trip` runs no instance`` | No `program` line has `with trip`, and the instance runs in each cycle. Add `with trip` to its `program` line. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` runs under the event task `trip` `` | A timer, a counter or a one-shot in a program of the event task. | Move the timer, counter or one-shot to a program on a periodic task. Read [Keep timers, counters and one-shots out of the program](#keep-timers-counters-and-one-shots-out-of-the-program). |
+| ``task `trip` runs no instance`` | No `program` line has `with trip`, and the instance runs in each cycle. | Add `with trip` to its `program` line. |
 
 ### The task does not run, or runs at an unexpected time
 
-| What you see | What to do |
-|---|---|
-| No `:ran` event for the instance | The trigger did not go from 0 to 1 between 2 cycles. Make sure that a cycle reads 0 before a cycle reads 1. |
-| No run while your code waits for `next_due_in/1` | Read [Call the cycles from your code](#call-the-cycles-from-your-code). |
-| The instance runs in the first cycle after a start or a [restart](../reference/glossary.md#restart) | Before this cycle, logex sets the last value of the trigger to 0. Thus a trigger at 1 runs the task. |
-| After a [warm restart](../reference/glossary.md#warm-restart), a trigger with `retain` at 1 does not run the task | A warm restart keeps the last value that a cycle read of a trigger with `retain`. If this value is 1, the task runs when the trigger goes to 0 and then to 1. |
-| The instance runs 1 cycle after a program writes 1 to the trigger | logex reads the trigger 1 time, before the programs of the cycle run. Nothing to do. |
-| The instance records a value that a different instance writes in the same cycle | Give the event task a higher priority than the task of the other instance. |
-| On the runner, no run for a short pulse | Use a device that gives each change immediately. Or hold the signal at 1 for more than the poll period. |
-| On the runner, a change at the device does not run the task | The trigger has a [force](../reference/glossary.md#force). A force or an unforce that changes the trigger runs the task immediately. Read [Force an input point](force-inputs.md). |
+| What you see | Cause | What to do |
+|---|---|---|
+| No `:ran` event for the instance | The trigger did not go from 0 to 1 between 2 cycles. | Make sure that a cycle reads 0 before a cycle reads 1. |
+| No run while your code waits for `next_due_in/1` | `next_due_in/1` does not count a change of a trigger. | Read [Call the cycles from your code](#call-the-cycles-from-your-code). |
+| The instance runs in the first cycle after a start or a [restart](../reference/glossary.md#restart) | Before this cycle, logex sets the last value of the trigger to 0. Thus a trigger at 1 runs the task. | Nothing. This is the rule of a start and of a restart. |
+| After a [warm restart](../reference/glossary.md#warm-restart), a trigger with `retain` at 1 does not run the task | A warm restart keeps the last value that a cycle read of a trigger with `retain`. | If this value is 1, the task runs when the trigger goes to 0 and then to 1. |
+| The instance runs 1 cycle after a program writes 1 to the trigger | logex reads the trigger 1 time, before the programs of the cycle run. | Nothing. |
+| The instance records a value that a different instance writes in the same cycle | The other instance runs before the event task in the cycle. | Give the event task a higher priority than the task of the other instance. |
+| On the runner, no run for a short pulse | The pulse is shorter than the poll period of the device. | Use a device that gives each change immediately. Or hold the signal at 1 for more than the poll period. |
+| On the runner, a change at the device does not run the task | The trigger has a [force](../reference/glossary.md#force). A force or an unforce that changes the trigger runs the task immediately. | Read [Force an input point](force-inputs.md). |
 
 ## See also
 

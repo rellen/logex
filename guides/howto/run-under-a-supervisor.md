@@ -176,12 +176,12 @@ If the runner does not start, the supervisor stops with the reason
 with the same reason. If your process traps exits,
 `Supervisor.start_link/2` returns `{:error, reason}` with that reason in its place.
 
-| What you see | Cause and what to do |
-|---|---|
-| `no runner is running under the name Packing` | The runner stopped or crashed. Start a new runner, as [The result](#the-result) shows. |
-| `{:io_init, "panel", cause}` in `reason` | The runner cannot open the device `panel`. [Run a plant on the clock](run-on-the-clock.md) gives each reason. |
-| An `ArgumentError` in `reason` | An option is wrong. The message of the `ArgumentError` gives the option. |
-| `{:error, :not_found}` from `restart_child/2` | The supervisor removed the child spec after the runner stopped, because the child is `:temporary`. Start a new runner, as [The result](#the-result) shows. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `no runner is running under the name Packing` | The runner stopped or crashed. | Start a new runner, as [The result](#the-result) shows. |
+| `{:io_init, "panel", cause}` in `reason` | The runner cannot open the device `panel`. | [Run a plant on the clock](run-on-the-clock.md) gives each reason. |
+| An `ArgumentError` in `reason` | An option is wrong. The message of the `ArgumentError` gives the option. | Correct the option in the child spec. |
+| `{:error, :not_found}` from `restart_child/2` | The supervisor removed the child spec after the runner stopped, because the child is `:temporary`. | Start a new runner, as [The result](#the-result) shows. |
 
 ## See also
 
