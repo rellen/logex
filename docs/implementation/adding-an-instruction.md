@@ -120,7 +120,7 @@ end
   first. The clauses of `move` do this.
 - A record of the scan in the env, for example the faults, has an atom key in
   `@own_keys`. See
-  [The records of a scan](../architecture/runtime-and-evaluator.md#the-records-of-a-scan).
+  [The records of a scan](../architecture/scan-records-and-faults.md#the-records-of-a-scan).
 - The power out is the power that the instruction gives to the next instruction on its
   path. Each clause must give the power out by a fixed rule. For arithmetic, the rule is
   the ENO output of IEC 61131-3: true, or false when the result wraps.

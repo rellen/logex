@@ -18,7 +18,7 @@ refute their findings. That makes 63 agents in 4 workflows. Each finding went th
 these 4 stages:
 
 1. Find: a reviewer attacked its part of the code by running code. It used fuzzers,
-   metamorphic relations, independent IEC [oracles](../implementation/testing-strategy.md#oracles),
+   metamorphic relations, independent IEC [oracles](../implementation/testing-walks.md#oracles),
    random walks, real-clock probes and mutation.
 2. Refute: a second agent, in its own clone, tried to refute the finding.
 3. Counter: a third agent tried to refute that verdict.
