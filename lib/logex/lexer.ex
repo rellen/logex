@@ -110,7 +110,7 @@ defmodule Logex.Lexer do
   # number in it cut (`inspected/2`, decision 585). Since decision 586 (RV-32) every
   # refusal of the host contract that quotes a value the host gave quotes it through
   # these, and `inspected/2` is the one call of `inspect/1` in lib/, outside the host
-  # contract too (`quoted_test.exs`; provisional: `PLAN.md`'s RV-32, question 2).
+  # contract too (`quoted_test.exs`; decision 611).
   @shown_start 24
   @past_positive Integer.pow(10, @longest_number)
   @past_negative -Integer.pow(10, @longest_number - 1)
@@ -156,8 +156,7 @@ defmodule Logex.Lexer do
   # integer in its first `@looked` terms, or has more, is shown field by field, as
   # `inspect/1` shows a struct with no `Inspect` of its own, each field through the cut,
   # `%Date{year: 100000000000000000000000… (100001 characters), month: 1, ...}`; a struct
-  # with none, as every struct of logex's, is shown so already (provisional: `PLAN.md`'s
-  # RV-32, question 6).
+  # with none, as every struct of logex's, is shown so already (decision 615).
   @looked 200
 
   defp struct_part(Inspect.Any, struct, options), do: Inspect.inspect(struct, options)

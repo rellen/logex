@@ -212,7 +212,7 @@ defmodule Logex.QuotedTest do
 
     # A line a program edited by hand gives that is no integer, a tuple or a text, is
     # quoted as `inspect/1` shows it, where `"#{line}"` raised Protocol.UndefinedError out
-    # of the refusal for a tuple (provisional: `PLAN.md`'s RV-32, question 3).
+    # of the refusal for a tuple (decision 612).
     test "a line that is no integer, quoted as inspect/1 shows it", %{p: p, s: s, scan: scan} do
       at = fn line -> lined(retyped(p, "total", :bool), opaque(line)) end
 
@@ -1261,10 +1261,10 @@ defmodule Logex.QuotedTest do
   describe "lib/ shows a value only through the one cut" do
     # Every `inspect/1,2` lib/ calls, by its syntax trees: none but the cut's own, in
     # `Logex.Lexer.inspected/2`, so that a refusal written from now on quotes a value
-    # through it or is red here, outside the host contract too (provisional: `PLAN.md`'s
-    # RV-32, question 2). Since RV-32's review, F7: only `Logex.Lexer`'s own `inspected` is
-    # passed over, and `inspect` reached through `apply/3`, `Function.capture/3` or the
-    # `Inspect` protocol's modules is found as a call of it is.
+    # through it or is red here, outside the host contract too (decision 611). Since
+    # RV-32's review, F7: only `Logex.Lexer`'s own `inspected` is passed over, and
+    # `inspect` reached through `apply/3`, `Function.capture/3` or the `Inspect`
+    # protocol's modules is found as a call of it is.
     @lexer "lib/logex/lexer.ex"
 
     defp inspects({:def, _, [{:inspected, _, _} | _]}, acc, @lexer), do: {nil, acc}

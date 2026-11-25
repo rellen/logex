@@ -2230,7 +2230,7 @@ defmodule Logex.Runtime do
     do: later(Logex.Lexer.shown_number(value), Logex.Lexer.shown_number(now), value - now)
 
   # RV-32's review, F8: two long numbers whose cuts read alike are told apart by how far
-  # (provisional: `PLAN.md`'s RV-32, question 5).
+  # (decision 614).
   defp later(same, same, by),
     do: "#{same} is later than the instance's now, #{same}, by #{Logex.Lexer.shown_number(by)}"
 
@@ -2472,7 +2472,7 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, "expected a %Logex.Scan{}, got: #{Logex.Lexer.inspected(other)}")
 
   # RV-32's review, F8: two long times whose cuts read alike are told apart by how far
-  # (provisional: `PLAN.md`'s RV-32, question 5).
+  # (decision 614).
   defp backwards(same, same, by),
     do:
       "time went backwards: this scan is at #{same} ms, but the instance was last " <>
@@ -2860,8 +2860,7 @@ defmodule Logex.Runtime do
 
   # Decision 586 (RV-32): a line through the one cut, a long one's start and count, and
   # one a program edited by hand gives that is no integer as `inspect/1` shows it, where
-  # a tuple raised `Protocol.UndefinedError` out of the refusal (provisional: `PLAN.md`'s
-  # RV-32, question 3).
+  # a tuple raised `Protocol.UndefinedError` out of the refusal (decision 612).
   defp on_line(%Tag{line: line}), do: " (declared on line #{Logex.Lexer.inspected(line)})"
 
   # The configuration, checked again: check/1 raises the host's mistakes itself, and a
@@ -5508,7 +5507,7 @@ defmodule Logex.Runtime do
   defp computes_in({:ok, type}, _at, _destination), do: type
 
   # An op's line through the one cut, a value of a program edited by hand however it was
-  # edited (decision 586; provisional: `PLAN.md`'s RV-32, question 3).
+  # edited (decisions 586 and 612).
   defp computes_in({:error, what}, {op, line}, destination),
     do:
       raise(

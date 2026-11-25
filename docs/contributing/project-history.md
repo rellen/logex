@@ -49,7 +49,7 @@ gantt
   M5 data types : 2026-10-21, 2026-10-28
   M6 retained values : 2026-10-27, 2026-11-02
   Review, RV-1 to RV-19 : 2026-11-01, 2026-11-13
-  RV-20 to RV-31, DOC-1 step 1 : 2026-11-12, 2026-11-23
+  RV-20 to RV-32, DOC-1 steps 1, 2 : 2026-11-12, 2026-11-24
 ```
 
 Figure: the blocks of work by date. Milestone 1 took 4 weeks. Each later block took 1
@@ -205,11 +205,12 @@ entry of the item in `PLAN.md` names.
 
 | Item | What it does | Decisions |
 |---|---|---|
-| RV-32 | Each refusal of the host contract that quotes a value of the host cuts a long value as a compile cuts one. A test of the cache of the PLT named for what it checks | 586 and 587 |
-| DOC-1, steps 2, 3 | The pages of this site, a short README, then a review of the whole | 546 to 548, 556 to 572 |
+| RV-33 | A refusal of many errors of the host gives the first 100 and a count of the others. A refusal cuts a long text. `Logex.Runtime.instance/1` refuses a struct where a map must be | 610, 613 and 616 |
+| DOC-1, step 3 | A review of the whole. The pages changed by the answers to step 2: the length of a page, the words and the sources of the claims about Logix. Also the pages on a phone, the uses of logex and the decision records | 546 to 548, 556 to 572, 589 to 595 |
+| RV-34 | The behaviours that step 2 of DOC-1 found: the store, forcing and the host contract. Also 4 messages, 4 warnings, the help of a refusal, the tests and the tools | 596 to 607 |
 | RV-23 | Each "provisional" mark traced to its decision, or put to the maintainer | 519 |
 | RV-25 | The runner and the contract test file split by concern, with no change of behaviour | 515 |
-| DOC-2 | The documentation of each module written again by the style guide | 546 |
+| DOC-2 | The documentation of each module written again by the style guide, with the words of the messages and the warnings | 546, 596 |
 
 logex has no release. `mix.exs` gives the version 0.1.0, and `CHANGELOG.md` has only
 `## Unreleased` (decision 541).

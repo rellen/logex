@@ -7981,6 +7981,13 @@ on the drive.
 
      **Taken: the heartbeat the device was given,** the time after which the plant
      actually went off, the same on every run (the maintainer, 2026-10-19).
+     *(Since decision 609, 2026-11-24, the text above kept: a runner stuck 3 s inside the
+     conveyor's step trips `{:watchdog, {:task, "fast", ms, 50}}` once it is back, the
+     step's time and its watchdog, every device at 0 by its own deadline meanwhile
+     (`trip_test.exs`'s step stuck 59 and 60 ms, and 3,000 ms in a run for this record);
+     `{:watchdog, {:device, device, ms}}`, with the heartbeat this decision takes, comes
+     from a runner stuck between rounds, in its own work, `{:device, "drive", 110}` at an
+     idle watchdog of 100 and a poll of 10.)*
 
 **The maintainer's answers after M4-5's review, 2026-10-19.** M4-5 landed with four
 readings the record left open, each the option closest to the record and to Logix, the
@@ -11056,6 +11063,10 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      or in a block, but the parser's three", which the review after Milestone 6 found the
      grep of lines could not hold, a7-docs-9: it took an example in `Logex.Runner`'s
      moduledoc for "the runner's one" and saw no conditional written inline.)*
+     *(Since decision 609, 2026-11-24, the text above kept: `end_to_end_test.exs` names no
+     draws; `clauses_test.exs`'s "an end-to-end test's oracle, and every function and test
+     beside it, holds no conditional" holds every module of it to no conditional at all,
+     and `@draws` is the walks' of `api_contract_test.exs` alone.)*
 265. **Milestone 5's done sentence (Milestone 5),** M5-16's question, which its review
      answered for itself by building the one plant. **Taken: accepted as is; Milestone 5
      is closed** (the maintainer, 2026-10-26): `end_to_end_test.exs`, "Milestone 5's done
@@ -14105,6 +14116,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: kept (a)** (the maintainer, 2026-11-07), as a statement of the rule, its
      comment saying so. *(RV-17, 2026-11-07: `retain_edit_test.exs`'s comment says so, with
      this number, and `PLAN.md`'s RV-7 entry names it.)*
+     *(Since decision 609, 2026-11-24, the text above kept: the test it keeps,
+     `retain_edit_test.exs`'s "an edit of programs that retain nothing pays nothing for
+     the qualifiers", bounds the switch of programs marked `non_retain` by that of
+     unmarked ones, the least of nine paired counts of `Logex.Edit.test/2`, and counts no
+     fresh start.)*
 
 464. **A load waits on every other file call of the VM (the review after Milestone 6),**
      RV-7's question 7: `Logex.SourceFile` reads and looks at files through the VM's file
@@ -14419,6 +14435,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `{:io, device, :timeout}`, the device killed and in `unzeroed` (provisional).
      `trip_test.exs`'s probe and the cap's threshold; the runner walk's
      `:hang_late_cap`.)*
+     *(Since decision 592, 2026-11-24: "as a Logix connection faults after four missed
+     packets at its RPI" is no manual's; decision 134's figure stands, a timeout of at
+     least 100 ms that grows with the RPI, 160 ms at the default RPI of 20 ms (1756-UM001Q,
+     p.158). The cap is logex's own rule, unchanged.)*
 
 485. **The runner's lateness seen at any look (the review after Milestone 6),** RV-6's
      question 4 (decision 461): the runner's lateness is read at every look for silent
@@ -14492,6 +14512,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision's number; since decision 490 it is the reading of a look that comes within
      the cap of the runner's last, one more than the cap after it naming the runner's
      lateness.)*
+     *(Since decision 592, 2026-11-24: a Logix connection does not fault after four missed
+     packets at its RPI; decision 134's figure stands, a timeout of at least 100 ms that
+     grows with the RPI. The reading taken, the same reason, is unchanged.)*
 
 490. **The cap where nothing is hung (the review after Milestone 6),** RV-18's question 1,
      extended (decisions 484 and 489): a fan line's host that stalls once for 211 ms, idle
@@ -14549,6 +14572,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(RV-19, 2026-11-10, `663c36d`: the marks RV-18 left on it, in `Logex.Runner`'s
      moduledoc, overdue/2's and judged/4's comments and README, are this decision's
      number.)*
+     *(Since decision 592, 2026-11-24: Logix does not time a connection out at four RPIs
+     with nothing added; decision 134's figure stands, at least 100 ms, 160 ms at the
+     default RPI of 20 ms, eight RPIs. The sum taken is unchanged.)*
 
 492. **Where a long step's turn begins (the review after Milestone 6),** RV-18's question
      3 (decision 486): a lamp test's step of 80 ms, idle 50, ends at 1080 ms, the panel
@@ -16211,6 +16237,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      or a location that is text quoted whole, as `check/1` has quoted one. Not taken: a
      text or a list cut at 60 bytes; shown whole. Elixir's own messages show a value
      through `inspect/1` and its limits.
+     *(Amended by decision 613, 2026-11-24: a name or a location that is text is quoted
+     whole up to 4,096 bytes and cut past them, with a note that it was cut, as `inspect/1`
+     cuts a text. RV-33 builds it.)*
 
 586. **Which refusals of the host contract cut a long number (RV-31),** RV-31's question
      3: `Logex.Configuration.new!(10 ** 100_000)` quotes a hundred thousand digits, and a
@@ -16237,7 +16266,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      where they were written whole or raw; and a walk of every argument and checked field
      of the host contract with such values, every refusal an `ArgumentError` whose message
      is text under 5,000 bytes. Provisional: `PLAN.md`'s "RV-32 as built", questions 1 to
-     3, and its review's questions.)*
+     3, and its review's questions.)* *(Since the answers to RV-32's questions, 2026-11-24:
+     decisions 610 to 616 settle them, 611, 612, 614 and 615 taking the cut as built and
+     their marks made the numbers, 610, 613 and 616 built by RV-33.)*
 
 587. **A test's name made true (RV-31),** RV-31's question 4: `scripts_test.exs`'s test of
      the PLT's cache is named for what the workflow's comment said before decision 580.
@@ -16261,6 +16292,319 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      as before. Not taken: two refusals in turn; a location that is none read as located
      for the value. IEC writes a location as one token, `%IX0.0`, with no second spelling;
      in Logix an I/O tag is its module's, and a misspelled address names no tag.
+
+589. **How long a page may be, and a decision record (DOC-1's close),** DOC-1's close's
+     question 1: by the checker on the reviewed tree, 29 of the 44 how-to guides pass 1,650
+     words and 20 of the 23 decision records pass 2,000, record 0017 holding 5,382, where
+     the style guide splits a page above about 1,500 and the record template says "1 page".
+
+     **Taken: about 1,500 words the aim, 2,000 the limit (b)** (the maintainer,
+     2026-11-24): a page over 2,000 words is cut or split, and a decision record's runs and
+     long tables go to a contributor page it links. Not taken: 1,500 held now, about 50
+     pages more; the rule changed to the pages as built; the checker made to count no table
+     or alternative text and the pages judged again. DOC-1's third step builds it.
+
+590. **"Test", the online edit's step and an ExUnit test (DOC-1's close),** DOC-1's close's
+     question 2: the glossary's `test` is the edit's step, `Logex.Edit.test/2`, and about
+     20 pages say "test" for an ExUnit test too.
+
+     **Taken: the step keeps the word, the suite's are "ExUnit tests" (a), with a words
+     table for contributors (i)** (the maintainer, 2026-11-24): on the user's pages "test"
+     is the edit's step alone and a test of the suite an "ExUnit test"; the contributors'
+     own words are a words table on the contributor pages, not entries of the user's
+     glossary. Not taken: two glossary headings; the step always "the test step"; a group
+     "Contributors" in the glossary. DOC-1's third step builds it.
+
+591. **What a user page shows outside the host contract (DOC-1's close),** DOC-1's close's
+     question 3: `literals.md` names `Logex.Printer.print/1` and `Logex.Parser.parse/1`,
+     and `programs-as-data.md` prints a compiled rung, each with a sentence that it is
+     outside the contract.
+
+     **Taken: the contract only on reference and how-to pages (c)** (the maintainer,
+     2026-11-24): a reference page and a how-to guide use the host contract alone; an
+     explanation page may show one example from outside it, under a Caution. Not taken: as
+     built; the contract only, on every user page. DOC-1's third step builds it.
+
+592. **A statement about Logix that no manual supports (DOC-1's close),** DOC-1's close's
+     question 4: decision 484 says a Logix connection "faults after four missed packets at
+     its RPI", where decision 134 quotes the manual, a timeout of at least 100 ms, 160 ms
+     at the default RPI of 20 ms, eight RPIs; and record 0013's major fault sending the
+     outputs to their fault state is `PLAN.md`'s text, not a manual's.
+
+     **Taken: each claim with its source or "Not recorded" on `differences-from-logix.md`
+     (a), sourced claims alone on every other page (b), and decision 134 over 484** (the
+     maintainer, 2026-11-24): `differences-from-logix.md` gives each claim's source or says
+     "Not recorded"; every other page makes only a claim it can source; and the manual
+     decision 134 quotes (1756-UM001Q, p.158) stands over decision 484's four missed
+     packets, a note against 484, 489 and 491, which repeat them, saying so (decision
+     490's "a Logix controller frozen past four RPIs" leans on them too). Logix's
+     timeout is a time with a floor of 100 ms that grows with the RPI, not a count of
+     packets. Not taken: sourced claims alone everywhere; the sources on a contributor
+     page; decision 484's words kept. DOC-1's third step builds the pages; the notes are
+     made with this record.
+
+593. **The pages on a phone (DOC-1's close),** DOC-1's close's question 5: at a column of
+     about 350 px a timing diagram of up to 741 px is cut, a Mermaid diagram's labels
+     shrink to 5 to 10 px, and a how-to failure table's third column is off the screen, so
+     16 of the 44 how-to guides changed the template's table, in four ways.
+
+     **Taken: one CSS rule for the pictures, the tables scrolled (c)** (the maintainer,
+     2026-11-24): one CSS rule shrinks a picture to the column; a table keeps its three
+     columns and scrolls; a Mermaid diagram stays at its default; and the 16 how-to tables
+     are made the template's again (the close's C20). Not taken: desktop first, every table
+     the template's; a phone a target, the template two columns. DOC-1's third step builds
+     it.
+
+594. **What logex is for, and where a defect is reported (DOC-1's close),** DOC-1's
+     close's question 6: the first page names no use of logex, and only a how-to's row of
+     `{:internal, message}` links the repository's issues.
+
+     **Taken: three or four uses drafted for the maintainer to correct (b), and the
+     repository's GitHub issues linked (i)** (the maintainer, 2026-11-24): DOC-1's third
+     step drafts three or four uses, for example learning ladder logic, simulating a
+     conveyor or a box counter before commissioning, testing ladder programs in CI and a
+     lab rig that is no safety function, said in the same words on README and
+     `what-logex-is.md`, and the maintainer corrects them; README and
+     `restart-after-a-trip.md` link the GitHub issues as the place to report a defect. Not
+     taken: no uses named, or only what logex is not; another channel, or none. The
+     question gave `restart-after-a-trip.md` as the page whose `{:internal, message}` row
+     links the issues today; that row is `find-why-a-plant-tripped.md`'s, and
+     `restart-after-a-trip.md` links none. DOC-1's third step builds it.
+
+595. **A decision record when a later decision changes it (DOC-1's close),** DOC-1's
+     close's question 7: the records' index says a record is edited in place, and defines
+     a status "Withdrawn" that no record has.
+
+     **Taken: in place while its choice holds, a new record when the choice changes (c),
+     "Withdrawn" kept** (the maintainer, 2026-11-24): a record is edited in place while its
+     choice holds, citing the new decision; a new record supersedes it when the choice
+     changes; and "Withdrawn" stays for a record whose choice was dropped. Not taken: in
+     place always, "Withdrawn" dropped; a record fixed once accepted, as Nygard's are.
+     DOC-1's third step builds it.
+
+596. **The behaviours the writers found, beside questions 9 to 32 (DOC-1's close),**
+     DOC-1's close's question 8, some 46 findings: one element of a retained array out of
+     its type's range drops the whole array to its initial values; `child_spec/1` of the
+     runner takes any value, the error coming only at the supervisor's start; and no test
+     holds "the core reads no clock".
+
+     **Taken: one review item for the store, forcing, the host contract and the tests and
+     tools, the messages and warnings to DOC-2 (b)** (the maintainer, 2026-11-24): the
+     findings of question 8's groups *the store and forcing*, *the host contract* and
+     *tests and tools* are one review item; those of its groups *messages* and *warnings
+     missing or lost* go to DOC-2, which rewrites the modules' text. Not taken: one review
+     item for all; nothing opened, the pages stating the behaviour. RV-34 is the review
+     item; DOC-2 takes the wording.
+
+597. **Four messages that are not true (DOC-1's close),** DOC-1's close's questions 9, 10,
+     13 and 27: `var_input w word / var_output d byte / not w d` is told that `not`
+     computes in `d`'s type, a byte, where it computes in the source's (decision 214).
+
+     **Taken: each made true, pinned whole** (the maintainer, 2026-11-24): `not` and the
+     shifts are told they compute in the source's type (decision 214); a bit coil's warning
+     names the one bit the coil writes, an `otl out.[sel]` beside an `ote out.[other]`
+     told that the `otl` writes one bit and not `out` whole, and the warning of a `move 0
+     faults[1]` after `ote faults[1].0`, given at the move's line and naming the coil's
+     bit, made true too; a `var_output` nothing writes is told the value it holds,
+     16777216.0, and not its spelling, 16777217.0; and an unconnected `var_input` is no
+     longer offered a point, a connection to which is refused. Not taken: given to DOC-2;
+     left as the pages document them. RV-34 builds it.
+
+598. **Four warnings, given wrongly or lost (DOC-1's close),** DOC-1's close's questions
+     11, 12, 15 and 32: under `task trip single estop interval 30 priority 0` the one-shot,
+     counter and `tp` warnings say the trigger "is true at every run and never pulses",
+     where a run at its due time reads it as 0, so it pulses and counts.
+
+     **Taken: all four fixed** (the maintainer, 2026-11-24): only a task whose trigger
+     truly never pulses is warned, so an event task with an interval is not; a real's
+     limit compare, `ge speed -3.4028235e38`, warned as an `int`'s is; a block's warnings
+     travel with its type, given through `types:` and by `compile_files/1` to every program
+     that holds it; and a configuration's real initial list warns ten and a count, as a
+     program's does. Not taken: questions 15 and 32 alone; left. RV-34 builds it.
+
+599. **Three refusals that could help more (DOC-1's close),** DOC-1's close's questions 14,
+     16 and 28: `xic a otee x` is told "unknown instruction `otee`" with no did-you-mean,
+     where `mov` gets one.
+
+     **Taken: all three** (the maintainer, 2026-11-24): an unknown instruction is offered
+     a did-you-mean by the bounded search a tag's name has (decision 520); a missing
+     block's file is named, `var x nofile` told of the file looked for; and a
+     configuration whose program type does not compile still reports its instances'
+     connection errors beside the compile's. Not taken: questions 14 and 16 alone; left.
+     RV-34 builds it.
+
+600. **Forcing and an adapter's reason (DOC-1's close),** DOC-1's close's questions 19, 20
+     and 21: after two cut force writes `forces_unknown` names the last write's set alone,
+     where the file may hold the first's.
+
+     **Taken: all three** (the maintainer, 2026-11-24): `forces_unknown` names every set
+     the file may hold; each problem of a force line is told, `zone_t[4] 1.0e39` after
+     `zone_t 1 2 3` told the value that does not fit as well as the line forced already;
+     and an adapter's linked helper that ends while `init/3` runs keeps its real reason in
+     the trip, as `Logex.IO`'s documentation says, where it reads `{:down, :noproc}`. Not
+     taken: question 21 alone; left. RV-34 builds it.
+
+601. **A configuration the file cannot print (DOC-1's close),** DOC-1's close's question
+     17: a real global built from Elixir with `initial: 0.1` is taken by `new!/1`, and
+     `Logex.Configuration.Text.print/1` raises that it is "not an entry a configuration
+     file can say".
+
+     **Taken: `print/1` writes every configuration `new!/1` accepts** (the maintainer,
+     2026-11-24), a real as its shortest text that reads back to the same value. Not taken:
+     `new!/1` refusing what the file cannot spell; `print/1` left raising. RV-34 builds it.
+
+602. **`Logex.Edit`'s "restart what does not fit" (DOC-1's close),** DOC-1's close's
+     question 18: a type change is refused at accept, and a state with a value outside its
+     type by `scan/3` first, so no host path seems to reach the rule.
+
+     **Taken: a search for a host path that reaches it** (the maintainer, 2026-11-24): if
+     one exists a test is pinned to it; if none, the rule and its text are removed, and
+     that is recorded as a decision. Not taken: removed now; kept as a guard, marked
+     unreachable. RV-34 builds it.
+
+603. **A warm fresh start of a large store (DOC-1's close),** DOC-1's close's question 22:
+     a warm fresh start matched 65,536 retained timers in 28 s in the caller, no device
+     open meanwhile, and a 3.6 MB store's write, 2.6 s, outlasts a 1 s period.
+
+     **Taken: the warm match under the store's time limit** (the maintainer, 2026-11-24),
+     `{:retain, :timeout}` past it, as a retained `ton[65536]` with no store is refused at
+     5,239 ms; and the runner's documentation gives the time a plant of its stated size
+     takes, and says that a period shorter than a write is stretched. Not taken: documented
+     alone; made faster first. RV-34 builds it.
+
+604. **A store edited by hand (DOC-1's close),** DOC-1's close's question 23: an end line
+     added to a store cut short reads the lost values at their initial values, `dropped:
+     []`, and a value line removed with the count lowered gives its tag the initial value
+     unreported; decision 355's end line guards a cut, not a hand.
+
+     **Taken: a digest of the value lines** (the maintainer, 2026-11-24): the store holds
+     a digest of its value lines, and a hand edit that does not mend it is refused at the
+     start with the usual way out. It is a change of the store's format: how it is
+     versioned beside `logex retain 3` is the builder's to propose, provisional. Not taken:
+     said so alone; warned in `status/1` at the start. RV-34 builds it.
+
+605. **Three gaps of the suite (DOC-1's close),** DOC-1's close's questions 24, 25 and 26:
+     `evaluation_test.exs` passes the mutant that gives a de-energised `ote` power, which
+     only one end-to-end test, two walks and the examples' test catch.
+
+     **Taken: all three** (the maintainer, 2026-11-24): the evaluator's own test of a
+     de-energised `ote`; a test holding the toolchain's five pins, `mix.exs`,
+     `examples/mix.exs`, `.tool-versions`, `shell.nix` and `flake.nix`, and CI to one
+     version; and `trip_test.exs`'s "a hung input card while every wake is late trips
+     within the cap", which asserts a trip at 220 ms past a cap of 210, root-caused, then
+     its bound the cap or its name saying what it holds, never only a looser bound. Not
+     taken: questions 24 and 25 alone; left. RV-34 builds it.
+
+606. **The example adapter's waits (DOC-1's close),** DOC-1's close's question 29:
+     `examples/line_device.exs` waits 1,000 ms for its card, past the runner's 510 ms for a
+     device's call, so a silent card trips `{:io, "panel", :timeout}`, the device is
+     killed, `close/1` never runs and the card keeps its outputs.
+
+     **Taken: the waits under the runner's device limit** (the maintainer, 2026-11-24), a
+     comment tying them to it and the page saying why. Not taken: the runner calling
+     `close/1` before it kills a device that timed out; a Warning on the page alone.
+     RV-34 builds it.
+
+607. **A tag declared from Elixir (DOC-1's close),** DOC-1's close's question 30:
+     `Logex.Tag.new!/5` is in the host contract, and nothing in the contract takes its
+     tag, `compile/2` refusing `declared:`.
+
+     **Taken: `compile/2` takes `declared:`** (the maintainer, 2026-11-24),
+     `Logex.Tag.new!/5`'s tags beside the source's declarations. Not taken: `Tag.new!/5`
+     taken out of the host contract; left, the page saying it serves `instructionize/3`
+     alone. RV-34 builds it.
+
+608. **Why the toolchain's bound stands (DOC-1's close),** DOC-1's close's question 31:
+     `CLAUDE.md` says the code needs Elixir 1.20, where the newest calls of `lib/` are
+     `Process.set_label/1` (1.17) and `Map.split_with/2` (1.15), and none of 1.18 to 1.20
+     was found.
+
+     **Taken: the reason decision 359 gives** (the maintainer, 2026-11-24): one toolchain
+     pinned for every run; `mix.exs` unchanged. Not taken: a real need of 1.18 to 1.20
+     searched for and cited; the sentence left. Made with this record: `CLAUDE.md`'s
+     bullet on the toolchain says "one toolchain pinned for every run (decision 359)".
+
+609. **Three decisions' texts and a changelog sentence (DOC-1's close),** DOC-1's close's
+     notes D16 to D18 and its sentence of `CHANGELOG.md`: decision 463 states its bound as
+     an edit's switch costing no more than a fresh start, where its test bounds the switch
+     of programs marked `non_retain` by that of unmarked ones.
+
+     **Taken: a dated note on each, its text kept** (the maintainer, 2026-11-24): decisions
+     463, 137 and 264 each carry a note of what the code and its test hold now; and
+     `CHANGELOG.md`'s Unreleased entry says the host's API is the host contract's reference
+     page's, where it said README's. Not taken: the decisions rewritten in place; the code
+     changed to the decisions' words. Made with this record.
+
+610. **A refusal of a great many mistakes (RV-32),** RV-32's question 1: a box counter's
+     bridge keys its inputs by register number by mistake and sends 100,000 of them at
+     once, and `put_inputs/3` refuses in some 0.4 s with 100,000 lines and 9.6 MB.
+
+     **Taken: the first hundred and a count of the rest (b)** (the maintainer,
+     2026-11-24): a refusal that tells a line a mistake tells the first hundred and how
+     many more there are, as decision 520 bounds the did-you-mean: `put_inputs/3`,
+     `Logex.IO.bind!/2` and any other refusal that lists. Not taken: every line, as built;
+     ten and a count. Neither IEC nor Logix has a host API to compare. RV-33 builds it.
+
+611. **Where the cut is used (RV-32),** RV-32's question 2: a test harness hands
+     `Logex.Parser.parse/1`, outside the host contract, a list that holds a long number.
+
+     **Taken: every `inspect/1` of `lib/` through the cut, as built (a)** (the maintainer,
+     2026-11-24): the harness is told the number's first 24 characters and its count, and
+     `quoted_test.exs` holds `lib/` to the one call. Not taken: the contract's modules
+     alone, the number told whole as Elixir would. Its marks made with this record.
+
+612. **A struct built or edited by hand (RV-32),** RV-32's question 3: a fan controller's
+     program is edited by hand after it compiled, an op's line set to `10 ** 100_000`.
+
+     **Taken: its fields a host's values, cut, as built (a)** (the maintainer,
+     2026-11-24): the struct is the host's, so its fields are quoted through the cut, an
+     op's line that is no integer as `inspect/1` shows it, and a wrong shape is an
+     `ArgumentError`, where a tuple raised `Protocol.UndefinedError`. Not taken: the
+     arguments alone cut, a struct's fields quoted as before. Its marks made with this
+     record.
+
+613. **A long name that is valid text (RV-32),** RV-32's question 4: a box counter's bridge
+     sends a megabyte of garbage that is valid UTF-8 as an input's key, and the operator's
+     log gets a megabyte after some 2 s.
+
+     **Taken: cut past 4,096 bytes (b)** (the maintainer, 2026-11-24): a text past 4,096
+     bytes is cut in a refusal, as `inspect/1` cuts a text by default, with a note that it
+     was cut, so the log gets a line, the key's start and that it was cut. It amends
+     decision 585's "a name or a location that is text quoted whole". Not taken: whole, as
+     decision 585 stood; cut at 60 bytes, as a store's refusal cuts a text. IEC has no host
+     API; Logix's tag names are 40 characters at most, refused longer. RV-33 builds it.
+
+614. **Two long numbers that cut alike (RV-32),** RV-32's question 5: a fan's timer `last`
+     and the instance's `now`, both past 10,000 digits, differ by 5, and their two cuts
+     read alike.
+
+     **Taken: "by N" where the cuts read alike, as built (a)** (the maintainer,
+     2026-11-24): the refusal adds by how much they differ, "…, by 5", and a short pin is
+     unchanged. Not taken: two cuts alike, which read as a contradiction; the cut showing
+     the last digits too, everywhere. Neither IEC nor Logix has a number past 64 bits to
+     show. Its marks made with this record.
+
+615. **A struct that writes itself out, too large to look through (RV-32),** RV-32's
+     question 6: a lamp panel's host hands `new!/1` a `MapSet` of 300 lamp names by
+     mistake.
+
+     **Taken: the first 200 terms looked at, as built (a)** (the maintainer, 2026-11-24): a
+     struct with an `Inspect` of its own whose first 200 terms hold a long number, or which
+     has more, is shown field by field, `%MapSet{map: %{...}}`, bounded and cheap. Not
+     taken: the whole struct looked through, its cost growing with it; every such struct
+     field by field, always. Elixir's own messages show a struct through its `Inspect`.
+     Its marks made with this record.
+
+616. **A program edited by hand that holds a struct where a map is due (RV-32),** RV-32's
+     question 7: a box counter's host puts a `Date` where a compiled program's tag table
+     goes, and `instance/1` raises `Protocol.UndefinedError`, Elixir's message, 100 KB with
+     a long year.
+
+     **Taken: `instance/1`'s shape check refuses it (b)** (the maintainer, 2026-11-24), a
+     pinned `ArgumentError`; `put_inputs/3` and `call/4` unchanged, a program edited after
+     `instance/1` being trusted. Not taken: left outside the contract, as now; every entry
+     point checking the program's shape again, a cost on every scan. IEC has no host API;
+     in Logix a program is downloaded whole and checked when it is. RV-33 builds it.
 
 ---
 

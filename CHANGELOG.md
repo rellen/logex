@@ -28,7 +28,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–588.
+Decisions: 1–616.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (waiting under decision 541, no release planned: its number, and whether its tag is
@@ -41,8 +41,9 @@ and that changed what a running program, or the runner under it, writes, found b
 through §7, oldest first (waiting under decision 541: `PLAN.md`'s RV-22, question 4, its
 reading (b), put to the maintainer when a release is planned); a
 word newly reserved or a form newly refused is told by the compile's own diagnostic, and
-the host's API is README's, so this first entry lists neither apart, but for a call that
-changed after its last item was written, under "The host's API".
+the host's API is `guides/reference/host-contract.md`'s, so this first entry lists neither
+apart, but for a call that changed after its last item was written, under "The host's
+API".
 
 ### What changes a running program's outputs
 
@@ -174,7 +175,8 @@ changed after its last item was written, under "The host's API".
   `` the first `m.limits[0]` ``, where its example line held the constant. Since decision
   586 so does every other refusal of the host contract, `new!/1`'s own lines among them
   (below). Look for: code that reads a number back out of such a message.
-- **Every refusal of the host contract quotes a long number cut** (decision 586), as
+- **Every refusal of the host contract quotes a long number cut** (decisions 586, 612,
+  614 and 615), as
   decision 583's three do: `Logex.compile/2`'s and its loaders', `Logex.Runtime`'s of a
   state, a scan, inputs, a program edited by hand, a resource or a retained image,
   `Logex.Edit`'s and `Logex.Configuration.Edit`'s, `Logex.IO.bind!/2`'s and

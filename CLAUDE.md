@@ -94,8 +94,8 @@ own documentation holds:
 - The toolchain is Elixir 1.20.4 on Erlang/OTP 28, pinned in `mix.exs`, `.tool-versions`,
   `shell.nix`, `flake.nix` and CI: `nix develop`, or `asdf install` / `mise install` from
   `.tool-versions`. On anything older `mix` aborts before it runs. **Never relax
-  `mix.exs`**: the bound is deliberate, the code needs it, and a loosened bound is the
-  kind of edit that lands by accident.
+  `mix.exs`**: the bound is deliberate, one toolchain pinned for every run (decision 359),
+  and a loosened bound is the kind of edit that lands by accident.
 
 ## lib/
 

@@ -112,7 +112,7 @@ review as done.
 ## The items after the review
 
 Decisions 513 to 521 started items RV-20 to RV-25. The answers to their questions, and
-to the questions of the items after them, started RV-26 to RV-31. The table gives the
+to the questions of the items after them, started RV-26 to RV-34. The table gives the
 items in the sequence that they merged into `main`. The last column gives the decisions
 that the entry of the item in `PLAN.md` names, then the day that the item merged, in
 2026.
@@ -130,16 +130,20 @@ that the entry of the item in `PLAN.md` names, then the day that the item merged
 | RV-29 | A store with no resource line and a count that does not read gets the refusal of its count first. The refusal of a renamed configuration gives the full way out | 541 to 545. Merged 11-16 |
 | RV-30 | `scripts/dialyzer.sh` is the fifth step of `scripts/gate.sh`, with `-Wunmatched_returns`. `Logex.Configuration.Global.new!/3` refuses a wrong initial value when it is called | 549 to 555. Merged 11-16 (565f057) |
 | RV-31 | `Logex.Configuration.Global.new!/3` refuses each error of 1 global when it is called: its name, its type, its location and its value. A refusal of the host cuts a long number that it quotes. The comments of CI on its caches | 576, 577, 580 and 583. Merged 11-23 (cd9601a) |
+| DOC-1, step 2 | The pages of this site, the decision records and a short README | 546 to 548, 556 to 572. Merged 11-23 (4ce7465) |
+| RV-32 | Each refusal of the host contract cuts a long value that it quotes. A test of the cache of the PLT named for what it checks | 586 and 587. Merged 11-24 (ea0d31c) |
 
-The answers to the questions of these items are in 5 groups:
+The answers to the questions of these items are in 6 groups:
 
 - 549 to 555: the answers to RV-24, which RV-30 built.
 - 556 to 572: the answers to DOC-1 step 1.
 - 573 and 574: the answers to RV-29.
 - 575 to 583: the answers to RV-30. RV-31 built 576, 577, 580 and 583.
-- 584 to 588: the answers to RV-31. RV-32 builds 586 and 587.
-  [Project history](project-history.md#the-work-that-waits) gives RV-32 with the other
-  work that waits.
+- 584 to 588: the answers to RV-31. RV-32 built 586 and 587.
+- 589 to 616: the answers to step 2 of DOC-1 and to RV-32. Step 3 of DOC-1 builds 589
+  to 595, RV-33 builds 610, 613 and 616, and RV-34 builds 596 to 607.
+  [Project history](project-history.md#the-work-that-waits) gives these items with the
+  other work that waits.
 
 ## Why the review ran this way
 
