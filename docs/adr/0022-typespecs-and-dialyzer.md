@@ -64,18 +64,15 @@ These problems came before the decision:
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) gives a type to the
 interface of each program, but no rule for the API of a host. The decisions compare the
-checks with the tools of IEC 61131-3 and [Logix](../../guides/reference/glossary.md#logix):
+checks with the tools of IEC 61131-3:
 
 - The tools of IEC 61131-3 check a typed interface at each compile, and refuse each
   mismatch (decisions 549 and 550).
-- The Verify command of Logix Designer checks a project before each download to the
-  controller. An error stops the download, and a warning goes into a list (decisions 549
-  and 550).
-- Neither has a mark that hides 1 warning (decision 551).
+- They have no mark that hides 1 warning (decision 551).
 - Code outside a [function block](../../guides/reference/glossary.md#function-block) of
   IEC 61131-3 reads its internal values only through its outputs (decision 553).
 
-The source of these claims about the tools is not recorded.
+The source of these claims about the tools of IEC 61131-3 is not recorded.
 
 ## Decision
 

@@ -12,7 +12,8 @@ defmodule Logex.MixProject do
         "A Ladder Logic compiler and interpreter: a ladder program written as text, " <>
           "compiled to data and run one scan at a time, with configurations, tasks " <>
           "and online edit.",
-      package: package(),
+      # No `package:`: logex has no release on Hex, and ExDoc links every page's footer to
+      # the package mix.exs names, which `scripts/site.exs check` refuses as a dead link.
       source_url: @source_url,
       start_permanent: Mix.env() == :prod,
       # The golden record's generator lives beside its fixture; it is run by hand, not
@@ -182,13 +183,6 @@ defmodule Logex.MixProject do
   end
 
   defp before_closing_body_tag(_format), do: ""
-
-  defp package do
-    [
-      licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url}
-    ]
-  end
 
   # ExDoc builds the documentation and nothing else needs it, so it is a dependency of the
   # `docs` environment alone, the one `mix docs` runs in (`cli/0`). In every other

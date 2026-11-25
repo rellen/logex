@@ -49,9 +49,8 @@ The file server of the VM, `:file_server_2`, does 1 call at a time. Thus 1 stall
 holds each other file call of the VM that goes through it (decision 464).
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) has no external forces file (decisions 493, 506 and 507).
-[Logix](../../guides/reference/glossary.md#logix) keeps its forces in the memory of the controller (decisions 390, 437
-and 499), and answers status during a change of mode (decision 500). The source of these
-claims about Logix is not recorded.
+In [Logix](../../guides/reference/glossary.md#logix), "I/O forces are held by the controller and not by the programming
+workstation" (1756-PM004L, p.53, and decisions 390, 437 and 499).
 
 ## Decision
 

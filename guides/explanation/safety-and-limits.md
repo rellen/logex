@@ -165,7 +165,8 @@ Thus the plant must do these things with no help from logex:
 
 A controller, for example a [Logix](../reference/glossary.md#logix) controller, is
 hardware. logex is a library. The computer and its operating system are the work of the
-host. As in a controller, the runner trips after a task runs too long.
+host. A Logix controller gives each task a watchdog, and a task that runs too long
+gives a major fault (1756-PM005M, page 34). The runner trips after a task runs too long.
 
 logex does not have each part of IEC 61131-3 or of a controller. For example, it has no
 type for a time, no strings and no [force](../reference/glossary.md#force) of an output

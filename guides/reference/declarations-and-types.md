@@ -736,9 +736,8 @@ on the page Source syntax gives the rule.
 ### The script
 
 The script is the file `examples/declarations-and-types-wrong.exs` of the repository. It
-is not necessary to read the script to use the diagnostics. A check of the repository
-runs the script and compares its output with this page. Thus each message on this page
-is a message that logex returns.
+is not necessary to read the script to use the diagnostics. A check of the repository runs each script of this page and compares its output with the page. Thus each
+message on this page is a message that logex returns.
 
 | Item | What the script does |
 |---|---|

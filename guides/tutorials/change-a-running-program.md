@@ -276,6 +276,9 @@ If you see these 24 lines, the edit is complete and the new program runs.
 > If you see `ArgumentError`, compare the line that calls `Logex.compile/2` with the
 > script. In a message of logex, the candidate is the new program, and the running
 > program is the old program.
+>
+> If you see `UndefinedFunctionError` and `function Logex.compile/1 is undefined or
+> private`, add `name: "motor"` to the call of `Logex.compile/2`.
 
 The script calls 4 new functions. Each of the first 3 returns the state and a report.
 

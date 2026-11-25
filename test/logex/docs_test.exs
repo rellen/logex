@@ -762,6 +762,34 @@ defmodule Logex.DocsTest do
                site(dir, %{"docs/site-warnings.txt" => listed}, ["check", "log"])
     end
 
+    test "a link to Hex, where logex has no package, is refused as a dead link: the " <>
+           "footer ExDoc writes when mix.exs gives a package",
+         %{tmp_dir: dir} do
+      footer =
+        ~S|<a href="https://hex.pm/packages/logex/0.1.0">Hex Package</a> | <>
+          ~S|<a href="https://preview.hex.pm/preview/logex/0.1.0/show/readme.md">current file</a> | <>
+          ~S|<a href="https://hexdocs.pm/elixir/Kernel.html">Kernel</a>|
+
+      tree =
+        @built
+        |> Map.merge(%{"log" => @warning, "docs/site-warnings.txt" => @listed})
+        |> Map.update!("doc/first.html", &(&1 <> " " <> footer))
+
+      assert {out, 1} = site(dir, tree, ["check", "log"])
+
+      assert String.split(out, "\n", trim: true) == [
+               "site: not in docs/site-warnings.txt: first.html: the link " <>
+                 "`https://hex.pm/packages/logex/0.1.0` leads to Hex, where logex has no package",
+               "site: not in docs/site-warnings.txt: first.html: the link " <>
+                 "`https://preview.hex.pm/preview/logex/0.1.0/show/readme.md` leads to Hex, " <>
+                 "where logex has no package"
+             ]
+    end
+
+    test "mix.exs gives ExDoc no package, so that no page of the site links to Hex" do
+      refute Keyword.has_key?(Mix.Project.config(), :package)
+    end
+
     test "a page that asks for a file ExDoc did not write, docs_config.js, is refused: " <>
            "scripts/docs.sh leaves it empty",
          %{tmp_dir: dir} do

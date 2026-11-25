@@ -239,7 +239,7 @@ IO.inspect(List.last(Sim.writes(panel)), label: "the last write")
 IO.inspect(Sim.closed?(panel), label: "closed")
 ```
 
-10. Run the script. It runs for about 1.3 s.
+10. Run the script. The plant runs for about 1.3 s.
 
 ```console
 $ mix run on_the_real_clock.exs
@@ -327,6 +327,7 @@ With `retain:`, a start that fails can write the [store](../reference/glossary.m
 | What you see | Cause | What to do |
 |---|---|---|
 | `status` is `:tripped` | The runner wrote 0 to each output point and runs no rounds. `trip` gives the reason. | [Restart after a trip](restart-after-a-trip.md) gives the steps. |
+| `trip: {:watchdog, {:device, "panel", 510}}`, and `boxes` is less than 3 | The computer was too busy to run the runner in time. A box of 20 ms can also come and go between 2 rounds. | [Find why a plant tripped](find-why-a-plant-tripped.md) gives each reason. Run the script on a less busy computer. |
 | `the runner #PID<0.161.0> is not running` | `Logex.Runner.status/1`, `Logex.Runner.get!/2` or `Logex.Runner.stop/1` called a runner that stopped or crashed. After a crash, each device wrote 0 to each output point 1 time and closed. | Start a new runner. |
 | `no runner is running under the name Packing` | The same as the row before, for a runner that your code calls by its `name:`. | Start a new runner. |
 

@@ -34,10 +34,7 @@ The engineer must see each error of the text, with its line, to correct the file
 pass. The developer must see the error at the call that has it, with a stack trace.
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) has no rule for the API of
-a host (decision 514). Decision 182 says that Studio 5000 checks the tags and the code of
-a [Logix](../../guides/reference/glossary.md#logix) project together before a download.
-Thus Logix has no compiled program that a host can change. The source of this claim is
-not recorded, and `docs/organisation.md` marks it as not verified.
+a host (decision 514).
 
 Each rule of this record answers a case that logex handled badly in an earlier version.
 For example, the dint `count` of the box counter held 5,000,000,000 in a state. `add`

@@ -70,7 +70,6 @@ I/O (decision 142). [Logix](../../guides/reference/glossary.md#logix) does these
 | The outputs | The controller sends them at each RPI, and in the local chassis also at the end of each task | 1756-UM058L, p.24 |
 | A module that loses its controller | Its outputs go to the value for a fault that its configuration gives | 1756-PM015Q, p.12 |
 | Run mode after a fault of the I/O | The controller makes 1 attempt to connect to each module that the configuration requires | 1756-PM015Q, p.12 |
-| A restart of a controller that runs | No such restart. The nearest is a change to Program mode and back | Not recorded |
 
 [`docs/organisation.md` §8](../organisation.md#8-sources-and-what-is-unverified) records
 when each manual was read. OpenPLC v3 writes 0 to each output when its runtime stops

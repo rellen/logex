@@ -45,14 +45,8 @@ gives what the next start finds after each. The first store had no end line. A s
 that version, cut after its 6th line, started the box counter at 0 with no message.
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) has no store that a person
-edits, and [Logix](../../guides/reference/glossary.md#logix) has none either. That a Logix
-controller keeps all its memory at a loss of power is not recorded:
-[`docs/organisation.md` §8](../organisation.md#8-sources-and-what-is-unverified) marks it
-unverified. CODESYS matches its persistent variables by name and type when a program
-changes (decision 277).
-
-Decision 533 says that the Logix programming software tells an engineer when the project
-differs from the project in the controller. The source of this claim is not recorded.
+edits. CODESYS matches its persistent variables by name and type when a program changes
+(decision 277).
 
 ## Decision
 
@@ -163,6 +157,8 @@ each quoted text (decisions 419, 457 and 574). The runner refuses a store that i
 symbolic link (decision 413).
 
 [Runs and tables of the records: the store](../implementation/record-runs-store.md#0017-the-store-on-disk) gives a run of the box counter `tally` for each rule of this record.
+[Runs and tables of the records: the copies of the store](../implementation/record-runs-store-copies.md#0017-the-store-on-disk-versions-copies-and-refusals)
+gives the versions, the copies and the refusals of the store.
 
 ## Consequences
 

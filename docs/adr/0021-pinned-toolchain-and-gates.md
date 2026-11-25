@@ -70,9 +70,6 @@ A search of the output cannot judge a run. A search for `[0-9]+ passed` reads
 `Result: 40/41 passed` as a pass. The page of the runs gives each problem in full.
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) gives no rule for the toolchain, the gates or a release.
-The firmware of a [Logix](../../guides/reference/glossary.md#logix) controller has a number for each revision, and each
-revision has release notes (decisions 515 and 541). The source of this claim about Logix
-is not recorded.
 
 ## Decision
 

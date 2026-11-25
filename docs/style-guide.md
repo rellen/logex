@@ -191,7 +191,8 @@ GitHub.
   function or a mnemonic.
 - Keep a page to about 1,500 words. A page that is not a reference must not have more
   than 2,000 words. Cut it, or make 2 pages that each have 1 job. `scripts/prose.exs`
-  prints the count of words of each page.
+  prints the count of words of each page. Its rule `length` refuses a page that is not a
+  reference and has more than 2,000 words.
 - Put the runs and the long tables of a decision record on a contributor page, and link
   to that page from the record.
 - Link to a module or a function with its name in a code span: ExDoc makes the link.

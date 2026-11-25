@@ -238,21 +238,8 @@ defmodule Pictures.Rung do
     with {:ok, source} <- File.read(path),
          {:ok, compiled} <- Logex.compile_file(path),
          {:ok, tokens, _line} <- Logex.Lexer.tokenize(source),
-         {:ok, {:routine, {:rungs, parsed}}} <- Logex.Parser.parse(tokens) do
-      program = program(compiled)
-      lines = String.split(source, "\n")
-      written = Enum.take(parsed, -length(program.rungs))
-
-      {:ok,
-       for {{:rung, lowered}, {:rung, elements}} <- Enum.zip(program.rungs, written) do
-         line = line(lowered)
-
-         %{
-           text: lines |> Enum.at(line - 1) |> String.trim(),
-           note: note(lines, line - 1, []),
-           elements: series(lowered, elements, program)
-         }
-       end}
+         {:ok, tree} <- Logex.Parser.parse(tokens) do
+      {:ok, drawn_rungs(source, tree, compiled)}
     else
       {:error, why} when is_atom(why) ->
         {:error, "#{path}: #{:file.format_error(why)}"}
@@ -264,6 +251,25 @@ defmodule Pictures.Rung do
 
       {:error, _} ->
         {:error, "#{path} does not compile: a picture is drawn of a program that does"}
+    end
+  end
+
+  # The rungs of a text's tree as the program compiled from it runs them: the text gives
+  # each rung's line, its note and its words, the program its instructions. A program
+  # that is not the text's, a file changed between its read and its compile, is refused.
+  def drawn_rungs(source, {:routine, {:rungs, parsed}}, compiled) do
+    program = program(compiled)
+    lines = String.split(source, "\n")
+    written = Enum.take(parsed, -length(program.rungs))
+
+    for {{:rung, lowered}, {:rung, elements}} <- Enum.zip(program.rungs, written) do
+      line = line(lowered)
+
+      %{
+        text: lines |> Enum.at(line - 1) |> String.trim(),
+        note: note(lines, line - 1, []),
+        elements: series(lowered, elements, program)
+      }
     end
   end
 

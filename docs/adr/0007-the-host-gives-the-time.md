@@ -101,7 +101,7 @@ scan that starts it.
 Thus a timer that a scan does not run catches up at its next run:
 
 - A timer in rungs that a jump skips (decision 82, result 3). The conventional set does
-  the same for an RTO, by its formula. For a TON, the source is not recorded.
+  the same for an RTO, by its formula (1756-RM018A, pp.112-113).
 - A timer in a block whose `cal` is false (decision 8, result 4).
 - An instance that a slow task does not scan in each
   [cycle](../../guides/reference/glossary.md#cycle).

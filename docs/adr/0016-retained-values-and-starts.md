@@ -59,11 +59,8 @@ start (p.57):
 IEC 61131-3 does not say which start follows a loss of power. IEC 61131-1 defines the
 starts, but no person read it for this record.
 
-A [Logix](../../guides/reference/glossary.md#logix) controller has no qualifier. That it
-keeps its tag values through a loss of power is not recorded.
-[`docs/organisation.md` §8](../organisation.md#8-sources-and-what-is-unverified) marks it
-unverified. Before the first scan, its pre-scan resets the state of some instructions
-(1756-RM094N p.47).
+A [Logix](../../guides/reference/glossary.md#logix) controller has no qualifier. Before the
+first scan, its pre-scan resets the state of some instructions (1756-RM094N p.47).
 
 An OTL keeps its bit at the pre-scan (1756-RM018A pp.86 and 87). Thus a run bit latched
 with `otl` starts the conveyor again in the first scan. Logix gives a Power-Up Handler
@@ -218,7 +215,7 @@ rules.
 | Decision | Not taken | Why not |
 | Decision | Not taken | Why not |
 |---|---|---|
-| 266 | Each value comes back, as in Logix | Each latched bit comes back, and logex then needs a pre-scan. Each program of that time changes its behaviour |
+| 266 | Each value comes back | Each latched bit comes back, and logex then needs a pre-scan. Each program of that time changes its behaviour |
 | 272 | `retain` on a located global | An output point then comes on from the store itself |
 | 273 | The outage counts | The lube timer counts time in which the motor did not run |
 | 275 | A write each round, or at each change | A sync each round costs the share of the round and wears a flash card |

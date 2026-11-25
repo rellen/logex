@@ -59,8 +59,8 @@ and 140, checked on 2026-10-20):
 | What a force does | It "Overrides the value regardless of the value of the physical device" (p.54) |
 | Where forces are kept | "I/O forces are held by the controller and not by the programming workstation" (p.53). A force "exists in the project" (p.52) |
 | What the operator sees | The FORCE status indicator: "Flashing: At least one tag contains a force value", "Solid: I/O forces are active (enabled)" (p.52) |
-| Power off and on again | Not recorded: the manuals that the project read do not say it |
-| A file of forces | Not recorded: the manuals that decision 140 cites name no such file |
+| Power off and on again | The manuals that the project read do not say it |
+| A file of forces | The manuals that decision 140 cites name no such file |
 
 ## Decision
 
@@ -199,9 +199,8 @@ trigger runs its [event task](../../guides/reference/glossary.md#event-task) in 
 round. A force to the value that the trigger reads already makes no round. A force and an
 unforce of a trigger in 1 joined write make no round (decision 501).
 
-The maintainer gave the reason that a Logix force raises no change-of-state event of a
-module (decision 501). Its source is not recorded. The manuals that decision 138 cites do
-not say it, and give no rule for an event task that a force triggers.
+The manuals that decision 138 cites give no rule for an event task that a force
+triggers.
 
 [Runs and tables of the records: forcing](../implementation/record-runs-forcing.md#0015-input-forcing) gives a run of the packing line for each rule of this record.
 

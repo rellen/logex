@@ -23,7 +23,7 @@ compile of the program, in the option `types:`.
 ## Steps
 
 1. In the root directory of your project, make the file
-   `write-a-function-block-types.exs` with this text.
+   `compile-a-program-from-text.exs` with this text.
 
 ```elixir
 block = File.read!("write-a-function-block/starter.ld")
@@ -43,7 +43,7 @@ For the text of a function block, `Logex.compile/2` returns `{:ok, type}`. The o
 2. Run the script.
 
 ```console
-$ mix run write-a-function-block-types.exs
+$ mix run compile-a-program-from-text.exs
 conveyors: belt_1 = 1
 ```
 

@@ -216,8 +216,9 @@ whole program.
 
 For example, 36 h is 129600000000000 ns. You can write it as `129_600_000_000_000`.
 
-In `cure.ld`, an oven cures a load for 36 h while its door is shut. A fan runs on for
-90 s after the door opens.
+Make the file `cure.ld` in the root directory of your project, with this text. In it, an
+oven cures a load for 36 h while its door is shut. A fan runs on for 90 s after the door
+opens.
 
 <!-- file: cure.ld -->
 ```text
@@ -235,8 +236,9 @@ xic run_on.dn ote fan
 move cure.acc cure_ns
 ```
 
-The script `cure.exs` runs 7 scans. Then it compiles a copy of `cure.ld` with 2 times
-that are not whole ms, to show their [warnings](../reference/glossary.md#warning).
+Make the file `cure.exs` with this text. The script runs 7 scans. Then it compiles a copy
+of `cure.ld` with 2 times that are not whole ms, to show their
+[warnings](../reference/glossary.md#warning).
 
 ```elixir
 {:ok, cure} = Logex.compile_file("cure.ld")

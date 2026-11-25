@@ -34,7 +34,10 @@
 # `check` reads what `mix docs` printed and the site it built in `doc/`. It gathers every
 # warning of the build, `<where>: <message>`, and every dead link of every page built, a
 # link to a file that is not in the site or to an anchor its page does not have, which
-# ExDoc itself does not look for: `<page>: the link ...`. What it gathers must be the
+# ExDoc itself does not look for: `<page>: the link ...`. A link to another site is not
+# followed, but a link to Hex, hex.pm or preview.hex.pm, is a dead link too: logex has no
+# release there, and ExDoc writes such links in every page's footer when mix.exs gives a
+# package. What it gathers must be the
 # lines of docs/site-warnings.txt, each as often as the list has it: what the module text
 # gives today, which DOC-2 clears. A warning or a dead link the list does not have, a
 # page's or a module's, is refused, and so is a line of the list the build no longer
@@ -53,6 +56,8 @@ defmodule Site do
   @link ~r/(!?)\[([^\]]*)\]\(\s*([^)\s]+)(\s+"[^"]*")?\s*\)/
   @heading ~r/^(\#{1,6})\s+(.+?)\s*$/
   @markdown [".md", ".cheatmd", ".livemd"]
+  # Hex's hosts, where logex publishes nothing: a link there leads to no page of logex.
+  @hex ["hex.pm", "preview.hex.pm"]
 
   def staged, do: @staged
   def github, do: @github
@@ -410,6 +415,9 @@ defmodule Site do
       ids
     )
   end
+
+  defp followed(true, _own, {page, link, %URI{host: host}}, _ids) when host in @hex,
+    do: ["#{page}: the link `#{link}` leads to Hex, where logex has no package"]
 
   defp followed(true, _own, _link, _ids), do: []
 

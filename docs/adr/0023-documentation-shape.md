@@ -69,10 +69,7 @@ These problems came before the decision:
 The maintainer asked for user pages and contributor pages in ASD-STE100, Simplified
 Technical English. ASD owns its dictionary, and the repository does not hold its text.
 
-[IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) gives no rule for the shape of a manual. Decision 546 notes
-that the manuals of [Logix](../../guides/reference/glossary.md#logix) have a similar split: a quick start, a programming
-manual and a reference of the [instructions](../../guides/reference/glossary.md#instruction). The source of this claim is
-not recorded.
+[IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) gives no rule for the shape of a manual.
 
 ## Decision
 
@@ -170,8 +167,8 @@ A decision record has these rules:
   tables are on a contributor page that it links (decision 589).
 - It says "ExUnit test" for a test of the suite, and "test" for the step of an online edit
   (decision 590).
-- It gives each claim about Logix its source, or says that the source is not recorded
-  (decision 592).
+- It gives each claim about Logix its source. Only the page of the differences from
+  Logix says "Not recorded" where no record gives a source (decision 592).
 
 ### The suite runs each example
 

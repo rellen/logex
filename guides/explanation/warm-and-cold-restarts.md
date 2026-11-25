@@ -268,7 +268,7 @@ values through a loss of power.
 
 | Subject | IEC 61131-3 | Logix | logex |
 |---|---|---|---|
-| A tag with no qualifier at a warm restart | The implementer decides | Not recorded. The prescan resets some instructions | Initial value |
+| A tag with no qualifier at a warm restart | The implementer decides | The prescan resets some instructions | Initial value |
 | `retain` on an input | Yes | No qualifier | Refused. Each restart keeps the value of the host |
 | A prescan | None | Yes | None |
 | A bit for the first scan | None | `S:FS` | None. A program can make its own bit |

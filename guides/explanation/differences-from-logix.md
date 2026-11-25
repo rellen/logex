@@ -74,8 +74,8 @@ subscript is a rule of logex only.
 ### The sources for Logix
 
 Each statement about Logix on this page is from a publication of its vendor, or the
-table says "Not recorded". No publication that logex cites gives a statement that is
-"Not recorded".
+table says "Not recorded". No publication that logex cites gives a statement of that
+row.
 
 | Publication | Statement, with its page |
 |---|---|
@@ -83,7 +83,8 @@ table says "Not recorded". No publication that logex cites gives a statement tha
 | 1756-RM094N | A bit of an integer (86). An array of timers (85, 86) |
 | 1756-PM004L | An array (34 to 36). A bit of an element, and the range of a bit number (44) |
 | 1756-PM014O | A major fault and its handler (9, 20) |
-| Not recorded | The last instruction of a rung is an output. With a runner as with a Logix controller, the outputs get no value from a scan that has a major fault |
+| 1756-UM900B, Nov 2025 | A major fault sends the outputs to their configured fault state (242) |
+| Not recorded | The last instruction of a rung is an output |
 
 ## What is different in the vocabulary
 
@@ -190,9 +191,10 @@ goes to the host or to the runner.
 
 A runner trips after the run of the [task](../reference/glossary.md#task) that has the
 fault. It does not write the outputs of that [round](../reference/glossary.md#round).
-It writes 0 to each output [point](../reference/glossary.md#point) 1 time. Thus, with a
-runner as with a Logix controller, the outputs get no value from a scan that has a
-major fault (Not recorded). A trip is not a guarantee that each output is off.
+It writes 0 to each output [point](../reference/glossary.md#point) 1 time. In a Logix
+controller, "A major fault on the controller causes the outputs to go to their configured
+fault state" (1756-UM900B, Nov 2025, page 242). A trip is not a guarantee that each
+output is off.
 [Safety and limits](safety-and-limits.md) gives the limits of a trip.
 
 ## Why logex does it this way
