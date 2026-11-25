@@ -49,8 +49,8 @@ A bit string is a pattern of bits, not a number. Thus an arithmetic instruction,
 as `add`, does not take a bit string, and `move` does not copy a bit string into an
 integer type. Use a [conversion](../reference/glossary.md#conversion) first, for
 example `word_to_uint`.
-[Declarations and types](../reference/declarations-and-types.md) gives the rules of
-each type.
+[Elementary types](../reference/declarations-and-types.md#elementary-types) gives the
+rules of each type.
 
 ## Choose the instruction
 

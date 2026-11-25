@@ -262,7 +262,7 @@ The last 3 lines show a value on each path of the diagram:
 
 > #### Warning {: .warning}
 >
-> Do a test of the plant on simulated devices before you use an adapter for hardware.
+> Run the plant on simulated devices before you use an adapter for hardware.
 > With that adapter, the program writes to the outputs of the machine.
 
 To use a device with hardware, give the module of your adapter in `io:`, alone or with a
@@ -289,7 +289,7 @@ If the file has an error, the script stops with a `MatchError` that shows
 field `message:` has the words of this table and the field `line:` gives the line of the
 file. A warning does not stop the script.
 
-| What you see in the message | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `unknown configuration line` | A connection has the global first. | Write the tag of the instance first, then the global. |
 | `a location holds one global` | 2 globals are at 1 location. Each element of an array uses 1 location. | Give 1 of the globals a different location. |
@@ -342,5 +342,5 @@ The runner starts. After a [round](../reference/glossary.md#round),
   point with no connection.
 - [Force an input point](force-inputs.md): how to hold an input point at a value.
 - [Write ExUnit tests on the manual clock](test-on-the-manual-clock.md): the
-  simulated device in a test.
+  simulated device in an ExUnit test.
 - [Glossary](../reference/glossary.md): the technical words.

@@ -303,11 +303,11 @@ place of the assemble. Print each report.
 
 ## If it does not work
 
-| What you see | What to do |
-|---|---|
-| A `MatchError` with the words `cannot be read` | Put each configuration file at the path that the script gives. Do step 1 and step 2 again. |
-| A `MatchError` with the words `unknown program type` | Copy `conveyor.ld` to the directory `edit-a-running-plant`. |
-| An output that is different from the output of step 4 | Compare each file with its block on this page. |
+| What you see | Cause | What to do |
+|---|---|---|
+| A `MatchError` with the words `cannot be read` | The script cannot find a configuration file. | Put each configuration file at the path that the script gives. Do step 1 and step 2 again. |
+| A `MatchError` with the words `unknown program type` | `conveyor.ld` is not in the directory of the new plant. | Copy `conveyor.ld` to the directory `edit-a-running-plant`. |
+| An output that is different from the output of step 4 | A file is different from its block on this page. | Compare each file with its block on this page. |
 
 ## See also
 

@@ -274,18 +274,18 @@ shows the output of each step for the example.
 logex returned `{:error, diagnostics}`. Print each
 [diagnostic](../reference/glossary.md#diagnostic) with `Logex.Diagnostic.format/1`.
 
-| Words of the diagnostic | What to do |
-|---|---|
-| `unknown program type`, at step 2 | Copy each program file to the directory of the new plant, also a file that has no change. |
-| `with a restart`, at step 3 | Find the change in [Changes that need a restart](#changes-that-need-a-restart). Remove it, or stop the runner and start it with the new plant. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `unknown program type`, at step 2 | A program file of the old plant is not in the directory of the new plant. | Copy each program file to the directory of the new plant, also a file that has no change. |
+| `with a restart`, at step 3 | The new plant has a change that an online edit cannot make. | Find the change in [Changes that need a restart](#changes-that-need-a-restart). Remove it, or stop the runner and start it with the new plant. |
 
 ### A function raises an `ArgumentError`
 
-| Words of the message | What to do |
-|---|---|
-| `an edit keeps the configuration's name` | Give the [configuration file](../reference/glossary.md#configuration-file) of the new plant the name of the old file. |
-| `the runner holds no edit` | Do the accept. No accept came before this function, or the edit ended. |
-| `takes an edit` | Do a step that is possible at this stage. [The steps of an edit](#the-steps-of-an-edit) gives the stage for each step. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `an edit keeps the configuration's name` | The configuration of the new plant has a different name. | Give the [configuration file](../reference/glossary.md#configuration-file) of the new plant the name of the old file. |
+| `the runner holds no edit` | No accept came before this function, or the edit ended. | Do the accept. |
+| `takes an edit` | The step is not possible at the stage of the edit. | Do a step that is possible at this stage. [The steps of an edit](#the-steps-of-an-edit) gives the stage for each step. |
 
 In a message, `under test` is the stage `:testing`. An example is
 `assemble takes an edit under test, but this one is accepted`.

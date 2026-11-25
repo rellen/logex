@@ -33,7 +33,7 @@ messages of logex use other names: `the running program` is the old program, and
 candidate` is the new program. The [candidate](glossary.md#candidate) of a configuration
 is the new configuration.
 
-Each rule on this page has an example that the suite runs.
+Each rule on this page has an example. A check of the repository runs each script of this page and compares its output with the page.
 [Examples](#examples), at the end of the page, gives the scripts and their output. A
 reference such as "switch case 4" names a case of those scripts.
 

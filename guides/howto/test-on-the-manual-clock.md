@@ -207,18 +207,18 @@ end
    The runner reads the device at each [poll period](../reference/glossary.md#poll-period),
    10 ms. The read at 20 ms fails. The runner [trips](../reference/glossary.md#trip) and
    writes 0 to each output point. A failure `{:delay, ms}` gives no trip: it moves the
-   manual clock by `ms`. [I/O adapters](../reference/io-adapters.md) gives each failure
-   and the trip that it causes.
+   manual clock by `ms`. [Failures that a sim acts out](../reference/io-adapters.md#failures-that-a-sim-acts-out)
+   gives each failure and the trip that it causes.
 
 6. Put a second describe block after the `end` of the first, before the last `end` of
    the file. In it, the first write of the device takes 2 ms of the manual clock.
 
    If no round moves the manual clock, the runner answers a call before the next round.
-   Thus steps 2 to 5 call the runner from the test process.
+   Thus steps 2 to 5 call the runner from the process of the ExUnit test.
 
 > #### Caution {: .error}
 >
-> If a round moves the manual clock, do not call the runner from the test process. The
+> If a round moves the manual clock, do not call the runner from the process of the ExUnit test. The
 > call waits for ever, and after 60 s ExUnit gives `ExUnit.TimeoutError`. Call the runner
 > from a task, and move the clock by 0 ms until the task has the answer.
 
@@ -253,12 +253,13 @@ end
    The call of `get!` waits for its [slot](../reference/glossary.md#slot) after that
    round. With the default
    [share](../reference/glossary.md#share), 4 calls of `advance(clock, 0)` or fewer give
-   the call its answer. [Runner](../reference/runner.md) gives the rules of a slot.
+   the call its answer. [Calls and the share](../reference/runner.md#calls-and-the-share)
+   gives the rules of a slot.
 
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 20, "width": 90, "diagramMarginX": 5}}}%%
 sequenceDiagram
-  participant T as Test process
+  participant T as ExUnit test
   participant K as Task
   participant R as Runner
   Note over R: Round at 0 ms.<br/>Its write moves<br/>the clock to 2 ms.
@@ -274,7 +275,7 @@ sequenceDiagram
   K-->>T: {:ok, 0}
 ```
 
-Figure: a call from a task while a round is late. The test process moves the clock until
+Figure: a call from a task while a round is late. The ExUnit test moves the clock until
 the task has the answer.
 
 7. Make sure that the file `test/packing_test.exs` has this text.
@@ -391,36 +392,36 @@ If the script gives more than 0 failures, run `mix test` to see each failure.
 
 ### An ExUnit test fails or stops
 
-| What you see | Cause and what to do |
-|---|---|
-| `test timed out after 60000ms` | A call from the test process waits for a slot. Make the call from a task, as in step 6. |
-| `MatchError` and `unknown program type` | A file is not in the root directory of the project. Put the 3 files there. |
-| `MatchError` and `cannot be read` | Run `mix test` from the root directory of the project. |
-| An output does not change, and no error | No point reads the address. Compare it with the `at` of the global. |
-| An output does not change after a short press | The task did not run while the input was 1. Hold the input until the task runs. |
-| A count is less than the number of pulses | The simulated device has no `reports: true`. Give the option. |
-| An output changes at a different time at each run | The runner has no `clock: {Manual, clock}`. Give the option. |
-| `the manual clock waited 5000 ms for` | A process did not do its work in 5 s, for example after `Sim.fail(panel, :read, :hang)`. Do not use `:hang` on the manual clock. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `test timed out after 60000ms` | A call from the process of the ExUnit test waits for a slot. | Make the call from a task, as in step 6. |
+| `MatchError` and `unknown program type` | A file is not in the root directory of the project. | Put the 3 files there. |
+| `MatchError` and `cannot be read` | The ExUnit test cannot find a file of the plant. | Run `mix test` from the root directory of the project. |
+| An output does not change, and no error | No point reads the address. | Compare the address with the `at` of the global. |
+| An output does not change after a short press | The task did not run while the input was 1. | Hold the input until the task runs. |
+| A count is less than the number of pulses | The simulated device has no `reports: true`. | Give the option. |
+| An output changes at a different time at each run | The runner has no `clock: {Manual, clock}`. | Give the option. |
+| `the manual clock waited 5000 ms for` | A process did not do its work in 5 s, for example after `Sim.fail(panel, :read, :hang)`. | Do not use `:hang` on the manual clock. |
 
 ### Names and addresses that logex refuses
 
 Each message is an `ArgumentError`.
 
-| What you see | Cause and what to do |
-|---|---|
-| `which declares no` | `Logex.Runner.get!/2` got a tag that the program does not declare. Give the name of a tag of the program. |
-| `no runner has opened the simulated device` | Give the list form, for example `[8]`. |
-| `a runner has opened the simulated device` | Give the address of the configuration file, for example `"panel.i.8"`. |
-| `is an output of the device` | `Logex.IO.Sim.set/3` sets only inputs. Read an output with `Logex.IO.Sim.outputs/1`. |
-| `is no address as the configuration writes one` | Write `i` or `q` in lowercase, and each number with no leading 0. The message ends with the correct address. |
-| `is the device` | The address names a different device, or the name of the device in a different case. Write the name as the configuration file writes it. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `which declares no` | `Logex.Runner.get!/2` got a tag that the program does not declare. | Give the name of a tag of the program. |
+| `no runner has opened the simulated device` | An address as text, before a runner opened the device. | Give the list form, for example `[8]`. |
+| `a runner has opened the simulated device` | An address in the list form, after a runner opened the device. | Give the address of the configuration file, for example `"panel.i.8"`. |
+| `is an output of the device` | `Logex.IO.Sim.set/3` sets only inputs. | Read an output with `Logex.IO.Sim.outputs/1`. |
+| `is no address as the configuration writes one` | An uppercase `I` or `Q`, or a number with a leading 0. | Write `i` or `q` in lowercase, and each number with no leading 0. The message ends with the correct address. |
+| `is the device` | The address names a different device, or the name of the device in a different case. | Write the name as the configuration file writes it. |
 
 ### More than 1 device or 1 file
 
-| What you see | Cause and what to do |
-|---|---|
-| `:already_started` | 2 simulated devices have the same child id. Give each its own id, as in the first example under this table. |
-| `of another runner of this VM` | 2 ExUnit tests that run at the same time give the same `retain:` or `forces:` path. Give each its own directory, as in the second example. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `:already_started` | 2 simulated devices have the same child id. | Give each its own id, as in the first example under this table. |
+| `of another runner of this VM` | 2 ExUnit tests that run at the same time give the same `retain:` or `forces:` path. | Give each its own directory, as in the second example. |
 
 To start a second simulated device, give it its own id:
 

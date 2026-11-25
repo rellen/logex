@@ -1,8 +1,7 @@
 # The script builds the configuration of line_1.logex from Elixir data. It compares each
-# list of items with the list that the file gives, with no line numbers. Then it
-# prints the text of the configuration.
+# list of items with the list that the file gives, with no line numbers.
 alias Logex.Configuration
-alias Logex.Configuration.{Connection, Global, Instance, Task, Text}
+alias Logex.Configuration.{Connection, Global, Instance, Task}
 
 programs =
   for name <- ~w(belt box_count fan_control stop_record) do
@@ -58,4 +57,3 @@ for part <- [:tasks, :globals, :instances, :connections] do
 end
 
 IO.puts("file: #{inspect(plant.file)}, warnings: #{length(plant.warnings)}")
-IO.write(Text.print(plant))

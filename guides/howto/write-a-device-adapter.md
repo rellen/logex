@@ -44,7 +44,7 @@ You must know the behaviours and the processes of Elixir. You must have:
 
 The example is the module `LineDevice`, an adapter for an I/O card. It is the first
 part of the script `line_device.exs`, in the directory `examples/` of the repository.
-[Do a test of a device adapter](test-a-device-adapter.md) shows the complete script and
+[Check a device adapter](test-a-device-adapter.md) shows the complete script and
 runs it.
 
 > #### Caution {: .error}
@@ -62,7 +62,7 @@ channels, and it has output channels. A point of the plant is 1 channel of the c
 | `write 0=1 4=0` | `ok` |
 | `quit` | `bye` |
 
-[Do a test of a device adapter](test-a-device-adapter.md) also shows the plant of the
+[Check a device adapter](test-a-device-adapter.md) also shows the plant of the
 example. Its configuration file puts 6 points on the device `panel`. `init/3` gets each
 point as a `%Logex.IO.Point{}`.
 
@@ -346,12 +346,12 @@ In `init/3`, make the device send its messages to `self()`. Return the input poi
 that changed, or `%{}` for a message that you do not know. The runner uses the new
 values in its next round. `read/1` stays necessary, and can return `{:ok, %{}, state}`.
 
-9. **Do the tests of [Do a test of a device adapter](test-a-device-adapter.md).** They
-   use a test card, not the hardware.
+9. **Do the checks of [Check a device adapter](test-a-device-adapter.md).** They
+   use a card program, not the hardware.
 
 > #### Warning {: .warning}
 >
-> Do those tests before you connect the adapter to the hardware. With the hardware, the
+> Do those checks before you connect the adapter to the hardware. With the hardware, the
 > program of the plant controls the machine through the output points.
 
 10. **Give the adapter and its options to the device in the option `io:`.**
@@ -388,8 +388,8 @@ the hardware. Then go to [Run a plant on the clock](run-on-the-clock.md).
 
 ## See also
 
-- [Do a test of a device adapter](test-a-device-adapter.md): the complete script and
-  its run with a test card.
+- [Check a device adapter](test-a-device-adapter.md): the complete script and
+  its run with a card program.
 - [I/O adapters](../reference/io-adapters.md): the rules of each callback.
 - `Logex.IO`: the behaviour, with the type of each callback.
 - [Runner](../reference/runner.md): the options `io:`, `poll:`, `idle:` and `open:`.

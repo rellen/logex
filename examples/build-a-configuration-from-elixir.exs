@@ -44,7 +44,7 @@ connections =
     wire.("m2", [{"reset", 0}, {"motor", "k2"}, {"speed_sp", "sp_2"}])
 
 # Part 6: build the configuration. new!/1 checks it, and raises an ArgumentError if the
-# data has an error. Print each warning, then the configuration as the text of a file.
+# data has an error. Print each warning.
 plant =
   Configuration.new!(
     name: "plant",
@@ -56,7 +56,6 @@ plant =
   )
 
 Enum.each(plant.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
-IO.write(Configuration.Text.print(plant))
 
 # Part 7: run 7 cycles. Each line gives the ms since the last cycle, and the input
 # points that change before the cycle. An input point keeps its value until it changes.

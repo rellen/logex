@@ -4,7 +4,11 @@ This page is for a reader who wants to understand a part of logex. Say in 1 sent
 which question the page answers.
 
 Copy this file to `guides/explanation/`, give it a name and add its line to
-`docs/pages.exs`. Then replace each paragraph with the explanation.
+`docs/pages.exs`. Then replace each paragraph with the explanation. Keep the page to
+about 1,500 words, and 2,000 words at most. Show the
+[host contract](../../guides/reference/host-contract.md), and 1 example from outside it
+at most. Put a Caution before that example. The Caution says that the example is outside
+the host contract.
 
 ## The model
 

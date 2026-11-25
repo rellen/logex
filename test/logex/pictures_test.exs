@@ -64,6 +64,23 @@ defmodule Logex.PicturesTest do
              ]
     end
 
+    test "a text and a program compiled from another text are refused, at the first word " <>
+           "where they differ: a drawing is of the program it shows" do
+      text = "var start bool\nvar motor bool\nxic start ote motor\n"
+      other = "var start bool\nvar motor bool\nxio start ote motor\n"
+      {:ok, tokens, _line} = Logex.Lexer.tokenize(text)
+      {:ok, tree} = Logex.Parser.parse(tokens)
+      {:ok, program} = Logex.compile(text, name: "motor")
+      {:ok, changed} = Logex.compile(other, name: "motor")
+
+      assert [%{elements: [{:contact, :open, "start"}, {:coil, "", "motor"}]}] =
+               Pictures.Rung.drawn_rungs(text, tree, program)
+
+      assert_raise RuntimeError, "the text and the program differ at `xic`", fn ->
+        Pictures.Rung.drawn_rungs(text, tree, changed)
+      end
+    end
+
     test "a timer is a box with its instance and its preset, a one-shot stands in the " <>
            "rung with its storage bit, a call names each member it wires, a rung keeps " <>
            "the comment above it" do

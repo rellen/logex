@@ -166,11 +166,10 @@ the function block, and the function block stops its belt only while it runs.
   block whose input EN is false. The body does not run, and the outputs keep their
   values. The standard lets a controller copy the inputs or not. logex does not copy
   them.
-- A [Logix](../reference/glossary.md#logix) controller does not scan the logic between a
-  JMP and its LBL. A timer there adds the time since its last scan when the controller
-  scans it again. logex does the same.
-- IEC 61131-3 and Logix let a program jump back. logex refuses a `jmp` to an earlier
-  rung and to its own rung.
+- A timer of a [Logix](../reference/glossary.md#logix) controller adds the time since its
+  last scan when the controller scans it again (1756-RM018A, pages 112 and 113). logex
+  does the same.
+- logex refuses a `jmp` to an earlier rung and to its own rung.
 
 ## Why logex does it this way
 

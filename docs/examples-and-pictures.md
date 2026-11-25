@@ -79,7 +79,8 @@ and its words in the same commit.
 ## Pictures
 
 A script makes each picture, from the program or from a run. Do not draw a picture by
-hand. A mark before the picture names its source, and a test compares the picture with
+hand. Do not give a picture a size: on a narrow screen, such as a phone, the site shrinks
+it to the column. A mark before the picture names its source, and a test compares the picture with
 the output of the script. Each picture is 1 file. 2 marks that name the same file must
 name the same source.
 

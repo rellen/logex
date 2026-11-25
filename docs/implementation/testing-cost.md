@@ -3,8 +3,9 @@
 This page is for a contributor. It describes the tests that hold the cost of logex: the
 growth tests, the bounds against a twin and the ceilings. Read it before you add a pass
 over a [program](../../guides/reference/glossary.md#program), change a clause of the evaluator or change a bound.
-[The test strategy](testing-strategy.md) gives the other tests of the suite and the words
-of this page.
+[The test strategy](testing-strategy.md) gives the other tests of the suite.
+[The words of the contributor pages](../contributing/words.md) gives the words of this
+page.
 
 > #### Caution {: .error}
 >
@@ -14,7 +15,7 @@ of this page.
 
 ## What the cost tests do
 
-A cost test counts [reductions](testing-strategy.md#what-the-suite-does), the unit of
+A cost test counts [reductions](../contributing/words.md#cost-and-time), the unit of
 work of the BEAM. It does not measure time. A count of reductions is the same on a fast
 machine and on a slow one, and a busy machine changes it only a little. A bound in time
 fails on a CI runner that shares its cores.

@@ -197,8 +197,9 @@ panel.q.4  case_full
 ```
 
 `Logex.Configuration.compile_file/1` [compiles](../reference/glossary.md#compile) the
-configuration file and its 2 programs. If you see these 6 lines, logex compiled the 3
-files, and each global is at its point.
+configuration file and its 2 programs. The script prints the field `at` and the field
+`name` of each global of the configuration. If you see these 6 lines, logex compiled
+the 3 files, and each global is at its point.
 
 > #### If you see a different line {: .info}
 >
@@ -209,7 +210,7 @@ files, and each global is at its point.
 > ``packing.logex: line 13: no global `pb_start` — did you mean `pb_start_1`?``.
 >
 > For an error in `conveyor.ld`, the first line names line 12 of `packing.logex`. The
-> line after it names the line of `conveyor.ld` that has the error.
+> line after it names the line of `./conveyor.ld` that has the error.
 >
 > Correct the line and run the script again.
 
@@ -302,6 +303,9 @@ If you see these 7 lines, the plant runs.
 > Compare each `Sim.set` line of your script with the page. The simulated device takes
 > an input point that the plant does not use, and it gives no error. If `k1` stays 0,
 > look at `"panel.i.0"`. If `boxes` stays 0, look at `"panel.i.8"`.
+>
+> If you see an `ArgumentError` that names a point, for example `"panel.i.00"`, compare
+> that point with the configuration file.
 
 This diagram shows the first 10 ms of the script.
 

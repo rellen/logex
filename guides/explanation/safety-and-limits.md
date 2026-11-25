@@ -136,13 +136,13 @@ Thus the plant must do these things with no help from logex:
 
 > #### Caution {: .error}
 >
-> Do not let the computer sleep while a runner runs. No test of logex shows what the
+> Do not let the computer sleep while a runner runs. No ExUnit test of logex shows what the
 > [clock](../reference/glossary.md#clock) of the runner does after a sleep.
 
 ## Limits of I/O and of the dialect
 
 - **logex has no adapter for real I/O.** The only adapter in logex is `Logex.IO.Sim`, a
-  [simulated device](../reference/glossary.md#simulated-device) for tests and examples.
+  [simulated device](../reference/glossary.md#simulated-device) for ExUnit tests and examples.
   For a real device, the host writes a module with the behaviour `Logex.IO`. The script
   `line_device.exs` in `examples/` is an example to copy, not an adapter of logex. The
   protocol of a real device, its limits of time and the way it connects again are the
@@ -163,9 +163,10 @@ Thus the plant must do these things with no help from logex:
 
 ## How it compares with IEC 61131-3 and Logix
 
-A [Logix](../reference/glossary.md#logix) controller is hardware with its own operating
-system. logex is a library. The computer and its operating system are the work of the
-host. As in a controller, the runner trips after a task runs too long.
+A controller, for example a [Logix](../reference/glossary.md#logix) controller, is
+hardware. logex is a library. The computer and its operating system are the work of the
+host. A Logix controller gives each task a watchdog, and a task that runs too long
+gives a major fault (1756-PM005M, page 34). The runner trips after a task runs too long.
 
 logex does not have each part of IEC 61131-3 or of a controller. For example, it has no
 type for a time, no strings and no [force](../reference/glossary.md#force) of an output

@@ -4,7 +4,9 @@ This page is for a contributor. Say in 1 sentence which part of logex the page
 describes, and what the reader can change after it.
 
 Copy this file to `docs/architecture/`, `docs/implementation/` or `docs/contributing/`,
-give it a name and add its line to `docs/pages.exs`. Then replace each paragraph.
+give it a name and add its line to `docs/pages.exs`. Then replace each paragraph. Keep
+the page to about 1,500 words, and 2,000 words at most. If it has more, make 2 pages.
+Use the words of [The words of the contributor pages](../contributing/words.md).
 
 ## What the part does
 

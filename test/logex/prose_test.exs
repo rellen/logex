@@ -2,7 +2,8 @@ defmodule Logex.ProseTest do
   @moduledoc """
   `scripts/prose.exs` (decision 546 (d)), the check of the writing rules a script can
   measure, run as a writer runs it: on `test/fixtures/prose/every_rule.md`, a page that
-  breaks each rule once, each failure with its line, its rule and its fix; on each word and
+  breaks each rule of a part of a page once, each failure with its line, its rule and its
+  fix; on a page's length, the rule of a whole page; on each word and
   form the style guide replaces, with the plain one; on correct sentences of the domain
   that have the look of a refused form, which pass; on what is not prose, which it does
   not read; on a sentence, a step and a paragraph at their limits; on a page's kind, a
@@ -573,6 +574,42 @@ defmodule Logex.ProseTest do
                {1, "paragraph",
                 "a paragraph of 7 sentences: 6 is the limit. Write: two paragraphs, one topic each"}
              ]
+    end
+  end
+
+  describe "a page's length" do
+    # A page of `total` words, the heading of "See also" among them: sentences of 25 words
+    # and a last one of the rest, 6 to a paragraph.
+    defp long_page(total) do
+      sentence = fn n -> "Tag" <> String.duplicate(" tag", n - 1) <> "." end
+      words = total - 2
+      sentences = List.duplicate(sentence.(25), div(words, 25)) ++ [sentence.(rem(words, 25))]
+      page(for six <- Enum.chunk_every(sentences, 6), do: Enum.join(six, " "))
+    end
+
+    test "a page that is not a reference of 2,000 words passes and one of 2,001 is refused, " <>
+           "named by its first line; a reference page of more passes",
+         %{tmp_dir: dir} do
+      for kind <- ~w(tutorial howto explanation readme contributor adr) do
+        assert {[], [report], 0} =
+                 prose(dir, %{"page.md" => long_page(2000)}, ["--kind", kind, "page.md"])
+
+        assert report =~ "page.md: 0 failures; 2000 words, "
+
+        assert {[failure], [report], 1} =
+                 prose(dir, %{"page.md" => long_page(2001)}, ["--kind", kind, "page.md"])
+
+        assert report =~ "page.md: 1 failures; 2001 words, "
+
+        assert failure ==
+                 "page.md:1: [length] a page of 2001 words: 2000 is the limit. Write: cut it, " <>
+                   "or make 2 pages that each have 1 job"
+      end
+
+      assert {[], [report], 0} =
+               prose(dir, %{"page.md" => long_page(5000)}, ["--kind", "reference", "page.md"])
+
+      assert report =~ "page.md: 0 failures; 5000 words, "
     end
   end
 

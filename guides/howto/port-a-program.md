@@ -161,8 +161,8 @@ xic motor xic eye ton jam_t 5000
 
 6. **Change each [counter](../reference/glossary.md#counter).** Use the members `pv`,
    `cv` and `q` for `.PRE`, `.ACC` and `.DN`. A `ctu` counts in a `dint`. For the CTU of
-   IEC 61131-3, which counts in an INT, declare `ctu_int`. A Logix CTD counts down the
-   count of a CTU. For this, declare a `ctud` and run it with a `ctu` and a `ctd`.
+   IEC 61131-3, which counts in an INT, declare `ctu_int`. To count up and down
+   1 count, declare a `ctud` and run it with a `ctu` and a `ctd`.
 
    A counter also ends its rung or its leg. Read it on a later rung:
    `xic boxes.q ote full_lamp`. Put the rung that writes `r` before the rung of the
@@ -253,8 +253,8 @@ The new program is different from the old program in 3 places:
 - The rung of `S:FS` is not in the new program. `need_reset` has the initial value 1,
   thus it is 1 after each start and each restart.
 - The rung of RES is rung 5, before the counter.
-- `boxes` has the qualifier `retain`. A Logix controller keeps the value of each tag
-  through a loss of power. logex keeps only the retained tags.
+- `boxes` has the qualifier `retain`. Across a restart, logex keeps only the retained
+  tags.
 
 The script `port-a-program.exs` is in the root of the project. It runs 7 scans. The third
 argument of `Logex.Runtime.scan/3` is the time in ms since the last scan. The last scan

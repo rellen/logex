@@ -12,7 +12,8 @@ defmodule Logex.MixProject do
         "A Ladder Logic compiler and interpreter: a ladder program written as text, " <>
           "compiled to data and run one scan at a time, with configurations, tasks " <>
           "and online edit.",
-      package: package(),
+      # No `package:`: logex has no release on Hex, and ExDoc links every page's footer to
+      # the package mix.exs names, which `scripts/site.exs check` refuses as a dead link.
       source_url: @source_url,
       start_permanent: Mix.env() == :prod,
       # The golden record's generator lives beside its fixture; it is run by hand, not
@@ -126,14 +127,17 @@ defmodule Logex.MixProject do
   defp staged("guides/" <> _ = path), do: Path.join(@pages, Path.basename(path))
   defp staged(path), do: Path.join(@pages, String.replace(path, "/", "-"))
 
-  # A picture a script makes is shown at its own size, and its paragraph scrolls where the
-  # page is narrower, a phone's: shrunk to the page its text would be too small to read.
+  # A picture a script makes shrinks to the column where the page is narrower than the
+  # picture, a phone's (decision 593); a reader zooms in to read it. A table keeps its
+  # columns and scrolls, the cheatsheet's too, and a Mermaid diagram is drawn at Mermaid's
+  # default size. A long name in a heading breaks where it must, not past the page.
   # The sidebar does not show the version: mix.exs's is no release's (decision 541).
   defp before_closing_head_tag(:html) do
     """
     <style>
-      .content-inner p:has(> img[src^="assets/"]) { overflow-x: auto; }
-      .content-inner img[src^="assets/"] { max-width: none; }
+      .content-inner img[src^="assets/"] { max-width: 100%; height: auto; }
+      .page-cheatmd .content-inner section.h2 table { display: block; overflow-x: auto; }
+      .content-inner :is(h1, h2, h3) code.inline { overflow-wrap: anywhere; }
       .sidebar .sidebar-projectVersion { display: none; }
     </style>
     """
@@ -179,13 +183,6 @@ defmodule Logex.MixProject do
   end
 
   defp before_closing_body_tag(_format), do: ""
-
-  defp package do
-    [
-      licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url}
-    ]
-  end
 
   # ExDoc builds the documentation and nothing else needs it, so it is a dependency of the
   # `docs` environment alone, the one `mix docs` runs in (`cli/0`). In every other

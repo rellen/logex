@@ -200,7 +200,8 @@ this computer, with the defaults:
   task that misses its deadline an error, which a system reports or documents as not
   reported (edition 2, subclauses 2.7.2 and 1.5.1).
 - A [Logix](../reference/glossary.md#logix) controller gives each task a watchdog,
-  500 ms by default (1756-PM005M, page 34), and counts the overlaps of a task.
+  500 ms by default (1756-PM005M, page 34). It counts the overlaps of a task
+  (1756-RM018A, the TASK object, page 275).
 - logex has the same default watchdog. It counts and reports the missed periods, and
   runs on.
 

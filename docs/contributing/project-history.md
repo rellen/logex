@@ -91,7 +91,7 @@ on 2026-10-27, answered the questions of its close.
 | M5-12 | A subscript in a tag, `weights[slot]`, and the major fault `:index_out_of_range` |
 | M5-13 | Located arrays: an array at I/O points, with 1 point for each element |
 | M5-14 | Arrays of timers, counters and blocks, for example `var lane_t ton[4]` |
-| M5-15 | The reach of the [contract walks](../implementation/testing-strategy.md#walks-and-their-reach) across each pair of types |
+| M5-15 | The reach of the [contract walks](../implementation/testing-walks.md#walks-and-their-reach) across each pair of types |
 | M5-16 | The documents, and a test in `end_to_end_test.exs` that runs the done sentence on 1 plant |
 
 ### The items of Milestone 6

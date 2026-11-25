@@ -129,10 +129,10 @@ correct a program and then restart the runner. A restart keeps the stage of the 
 
 [IEC 61131-3](../reference/glossary.md#iec-61131-3) does not define an online edit. A
 [Logix](../reference/glossary.md#logix) controller does not let a person move a program
-to a different task in Run mode. logex refuses this change also.
+to a different task in Run mode (1756-RM094N, page 65). logex refuses this change also.
 
 Logic in a Logix controller can write the interval and the priority of a task while it
-runs. In logex, no [instruction](../reference/glossary.md#instruction) writes a task.
+runs (1756-RM018A, the TASK object, page 276). In logex, no [instruction](../reference/glossary.md#instruction) writes a task.
 Only an edit changes the interval or the priority.
 
 ## Why logex does it this way

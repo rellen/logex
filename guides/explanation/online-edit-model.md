@@ -288,8 +288,8 @@ name a different [element](../reference/glossary.md#element) at each scan.
 [IEC 61131-3](../reference/glossary.md#iec-61131-3) does not define an online edit. A
 [Logix](../reference/glossary.md#logix) controller has one, with the same 5 steps:
 accept, test, untest, assemble and cancel. In Logix, an output keeps its last state if the
-old logic writes it and the edits under test do not. logex keeps such an output in the
-same way.
+old logic writes it and the edits under test do not. The source is the Logix quick
+start of October 2009, pages 120 to 124. logex keeps such an output in the same way.
 
 In logex, the accept also returns a forecast. Thus a person sees the result of a test
 before the test.

@@ -339,7 +339,7 @@ as a `ctd`. The diagnostic gives the line of the
 
 ### A call raises an `ArgumentError`
 
-| What you see in the message | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `keeps the program's name` | The new program has a different name. | Do step 1 of [Steps](#steps) again. |
 | `takes an edit` | The edit is not at the correct stage for this call. | Read the table of [The steps of an edit](#the-steps-of-an-edit). |

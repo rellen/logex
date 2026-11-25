@@ -290,6 +290,17 @@ API".
   by the suite as README's are, its writing checked by `scripts/prose.exs` and its
   pictures drawn by `scripts/draw.exs`; a workflow builds the site on every push and
   publishes it from `main`.
+- **The pages under the answers to DOC-1's close**, DOC-1's third step (decisions
+  589–595): nothing a program or a host's call did is changed. A page that is not a
+  reference has 2,000 words at most, `scripts/prose.exs` refusing a longer one, and each
+  decision record's runs and long tables are on a contributor page it links (589); "test"
+  on the user's pages is the online edit's step alone, a test of the suite an "ExUnit
+  test" (590); a reference page and a how-to guide use the host contract alone (591);
+  every claim about Logix gives its source, or says "Not recorded" on the page of the
+  differences from Logix alone (592); a picture shrinks to a phone's column and a wide
+  table scrolls (593); README names four uses of logex and links the GitHub issues for a
+  defect (594); and a record is edited in place while its choice holds (595). The site
+  no longer links a Hex package that logex does not publish.
 - **The answers to RV-24's questions**, RV-30 (decisions 549–555): `scripts/gate.sh` runs
   OTP's Dialyzer as its fifth step, after the suite, so a spec the code breaks is seen
   before the commit (549); a call whose answer is thrown away is red,

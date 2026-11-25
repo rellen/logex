@@ -85,6 +85,10 @@ follow its principle for words: 1 word for 1 thing, and 1 meaning for 1 word.
   heading of level 3 there is 1 technical word, and the checker does not refuse it. Put a
   new technical word into the glossary before you use it. "Enable" is such a word: a
   rung enables an instruction.
+- On a user page, "test" is only the step of an online edit, the
+  [test](../guides/reference/glossary.md#test) of the glossary. Write "ExUnit test" for a
+  test of the suite. The contributor pages use the words of
+  [The words of the contributor pages](contributing/words.md).
 - Write a mnemonic, a tag, a file name and a message as code. On a user page, do not
   put a message between quotation marks: the checker reads those words as your words.
 - Do not use an idiom, a metaphor or humour.
@@ -148,6 +152,31 @@ The pages define the behaviour of the engine. A wrong sentence is a defect.
 - Do not make a limit weaker. "logex is not a safety controller" stays as strong as it
   is.
 
+### The modules that a user page shows
+
+The [host contract](../guides/reference/host-contract.md) is the API that a host uses.
+Its page names each module and each function of it.
+
+| Kind of page | What it can show |
+|---|---|
+| Reference, how-to guide | Only the host contract |
+| Explanation | The host contract, and 1 example from outside it. Put a Caution before that example. The Caution says that the example is outside the host contract |
+| Contributor page, decision record | Each module of `lib/` |
+
+### A claim about Logix
+
+Give the source of each claim about a Logix controller: the publication, its date and its
+page. The list of the publications that the records read is in §8 of
+[`docs/organisation.md`](organisation.md).
+
+- [Differences from Logix](../guides/explanation/differences-from-logix.md) gives the
+  source of each claim in its table. If no record gives a source, the table says "Not
+  recorded".
+- Each other page makes only a claim that has a source. Remove a claim that has none.
+- If 2 records give different facts, the record that quotes a manual is correct. For
+  example, a Logix connection times out after a time with a minimum of 100 ms. The time
+  grows with the requested packet interval. It is not a count of missed packets.
+
 ## Format
 
 The pages must read well on the site that ExDoc builds and in the Markdown view of
@@ -160,8 +189,12 @@ GitHub.
 - Write Markdown only. The site shows an HTML tag as text, and no check reads it.
 - Use headings of level 2 and 3 only. A heading can hold a name as code, such as a
   function or a mnemonic.
-- Keep a page short. If a page that is not a reference has more than about 1,500 words,
-  make 2 pages.
+- Keep a page to about 1,500 words. A page that is not a reference must not have more
+  than 2,000 words. Cut it, or make 2 pages that each have 1 job. `scripts/prose.exs`
+  prints the count of words of each page. Its rule `length` refuses a page that is not a
+  reference and has more than 2,000 words.
+- Put the runs and the long tables of a decision record on a contributor page, and link
+  to that page from the record.
 - Link to a module or a function with its name in a code span: ExDoc makes the link.
 - Do not put a hidden module or function in a code span as `Module.fun/arity`: one with
   `@moduledoc false` or `@doc false`. ExDoc warns, and `scripts/docs.sh` fails. Name its
@@ -172,7 +205,14 @@ GitHub.
   the address of the file on GitHub.
 - Give each picture alt text, and put the facts of the picture in the text or in a table
   also.
+- Do not give a picture a size. On a screen narrower than the picture, such as a phone,
+  the site shrinks the picture to the column. A reader zooms in to read it.
+- A wide table keeps its columns. On a narrow screen, the reader scrolls the table to
+  the side. Do not cut a column to make a table narrow.
+- A how-to guide ends with the table "If it does not work". It has 3 columns, `What you
+  see`, `Cause` and `What to do`, as in the [template](templates/howto.md).
 - Use a Mermaid diagram for a flow, a sequence or a state. Keep it to 12 nodes or fewer.
-  Give it a caption of 1 line, and 1 sentence that says what to see in it.
+  Give it a caption of 1 line, and 1 sentence that says what to see in it. The site
+  draws it at the default size of Mermaid, also on a phone.
 - Put the instruction set on 1 page as a cheatsheet: a file of the type `.cheatmd` in
   `guides/reference/`. ExDoc shows it in columns.

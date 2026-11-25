@@ -1467,3 +1467,168 @@ defmodule Logex.ReadmeTest.Extraction do
     assert grown == [files: true, examples: true, problems: true, held: true]
   end
 end
+
+defmodule Logex.ReadmeTest.MemberTables do
+  @moduledoc false
+  # The tables of the members of a timer and of a counter on the reference of function
+  # blocks, held to the built-in types, `Logex.FbType.builtins/0`: each member's Write,
+  # Type and Role, each type's members in their sequence, a long timer's and a typed
+  # counter's types. The page's example shows a host's view of an instance, as the host
+  # contract has it (decision 591), and so no longer prints these from the types: this
+  # test holds them instead, off the page.
+  use ExUnit.Case, async: true
+
+  @page Path.expand("../../guides/reference/function-blocks.md", __DIR__)
+
+  # The tables under a heading of level 3 of the page, up to the next heading, each a list
+  # of its rows after the header, a row a list of its cells.
+  defp tables(heading) do
+    [_, after_heading] = String.split(File.read!(@page), "\n### #{heading}\n", parts: 2)
+    [section | _] = String.split(after_heading, "\n#")
+
+    for table <- section |> String.split("\n\n") |> Enum.map(&String.trim/1),
+        String.starts_with?(table, "|"),
+        do: table |> String.split("\n", trim: true) |> Enum.drop(2) |> Enum.map(&cells/1)
+  end
+
+  defp cells(row), do: row |> String.trim("|") |> String.split("|") |> Enum.map(&String.trim/1)
+
+  # The words of a cell written as code, in their order.
+  defp code(cell), do: for([_, word] <- Regex.scan(~r/`([^`]+)`/, cell), do: word)
+
+  defp written("Yes"), do: true
+  defp written("No"), do: false
+
+  defp role(role), do: role |> String.downcase() |> String.to_existing_atom()
+
+  # A member's row: its name, its Write, its type as the page writes it, and its role.
+  defp member([name, write, type, role]),
+    do: {hd(code(name)), {written(write), type, role(role)}}
+
+  defp typed(member, integer) when member.type == integer, do: "Integer"
+  defp typed(member, _integer), do: "`#{member.type}`"
+
+  defp row(member, integer), do: {member.write, typed(member, integer), member.role}
+
+  defp members(word), do: Logex.FbType.builtins()[word].members
+
+  # The members of a type as its table writes them, `Integer` for the type of the count.
+  defp rows(word, integer) do
+    for member <- members(word), do: {member.name, row(member, integer)}
+  end
+
+  test "function-blocks.md's tables of the members of a timer are the built-in timers'" do
+    [table, sequences, _rules] = tables("The members of a timer")
+    described = Map.new(table, &member/1)
+
+    for word <- ~w(ton tof tp rto),
+        {name, row} <- rows(word, :none),
+        do: assert({word, name, described[name]} == {word, name, row})
+
+    assert Enum.sort(Map.keys(described)) ==
+             ~w(ton tof tp rto)
+             |> Enum.flat_map(&members/1)
+             |> Enum.map(& &1.name)
+             |> Enum.uniq()
+             |> Enum.sort()
+
+    {plain, [["A long timer", long]]} = Enum.split(sequences, -1)
+
+    for [types, names] <- plain,
+        word <- code(types),
+        do: assert({word, Enum.map(members(word), & &1.name)} == {word, code(names)})
+
+    assert long =~ "`pre` and `acc` are `lint`"
+
+    for word <- ~w(ton tof tp rto) do
+      long_members = members(word <> "_ltime")
+      assert Enum.map(long_members, & &1.name) == Enum.map(members(word), & &1.name)
+
+      for member <- long_members,
+          do: assert({member.name, member.type} == {member.name, long_type(member, word)})
+    end
+  end
+
+  defp long_type(%{name: name}, _word) when name in ["pre", "acc"], do: :lint
+  defp long_type(%{name: name}, word), do: Enum.find(members(word), &(&1.name == name)).type
+
+  test "function-blocks.md's tables of the members of a counter are the built-in counters', " <>
+         "the type of the count by the type word" do
+    [table, sequences, by_word, _rules] = tables("The members of a counter")
+    described = Map.new(table, &member/1)
+
+    counters =
+      for word <- Map.keys(Logex.FbType.builtins()), String.starts_with?(word, "ct"), do: word
+
+    for word <- ~w(ctu ctd ctud),
+        {name, row} <- rows(word, :dint),
+        do: assert({word, name, described[name]} == {word, name, row})
+
+    assert Enum.sort(Map.keys(described)) ==
+             ~w(ctu ctd ctud)
+             |> Enum.flat_map(&members/1)
+             |> Enum.map(& &1.name)
+             |> Enum.uniq()
+             |> Enum.sort()
+
+    {plain, [["A typed counter", typed_rule]]} = Enum.split(sequences, -1)
+    assert typed_rule =~ "`pv` and `cv` have the type of the count"
+
+    for [types, names] <- plain,
+        word <- code(types),
+        do: assert({word, Enum.map(members(word), & &1.name)} == {word, code(names)})
+
+    # Each type word's count, by its row: a word the row names, or an ending it names.
+    count = fn word ->
+      for [words, [type]] <- Enum.map(by_word, fn [w, t] -> [w, code(t)] end),
+          given <- code(words),
+          word == given or (String.starts_with?(given, "_") and String.ends_with?(word, given)),
+          uniq: true,
+          do: String.to_existing_atom(type)
+    end
+
+    for word <- Enum.sort(counters) do
+      [type] = count.(word)
+      plain_word = word |> String.split("_") |> hd()
+      assert Enum.map(members(word), & &1.name) == Enum.map(members(plain_word), & &1.name)
+
+      for member <- members(word),
+          member.name in ["pv", "cv"],
+          do: assert({word, member.name, member.type} == {word, member.name, type})
+
+      for {name, row} <- rows(word, type),
+          do: assert({word, name, described[name]} == {word, name, row})
+    end
+  end
+end
+
+defmodule Logex.ReadmeTest.Uses do
+  @moduledoc false
+  # The uses of logex, said in the same words on README and on what-logex-is.md (decision
+  # 594): the list after the sentence that counts them, on each page.
+  use ExUnit.Case, async: true
+
+  @root Path.expand("../..", __DIR__)
+
+  defp uses(page) do
+    [_, after_count] =
+      Regex.split(~r/^These are \d+ uses of logex:\n\n/m, File.read!(Path.join(@root, page)),
+        parts: 2
+      )
+
+    after_count |> String.split("\n\n", parts: 2) |> hd() |> String.split("\n")
+  end
+
+  test "README and what-logex-is.md give the uses of logex in the same words" do
+    readme = uses("README.md")
+    assert length(readme) >= 3
+    assert Enum.all?(readme, &String.starts_with?(&1, "- "))
+    assert uses("guides/explanation/what-logex-is.md") == readme
+
+    for page <- ["README.md", "guides/explanation/what-logex-is.md"],
+        do:
+          assert(
+            File.read!(Path.join(@root, page)) =~ "These are #{length(readme)} uses of logex:"
+          )
+  end
+end
