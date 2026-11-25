@@ -87,7 +87,7 @@ switch.
 | Task | Due in a cycle when |
 |---|---|
 | [Periodic task](../../guides/reference/glossary.md#periodic-task) | Its next due time is at or before `now` |
-| [Event task](../../guides/reference/glossary.md#event-task) | Its trigger samples 1 and its last sample is 0. At the start, the last sample is 0 |
+| [Event task](../../guides/reference/glossary.md#event-task) | Its trigger samples 1 and its last sample is 0. After `start/1`, the last sample is 0. `start/2` takes the last sample of a retained trigger from the [retained image](../../guides/reference/glossary.md#retained-image) |
 | A task with a trigger and an interval | Its trigger rises, or its trigger samples 0 and a due time came. The task skips a due time that comes while its trigger samples 1, and does not count it |
 | The continuous task | Never. Its instances run 1 time in each cycle, after the due tasks |
 

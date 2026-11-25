@@ -61,20 +61,28 @@ fresh processes. Each timing rule of the runner has a test on the manual clock.
 ### The tests on the real clock
 
 The tests on `Logex.Runner.Clock.Monotonic` are few and short. Their bounds are wide, and
-no test measures the time of a round (`docs/organisation.md` §4.11, "Risks"):
+no test measures the time of a round (`docs/organisation.md` §4.11, "Risks"). Each test of
+this table but the last runs on the real clock. A runner with no `clock:` option uses it:
 
 | Test | What it asserts |
 |---|---|
 | The plant runs for 2 s (`end_to_end_test.exs`) | 20 rounds or more, no trip, `rounds <= now + 1`, each [output](../../guides/reference/glossary.md#output) 0 after the stop, both devices closed |
 | A [device](../../guides/reference/glossary.md#device) hung in its read (`trip_test.exs`) | The runner [trips](../../guides/reference/glossary.md#trip) with `{:io, "drive", :timeout}` |
-| A device that waits for the runner (`trip_test.exs`) | The runner hears the device at each poll |
+| A device that waits for the runner (`trip_test.exs`, 2 tests) | The runner hears the device at each poll |
+| A device that reports a change while the step of its event task waits (`trip_test.exs`) | The device latches on its deadline and writes its 0. The watchdog of the task trips |
+| Slow writes of a round (`trip_test.exs`, 2 tests) | Each write has its own limit from its own start: the idle watchdog and a poll period. A device after slow ones gets its write, and a hung device trips with its name (decision 348) |
 | A bad reading at a restart (`trip_test.exs`) | A device gives a bad reading while the restart reads the device before it. Nothing trips |
+| A slow write of a force (`stalled_disk_test.exs`, 2 tests) | The rounds run on and `status/1` answers while the write is out. No device latches, and nothing trips (decision 437) |
 | A tight loop of forces from 100 processes (`runner_test.exs`) | A task of 10 ms keeps its periods. The runner serves at most half of the callers in a round (decisions 396 and 465) |
 | A device that answers 700 ms late (`api_contract_test.exs`, on the manual clock) | The walk opens a device, or reads it again at a restart, 700 ms late in real time. Nothing trips, and the runner refuses nothing (decisions 398 and 439) |
 
 The 2 s test asserts `rounds <= now + 1`. That count is over the whole run. It shows
 1 round each millisecond or fewer on average, but not the rule round by round. A test on
 the manual clock shows the rule for each round.
+
+Some examples of the pages also run a runner on the real clock, for example
+`on_the_real_clock.exs`, `run-under-a-supervisor.exs` and `io-adapters-bind.exs`.
+`readme_test.exs` runs `on_the_real_clock.exs` alone, after each async module.
 
 ### Waits
 
