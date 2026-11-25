@@ -3,9 +3,9 @@
 This guide is for a reader who writes a ladder [program](../reference/glossary.md#program)
 that calculates with fractions, for example a speed from a frequency. It shows how to
 declare a real [tag](../reference/glossary.md#tag), write a real
-[literal](../reference/glossary.md#literal), calculate and take a square root. It also
-shows how to put a real value into an integer tag, and how to get the next integer up or
-down.
+[literal](../reference/glossary.md#literal), calculate and take a square root.
+[Convert between real and integer tags](convert-reals-and-integers.md) gives the
+conversions.
 
 logex has 2 real [types](../reference/glossary.md#type). A `real` holds a floating-point
 number of 32 bits. An `lreal` holds a floating-point number of 64 bits.
@@ -215,112 +215,11 @@ value of a negative source (1756-RM018A, page 474). logex does not: the root of 
 gives what each instruction writes for a result that its type cannot hold, and its power
 out.
 
-## Put a value of another type into a real tag
+## Convert a real value
 
-A type that [widens](../reference/glossary.md#widen) into the real type needs no
-conversion. Use `move`, or name the tag as an [operand](../reference/glossary.md#operand).
-
-```mermaid
-flowchart LR
-  small["sint, int, usint, uint"] --> real["real, 32 bits"]
-  real --> lreal["lreal, 64 bits"]
-  mid["dint, udint"] --> lreal
-```
-
-Figure: the integer types and the real types. An arrow goes from a type to a type that
-it widens into.
-
-`lint` and `ulint` widen into no real type. For each pair that no arrow joins, use a
-conversion:
-
-| From | Conversion |
-|---|---|
-| `dint` or `udint` into `real` | `dint_to_real`, `udint_to_real` |
-| `lint` or `ulint` into `real` | `lint_to_real`, `ulint_to_real` |
-| `lint` or `ulint` into `lreal` | `lint_to_lreal`, `ulint_to_lreal` |
-| `lreal` into `real` | `lreal_to_real` |
-| `bool` or a [bit string](../reference/glossary.md#bit-string) type into a real type | No instruction |
-
-For a bit string, convert it to an integer type first. For example, `word_to_uint w u`
-then `move u r` puts the `word` tag `w` into the `real` tag `r`.
-
-For example, an `int` register gives the frequency in units of 0.1 Hz. In `fan.ld`,
-declare `var_input raw int` and change `var_input hz real` to `var hz real`. Then add
-the rung `mul raw 0.1 hz` before the other rungs. For 125, `hz` is 12.5 and `speed` is
-750.0.
-
-If the register is a `dint`, logex refuses that rung. Declare `var_input raw dint` and
-`var raw_hz real`, and use 2 rungs: `dint_to_real raw raw_hz`, then
-`mul raw_hz 0.1 hz`.
-
-A conversion into a real type writes the nearest value of the type. Thus `dint_to_real`
-of 16777217 writes 16777216.0, and its power out is true. For a value beyond the range
-of a `real`, `lreal_to_real` writes the end of the range, and its power out is false.
-
-## Put a real value into an integer tag
-
-A conversion such as `real_to_int` or `lreal_to_dint` writes the nearest integer. A
-conversion such as `real_trunc_int` or `lreal_trunc_dint`, a truncation, removes the
-fraction toward 0.
-
-| Source | `real_to_int` | `real_trunc_int` |
-|---|---|---|
-| 2.5 | 2 | 2 |
-| 3.5 | 4 | 3 |
-| -2.5 | -2 | -2 |
-| -2.7 | -3 | -2 |
-
-For a value halfway between 2 integers, `real_to_int` takes the even integer. If the
-integer does not fit the destination, both instructions write its low bits, and the
-power out is false. [Conversions](../reference/conversions.md) gives each conversion.
-
-## Get the next integer up or down
-
-logex has no instruction that gives the next integer up or the next integer down. Use a
-truncation and a comparison.
-
-1. Make the file `round.ld` in the directory `use-reals`, with this text:
-
-<!-- file: use-reals/round.ld -->
-```text
-var_input x real
-var_output up int
-var_output down int
-
-real_trunc_int x up
-lt up x add up 1 up
-real_trunc_int x down
-gt down x sub down 1 down
-```
-
-2. Make the file `use-reals-round.exs` in the root directory of your project, with this
-   text. It gives the program 5 values:
-
-```elixir
-{:ok, round} = Logex.compile_file("use-reals/round.ld")
-
-for x <- [2.3, 2.0, -2.3, 0.7, -0.7] do
-  state = Logex.Runtime.put_inputs(round, Logex.Runtime.instance(round), %{"x" => x})
-  {outputs, _state} = Logex.Runtime.scan(round, state)
-  IO.puts("x #{x}  up #{outputs["up"]}  down #{outputs["down"]}")
-end
-```
-
-3. Run the script:
-
-```console
-$ mix run use-reals-round.exs
-x 2.3  up 3  down 2
-x 2.0  up 2  down 2
-x -2.3  up -2  down -3
-x 0.7  up 1  down 0
-x -0.7  up 0  down -1
-```
-
-Rung 2 adds 1 if `up` is less than `x`. Rung 4 subtracts 1 if `down` is more than `x`.
-The rungs give the correct values for an `x` from -32768.0 to 32767.0. Out of that
-range, the truncation, `add` or `sub` wraps and passes no power. For a larger `x`, use
-`real_trunc_dint` and `dint` tags.
+[Convert between real and integer tags](convert-reals-and-integers.md) puts an integer
+value into a real tag and a real value into an integer tag. It also gives the next
+integer up or down.
 
 ## If it does not work
 
@@ -335,15 +234,11 @@ Each entry in the column **What you see** is a part of the message.
 | `` digits on both sides ``, `` logex takes no `+` `` or `` is neither a number nor a tag `` | A form that logex does not have: `1.`, `.5`, `1e5`, `1.5e+3` or `1.5L`. | Write `1.0`, `0.5`, `1.0e5`, `1.5e3` or `1.5`. |
 | `` holds integers exactly only to 2^24 `` or `` is more precise than a real keeps `` | A literal that a `real` does not hold exactly. `16777217` is an error. `16777217.0` gets a warning, and the program [compiles](../reference/glossary.md#compile). | Write the value that the message gives, or use an `lreal`. |
 | `` is beyond a real's range `` or `` is too near 0.0 `` | A literal out of the range of the type. | For a value beyond the range, use an `lreal`. For a value too near 0.0, write `0.0`. |
-| `` logex has no conversion between `` | A `bool` or a bit string with a real. | For a `bool` tag `b`, use 2 rungs: `xic b move 1.0 r` and `xio b move 0.0 r`. Convert a bit string to an integer type first, as [Put a value of another type into a real tag](#put-a-value-of-another-type-into-a-real-tag) shows. |
-| `` does not widen into `` | A `dint` into a `real`, or a `real` into an `int`. | Use the conversion that the message names, or a truncation. |
 | `` holds only integers `` | A real literal for an integer tag, even `1.0`. | Write an integer literal. |
 | `` divides by the literal `` or `` takes the root of the literal `` | A literal divisor of 0, or a negative literal source of `sqrt`. | Use a tag, and compare it with 0.0 before the instruction. |
 | `` a square root is a real's `` or `` a truncation writes an integer `` | The destination is of a different type. | Declare the destination with the type that the message names. |
 | `` `mod` reads an integer `` or `` which has no bits `` | `mod`, or a bit, of a real. | Convert the real to an integer type first. |
 | `` cannot name a tag `` | A tag named `real`, `sqrt` or a conversion, in uppercase or lowercase. | Choose a different name. |
-| `` unknown instruction `` | An instruction such as `round`, `ceil` or `floor`, which logex does not have. | Do the steps of [Get the next integer up or down](#get-the-next-integer-up-or-down). |
-| `` reads a literal `` | A warning: a conversion of a literal always writes the same value. | Write that value as a literal. |
 
 ### When you run the scans
 
@@ -356,7 +251,6 @@ keeps its last value, and the power out is false.
 |---|---|---|
 | `` (MatchError) no match of right hand side value `` | logex refused `fan.ld`. | Do the steps of [Read a diagnostic](read-diagnostics.md). |
 | `` is beyond a real's range `` or `` must be a number `` | The host gives a value out of the range, a bool or a string. | Give only a number in the range of the table in [Choose `real` or `lreal`](#choose-real-or-lreal). |
-| An integer goes to the other end of its range | A conversion wraps the value. | Use the value only while the power out is true, as steps 8 and 9 do. |
 
 ## See also
 
