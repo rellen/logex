@@ -22517,7 +22517,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
      and the records edited, 594's draft of uses going to the maintainer to correct; and
      it takes what the close left it, C5, C6, the rest of C11, C13 and C20.)*
 
-  Its questions for the maintainer are recorded here when it lands.
+  Its questions for the maintainer are recorded here when it lands. *(Since its build
+  and review, 2026-11-25: "DOC-1's step 3 as built" and "DOC-1's step 3 reviewed" record
+  them, the draft of the uses first.)*
 
   **DOC-1's step 1 as built** (2026-11-15, branch `doc1` over `80d3cdf`). The foundation is
   there, and one page written on it whole, the tutorial "Your first program", so that each
@@ -23944,6 +23946,254 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   | G043 | 5651-5654 | What accept refuses, each at its line in the candidate's files | here | `reference/diagnostics.md` (The stages (the list after the table); The errors that logex reports, item 16; The file); `reference/online-edit.md` (What the accept refuses: A configuration (plant cases 11 to 22) and Connections that a sw…); `howto/edit-a-running-plant.md` ("Changes that need a restart". The messages and the refusals of a held output's connectio…) |  |
   | G044 | 5656-5667 | The remaining rules: a program type changed, instances added, removed or retyped, `var_external` to `var` and back, priority and… | here | `reference/online-edit.md` (The switch of a configuration; plant cases 2 to 7 and 9) |  |
   | G045 | 5669-5672 | The host's duties in a plant edit; the input image; held points in every cycle's outputs | here | `reference/online-edit.md` (What the host does during an edit: A configuration) |  |
+
+  **DOC-1's step 3 as built** (2026-11-25, branch `doc3` over `dd67105`, `main` unmoved
+  while it was built: RV-33 had not landed at its merges or at its close). Three lanes,
+  each in its own clone and backup branch, merged with `--no-ff` and a message each:
+  records (`d89ece4`, merged as `f5a317b`), the user's pages (`dd417cc` to `8a845d5`,
+  merged as `4d3ce26`) and the contributor's pages (`fa69ea4` to `61c9e67`, merged as
+  `61d1d41`), then one commit across them (`19ab7a6`). What each decision and leftover
+  became:
+  - *589, a page's length.* The five how-to guides over 2,000 words cut or split, three
+    new guides (`select-an-array-element-with-a-tag.md`, `convert-reals-and-integers.md`,
+    `compile-a-program-from-text.md`, each line of `docs/pages.exs` after its parent's);
+    the six contributor pages over 2,000 split, each half one job
+    (`loader-and-compiler.md`, `scan-records-and-faults.md`, `online-edit-plans.md`,
+    `store-reading.md`, `testing-walks.md`, `dialyzer-and-ci.md`); the twenty records over
+    2,000 cut, every record's runs, measurements and long tables moved with their marks to
+    sixteen contributor pages, `docs/implementation/record-runs-*.md`, each record linking
+    its section, every example's file under `examples/` unchanged and held by
+    `readme_test.exs` as before; `docs/README.md`'s rows of those pages a list, which
+    kept the map under 2,000; `record-runs-cost.md` split once more at the merge. The
+    style guide, `check-a-page.md` and each template give the aim and the limit.
+  - *590, "test".* On the user's pages "test" is the edit's step alone, a test of the
+    suite an "ExUnit test", a heading of the glossary; `test-a-device-adapter.md` titled
+    "Check a device adapter", its file's name kept; the contributors' words one page,
+    `docs/contributing/words.md` (874 words), linked from `docs/README.md`, the contributor
+    template and the pages whose words tables it took.
+  - *591, the host contract.* `literals.md`'s `Logex.Printer` and `Logex.Parser` rows,
+    `declarations-and-types.md`'s `instructionize/3` rows, `configuration-file.md`'s "The
+    text of a configuration" and `build-a-configuration-from-elixir.md`'s printed text
+    removed; `diagnostics.md` and `store.md` rows reworded to the contract; four examples'
+    files changed with their blocks, the printed text of `print/1` and the members' Write,
+    Type and Role columns no longer printed (`print/1` held by `configuration_test.exs`;
+    the columns by the review's test below).
+  - *592, the sources of a claim about Logix.* `differences-from-logix.md` gives each
+    claim its source or "Not recorded"; the other user pages cite the manuals §8 records,
+    or drop the claim (tags kept through a loss of power, `CTD` counting a `CTU`'s
+    count, a `CTUD` that wraps, a jump back, a skipped rung's logic, a task's programs in
+    line order, I/O changing during the logic); `runner-devices.md` follows decision 134;
+    the records' claims each with its source, or "not recorded" (the lane's reading, made
+    sourced claims alone by the review).
+  - *593, the pages on a phone.* `mix.exs`'s head of each page shrinks a picture to the
+    column, scrolls a wide table and the cheatsheet's tables, and wraps a heading's code;
+    a Mermaid diagram at its default; every built page measured at 350 px by a headless
+    browser, none wider than the column. C20 with it: the failure tables of 20 how-to
+    guides, where the question counted 16, the template's three columns, each cause the
+    row lacked written from the row or its page.
+  - *594, the uses and the issues.* README's "What logex is for" and `what-logex-is.md`
+    give four uses in the same words (the draft, question 1); README and
+    `restart-after-a-trip.md`, a new row for `{:internal, message}`, link the GitHub
+    issues. README 154 lines.
+  - *595, a record a later decision changes.* `docs/adr/README.md`'s "Change a record",
+    `check-a-page.md`'s "Change a decision record" and the record template give the three
+    cases in the same words; records 0013, 0014 and 0023 edited in place, citing 262, 134
+    and 589 to 592.
+  - *C5.* 17 links in 15 how-to guides name the heading of the reference they mean.
+  - *C6.* The six pages split after their reviews read again, each claim run
+    (`ir-and-program-type.md`'s arrays row and `resource-and-schedule.md`'s first sample
+    corrected, `testing-time.md` given five tests it lacked, `releasing.md`'s run made
+    again in a copy with a stand-in `gh`); `online-edit-of-a-plant.md` run and found true.
+  - *C11.* The ranges of the types one table (`declarations-and-types.md`), the store's
+    write events one table (`store.md`); the "checked messages" sentence and the
+    one-shots' row not found by the lane (the review's mend below).
+  - *C13.* The real-clock examples run 50 times each under `scripts/load.sh -n 50 -l 4`:
+    `watch-a-runner.md`, `trips-and-watchdogs.md` and `run-under-a-supervisor.md` 0 of 50
+    failed; record 0014's run (`record-runs-runner.md`) failed 2 of 50, a race of its
+    case 5 between `Manual.advance/2` and the trip the device's notice starts, mended by
+    a `Runner.status/1` call before the outputs are read, the output unchanged, then 0 of
+    50; `run-on-the-clock.md`, `keep-values-on-disk.md` and `record-runs-file-work.md` by
+    the review, 0 of 50 each.
+
+  The checks on `19ab7a6`, each by its exit code: `scripts/gate.sh` `GATE-OK`, 4,392 tests
+  (11 doctests) and `DIALYZER-OK`; `scripts/docs.sh` `DOCS-OK`, 211 pages, 18,151 links,
+  the 13 lines of `docs/site-warnings.txt`; `scripts/prose.exs` on every page, no
+  failure; `mix run scripts/draw.exs --check` and `mix format --check-formatted` green;
+  CI 45572437545 and Docs 45572437563 green.
+
+  The words, by `scripts/prose.exs`, at `dd67105` and at the step's tip: how-to guides 45
+  to 48, 5 over 2,000 to none, 27 over 1,650, the longest 1,999; contributor pages 28 to
+  52, 6 over 2,000 to none, the longest 1,988; decision records 23, 20 over 2,000 (the
+  longest 5,384) to none, 1,367 to 1,999 and 22 over 1,650; tutorials 5 and explanations
+  23, none over 2,000; reference pages 27, 25 over 2,000 before and after, the longest
+  11,645.
+
+  **DOC-1's step 3 reviewed** (2026-11-25, of `19ab7a6`, by two reviewers, each in a
+  clone of its own, changing nothing). One reviewed the whole: the gate, the site, every
+  link of it followed, the hidden names, the claims of README's "What logex is not",
+  `safety-and-limits.md` and `not-supported.md` run, 20 mutants of the four scripts, the
+  test diff against `80d3cdf` and the real-clock pages under load. The other followed the
+  four tutorials and five how-to guides in empty projects, with logex a path dependency
+  and with the page's `github:` one, every block copied by its line and every output
+  compared by `diff`: all 17 runs the pages show matched byte for byte. Each finding and
+  its mend (`c16d8f1`), each made true by a run or held by a test that fails when
+  the mend is reverted:
+  - *F1, the Hex links.* Each of the 211 built pages linked a Hex package and a Hex
+    preview that do not exist, 178 dead URLs, from `mix.exs`'s `package:`, which ExDoc
+    reads for its footer; `scripts/site.exs check` followed no external link. Mended:
+    `package:` removed, `site.exs check` refusing a link to `hex.pm` or `preview.hex.pm`
+    as a dead link, and `docs_test.exs` holding both (a footer of two such links refused,
+    a `hexdocs.pm` link passed; `mix.exs` with no `:package`).
+  - *F2, the length.* No check held the limit. Mended: `scripts/prose.exs`'s rule
+    `length` refuses a page that is not a reference over 2,000 words, at line 1, and
+    `prose_test.exs` passes 2,000 and refuses 2,001 for each of the six other kinds and
+    passes a reference of 5,000. Whether the limit binds a reference page is question 2.
+  - *F3, the records' claims about Logix.* Seven records kept a claim with "not
+    recorded", where 592 (b) leaves that to `differences-from-logix.md`. Mended under
+    592 (b): the claims of records 0008, 0015, 0016, 0017, 0021, 0022 and 0023 with no
+    source dropped; record 0018's forces held by the controller cited (1756-PM004L p.53);
+    0007's `RTO` formula cited (1756-RM018A pp.112-113); 0013's row of a restart with no
+    source dropped; 0015's two rows of what the manuals do not say kept as that; and the
+    same for `warm-and-cold-restarts.md`'s one cell. Record 0023's rule of the pages says
+    592 again. Question 4.
+  - *F4, a major fault's outputs.* `differences-from-logix.md` said "Not recorded" where
+    record 0013 cites 1756-UM900B p.242, which §8 records. Mended: the manual's words
+    quoted with its page, a row of the sources table for it, and the table's sentence on
+    "Not recorded" made true.
+  - *F5, the watchdog.* `safety-and-limits.md`'s "As in a controller, the runner trips
+    after a task runs too long" had no source. Mended: a Logix task's watchdog gives a
+    major fault (1756-PM005M p.34), then the runner's trip.
+  - *F6, the member tables.* Decision 591's change to `function-blocks-members.exs` left
+    `function-blocks.md`'s tables of the members of a timer and of a counter held by
+    nothing. Mended: `readme_test.exs`'s `MemberTables` holds each member's Write, Type
+    and Role, each type's members in their sequence, a long timer's `lint` and each typed
+    counter's count to `Logex.FbType.builtins/0`; five edits of the page, each run, each
+    red. Text 35's `%{seal | name: "seal2"}` is question 5.
+  - *F7, mutant x02.* `scripts/pictures.exs`'s refusal of a text and a program that
+    differ was reached by no test. Mended: the drawing of a parsed text from a compiled
+    program made `drawn_rungs/3`, and `pictures_test.exs` refuses `xic` drawn from a
+    program compiled from `xio`, at that word.
+  - *F8, no record of step 3.* Mended by this record, the landed notes of decisions 589
+    to 595 in §7 and `CHANGELOG.md`'s entry.
+  - *F9, the rest of C11.* The triage's text: "The 'checked messages' sentence on 3
+    reference pages" and "one-shots' periodic-task row has no run behind it". Mended,
+    provisional: the three pages that say a check runs their scripts,
+    `configuration-file-messages.md`, `online-edit.md` and `declarations-and-types.md`,
+    say it in one sentence, "A check of the repository runs each script of this page and
+    compares its output with the page."; the one-shots' row is question 8.
+  - *F10, the nits.* Record 0017 links `record-runs-store-copies.md` itself; the uses on
+    README and `what-logex-is.md` held to each other by `readme_test.exs`'s `Uses`;
+    `compile-a-program-from-text.md`'s script is `examples/compile-a-program-from-text.exs`,
+    named for its page. Not mended: README's 154 lines, question 9.
+  - *The tutorials and guides.* `read-diagnostics.md`: a configuration stops at a
+    character, a number or a name it cannot read, `@` or `12x` (run: `1#0` and `12x` each
+    the only diagnostic, `interval` with no number one of six), and the step that makes
+    `read-diagnostics-editor.exs`; `run-on-the-clock.md`: "The plant runs for about
+    1.3 s", and a row for `trip: {:watchdog, {:device, "panel", 510}}` with fewer boxes
+    on a busy computer, linking "Find why a plant tripped" (run: 2 of 4 runs beside 8 busy
+    loops tripped so, 1 and 2 boxes); `use-timers.md`: the steps that make `cure.ld` and
+    `cure.exs`; `first-program.md`: what `bool` and `dint` hold (run: 2147483648 and
+    -2147483649 refused, 2 refused for a `bool`) and the field `env`; `first-plant.md`:
+    the fields the check prints, `./conveyor.ld` as the second line names it (run), and
+    an `ArgumentError` that names a point (run: `"panel.i.00"`, `"panle.i.0"` and
+    `"panel.q.0"`); `change-a-running-program.md`: `UndefinedFunctionError` for
+    `Logex.compile/1` (run).
+
+  The mutation table, the review's of the four scripts and the mend's of its own rules,
+  each by the full suite:
+
+  | patch | full suite | killed by |
+  |---|---|---|
+  | p01 no `unchecked` mark | rc=2, 57 failed | page_test 1, prose_test 2, readme_test 54 |
+  | p02 tilde fence allowed | rc=2 | page_test 1, prose_test 1, readme_test 1 |
+  | p03 indent margin +1 | rc=2 | page_test 1, readme_test 1 |
+  | p05 `$ mix run scripts/` taken as an example | rc=2 | page_test 1 |
+  | r01 step sentence limit 21 | rc=2 | prose_test 2 |
+  | r04 heading depth > 4 | rc=2 | prose_test 1 |
+  | r05 glossary links unchecked | rc=2 | prose_test 1 |
+  | r06 empty alt text allowed | rc=2 | prose_test 1 |
+  | s01 two pages of one name allowed | rc=2 | docs_test 1 |
+  | s02 link out of the repository allowed | rc=2 | docs_test 1 |
+  | s04 anchors of level 2 only | rc=2 | docs_test 3 |
+  | s06b GitHub anchor unchecked | rc=2 | docs_test 7 |
+  | s07b dead anchor in the built site accepted | rc=2 | docs_test 7 |
+  | s09 stale-line check broken | rc=2 | docs_test 6 |
+  | s10 picture outside assets accepted | rc=2 | docs_test 1 |
+  | x01 unmarked picture accepted | rc=2 | pictures_test 6 |
+  | x02 `same!/2` never raises (review) | rc=0, survived | none |
+  | x03 `otl` drawn as U | rc=2 | pictures_test 3 |
+  | m1 the hosts of Hex never matched (mend) | rc=2 | docs_test 15, by the compiler's warnings alone |
+  | m1b the hosts of Hex `hex.invalid` (mend) | rc=2 | docs_test 1, the Hex footer refused |
+  | m2 `package:` given again (mend) | rc=2 | docs_test 1, `mix.exs` gives no package |
+  | m3 a reference page under the limit (mend) | rc=2 | prose_test 2; configuration_test 1, a growth bound under load |
+  | m4 2,000 words refused (mend) | rc=2 | prose_test 1 |
+  | m5 no page refused for its length (mend) | rc=2 | prose_test 20, by the compiler's warnings alone |
+  | m5b the limit 1,000,000 (mend) | rc=2 | prose_test 1, 2,001 words passed |
+  | m6 `same!/2` never raises (mend, x02 again) | rc=2 | pictures_test 1 |
+  | page edits: a member's Write, a type's sequence, a typed counter's count, `cv`'s type, a long timer's `lint` (mend) | 5 of 5 red | readme_test's `MemberTables` |
+  | page edit: one use worded apart on `what-logex-is.md` (mend) | red | readme_test's `Uses` |
+
+  m1 and m5 killed only by the warnings a dead clause gives, as the review's s06 and s07,
+  m1b and m5b are their behaviour kills. The page edits ran the two tests alone, each
+  edit put back after its run.
+
+  The test diff: step 3 changed no file under `test/` before its review; its six
+  `examples/` changes are 0014's `Runner.status/1` call, output unchanged, and five holds
+  decision 591 drops, each held elsewhere but the member columns (F6). The review's mend
+  adds tests and removes none: `docs_test.exs` 2, `prose_test.exs` 1, `pictures_test.exs`
+  1, `readme_test.exs` 3, and moves no example's hold. The checks on its tip, each by its
+  exit code: `scripts/gate.sh` `GATE-OK`, 4,399 tests (11 doctests) in 491 s and
+  `DIALYZER-OK`; `scripts/docs.sh` `DOCS-OK`, 211 pages, 17,553 links, the 13 lines of
+  `docs/site-warnings.txt`, and no page linking Hex; `scripts/prose.exs` on every page, no
+  failure; `mix run scripts/draw.exs --check` and `mix format --check-formatted` green; CI
+  and Docs on `c16d8f1` green (runs 45622588569 and 45622588554). The mend's first gate
+  failed `retain_store_test.exs`'s "a parent's shutdown writes the store after every
+  output 0 and every device closed" once, its counts `[1, 1, 1, 1]` for `[2, 2, 1, 2]`,
+  beside RV-33's suites at a load of 18; it passed alone 3 times of 3 and under
+  `scripts/load.sh -n 30 -l 4` 30 of 30, and is no change of this step's: a flake under
+  load, recorded, the test unchanged. The site's pages under the first build of the mend
+  gave one more warning, the tutorial's `Logex.compile/1` in a code span, which ExDoc
+  reads as a link to no function: the message is quoted whole.
+
+  **The questions for the maintainer, each kept as built until answered.** The first is
+  594's draft; the rest are readings the step took where the record is silent.
+
+  1. *The uses of logex (594's draft, to correct).* README and `what-logex-is.md` say:
+     "Learn ladder logic on a computer, with no controller. Simulate a machine, for example
+     a conveyor or a box counter, before you commission it. Run ExUnit tests of ladder
+     programs in CI. Control a lab rig that has no safety function." Correct the words, or
+     keep them; `readme_test.exs` holds the two pages to one list.
+  2. *Does the 2,000-word limit bind a reference page?* Built: no; 25 of 27 references
+     pass it, `runner.md` 8,098 and `instructions-timers-and-counters.md` 11,645, and the
+     rule `length` passes them. (a) As built: a reader finds every rule of the runner of a
+     conveyor on one page. (b) As 589 is written: the references split, about 60 pages
+     more, the reader following a link for some rules.
+  3. *The pages of the records' runs.* Built: sixteen contributor pages, linked as a list
+     under "Decision records" in `docs/README.md`, and `record-runs-cost.md` in two pages
+     to keep each under 2,000. (a) As built. (b) One row a page in the map, which then
+     passes 2,000. (c) Listed in `docs/adr/README.md` alone.
+  4. *May a decision record keep a claim about Logix whose source is not recorded?*
+     Built since the review: no, 592 (b), the claim dropped or cited. (a) As mended: a
+     reader of the store's record reads only claims with a source. (b) The records lane's
+     reading: the claim stays, "not recorded" beside it, and the reader sees what the
+     project believes and that no manual says it.
+  5. *May a reference page show a type a host changed by hand, to show its refusal?*
+     `function-blocks.md`'s text 35 renames a box counter's block, `%{seal | name:
+     "seal2"}`. (a) As built: the reader sees the refusal. (b) The contract alone: the text
+     and its message removed.
+  6. *Does 591 bind a tutorial?* 591 names reference pages and how-to guides. Built: a
+     tutorial follows the contract by its template alone. (a) As built. (b) A tutorial as a
+     how-to guide, the style guide's table naming it.
+  7. *The contributors' words.* Built: one page, `docs/contributing/words.md`. (a) As
+     built: the reader of the runner's contributor page follows a link for a word. (b) A
+     table at the head of each contributor page: each page longer, the words beside it.
+  8. *The one-shots' row for a periodic task.* `use-one-shots-and-pulse-coils.md` says, of
+     a one-shot under an event task that misses an edge, "run the program under a periodic
+     task"; no run on a page shows it. (a) As built. (b) A run of a lamp's push button
+     under both tasks on the page, and the row's words held to what that run shows.
+  9. *README's length.* 154 lines where its template says about 120: the uses and the
+     issues added 9. (a) As built. (b) Cut to about 120, the install steps or the small
+     program moved to their pages.
 
 - **DOC-2 — the module text rewritten** (decision 546 (a)). Each module's and function's
   text rewritten by DOC-1's style guide, each sentence the suite pins changed with its
