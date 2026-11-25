@@ -162,7 +162,7 @@ defmodule Logex.IO do
   defp refused!([]), do: :ok
 
   defp refused!(diagnostics),
-    do: raise(ArgumentError, Enum.map_join(diagnostics, "\n", &Diagnostic.format/1))
+    do: raise(ArgumentError, Declarations.told(Enum.map(diagnostics, &Diagnostic.format/1)))
 
   @doc """
   A host's bindings, checked against a configuration's devices, as `Logex.Runner` checks
@@ -174,8 +174,10 @@ defmodule Logex.IO do
   Every device the points name is bound, and every device bound has a point at it
   (`docs/organisation.md` §4.5). A mistake is the host's, and every mistake comes in one
   `ArgumentError`, a line each, in device-name order, a key that is not a device's name
-  first: a device no adapter is bound to, naming the points at it; a device bound that no
-  point is at, with a did-you-mean among the devices; a binding that is no adapter; an
+  first, the first hundred and then one line that counts the rest (decision 610), a
+  device's name past 4,096 bytes cut (decision 613): a device no adapter is bound to,
+  naming the points at it; a device bound that no point is at, with a did-you-mean among
+  the devices; a binding that is no adapter; an
   adapter's options that are no keyword list; an adapter that does not implement this
   behaviour, naming the callbacks it lacks; and, for one that does and has `check/3`, each
   mistake its check gives in its options, or a check that gives no list of messages. The
@@ -183,9 +185,11 @@ defmodule Logex.IO do
 
   Its time is linear in the devices, their points and the bindings, but for a sort of the
   names, n log n, and the did-you-mean of a device bound that no point is at, which is
-  matched against every device's name: many such bindings among many devices take time
-  quadratic in the two, as `Logex.Configuration`'s refusals do. Only a host's mistake pays
-  it, and its message is linear in its problems.
+  matched against every device's name. Only a host's mistake pays it, and since decision
+  610 only the first hundred mistakes' lines are made, each did-you-mean among them, the
+  rest only counted, so that many such bindings among many devices cost near their count,
+  where they took time quadratic in the two, and 100,000 devices keyed by number are told
+  in 4 KB, where they were told in 4.5 MB.
   """
   @spec bind!(Configuration.t(), %{optional(String.t()) => module | {module, keyword}}) ::
           [{device :: String.t(), module, keyword, [Point.t(), ...]}]
@@ -220,10 +224,14 @@ defmodule Logex.IO do
     do:
       Enum.sort(Enum.uniq(Map.keys(devices) ++ for(key <- Map.keys(io), is_binary(key), do: key)))
 
+  # Decision 610: a line that quotes the key, or looks for a did-you-mean among the
+  # devices, is made only among the first hundred a refusal tells (Declarations.told/3).
   defp unnamed_key(key, devices),
     do: [
-      "io names each device by a string, got: #{Logex.Lexer.inspected(key)}" <>
-        named(key, devices)
+      fn ->
+        "io names each device by a string, got: #{Logex.Lexer.inspected(key)}" <>
+          named(key, devices)
+      end
     ]
 
   # An atom that spells a device's name is told the string.
@@ -245,8 +253,10 @@ defmodule Logex.IO do
 
   defp device(name, :error, {:ok, _binding}, sorted),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound, but no point is at it" <>
-        Declarations.suggest(name, sorted, & &1, "devices")
+      fn ->
+        "the device #{Logex.Lexer.quoted_text(name)} is bound, but no point is at it" <>
+          Declarations.suggest(name, sorted, & &1, "devices")
+      end
     ]
 
   defp device(name, {:ok, points}, {:ok, binding}, _sorted), do: adapter(name, binding, points)
@@ -277,14 +287,15 @@ defmodule Logex.IO do
 
   defp ranged(_array, first, last, device, _points),
     do: [
-      "`#{first.name}` to `#{last.name}` (#{located_at(device, first)} to #{located_at(device, last)})"
+      "#{quoted(first.name)} to #{quoted(last.name)} (#{located_at(device, first)} to #{located_at(device, last)})"
     ]
 
   defp array_of(name), do: array_named(Logex.Name.element(name))
   defp array_named({array, _subscripts}), do: array
   defp array_named(nil), do: nil
 
-  defp shown(device, %Point{name: name} = point), do: "`#{name}` (#{located_at(device, point)})"
+  defp shown(device, %Point{name: name} = point),
+    do: "#{quoted(name)} (#{located_at(device, point)})"
 
   defp located_at(device, %Point{direction: direction, address: address}),
     do: Enum.join([device, letter(direction) | Enum.map(address, &Integer.to_string/1)], ".")
@@ -339,7 +350,7 @@ defmodule Logex.IO do
 
   defp lines(name, module, other, false),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, whose check/3 gives a list of " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, whose check/3 gives a list of " <>
         "messages, got: #{Logex.Lexer.inspected(other)}"
     ]
 
@@ -356,7 +367,7 @@ defmodule Logex.IO do
 
   defp lacking(name, module, false),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which is no module"
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, which is no module"
     ]
 
   defp lacking(name, module, true),
@@ -371,7 +382,7 @@ defmodule Logex.IO do
 
   defp missing(name, module, callbacks),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which does not implement " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, which does not implement " <>
         "Logex.IO: it has no " <> either(callbacks)
     ]
 
@@ -383,8 +394,11 @@ defmodule Logex.IO do
     do: for(name <- sorted, do: entry(name, Map.fetch!(io, name), Map.fetch!(devices, name)))
 
   defp bound!(problems, _sorted, _devices, _io),
-    do: raise(ArgumentError, Enum.join(problems, "\n"))
+    do: raise(ArgumentError, Declarations.told(problems))
 
   defp entry(name, {module, opts}, points), do: {name, module, opts, points}
   defp entry(name, module, points), do: {name, module, [], points}
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

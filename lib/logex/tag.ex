@@ -110,8 +110,13 @@ defmodule Logex.Tag do
   digits for `10 ** 100_000`, made in time that grows with the square of its digits; a
   value that is no number, as `inspect/1` shows it, each long number in it cut (decision
   585), as every refusal of the host contract quotes a host's value (decision 586). A
-  name that is text is quoted whole, in backquotes, and one that is no UTF-8 text as
-  `inspect/1` shows it, `<<97, 98, 255, 99>>` (RV-32's review).
+  name that is text is quoted whole, in backquotes, up to 4,096 bytes and past them cut
+  and told how long it was (decision 613), one with `.` parts or a subscript among them,
+  a line to copy holding its cut start (RV-33's review), and one that is no UTF-8 text as
+  `inspect/1` shows it, `<<97, 98, 255, 99>>` (RV-32's review); a type's text, a value,
+  as `inspect/1` cuts it. A line of source that declares the same tag is told its name
+  whole, as a compile's diagnostic is. Its problems, the first hundred and how many more (decision
+  610).
 
   Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
   key: `new!("c", :dint, :var, nil, retain: true)` for `var retain c dint` and
@@ -176,18 +181,17 @@ defmodule Logex.Tag do
     do:
       raise(
         ArgumentError,
-        Enum.join(
+        Logex.Declarations.told(
           problems ++
             [
               "#{label(name)} takes `retain: true` or `non_retain: true`, not both, as a " <>
                 "declaration takes `retain` or `non_retain`, not both"
-            ],
-          "\n"
+            ]
         )
       )
 
   defp chosen(_seen, _name, [_ | _] = problems),
-    do: raise(ArgumentError, Enum.join(problems, "\n"))
+    do: raise(ArgumentError, Logex.Declarations.told(problems))
 
   defp chosen(%{retain: true}, _name, []), do: :retain
   defp chosen(%{non_retain: true}, _name, []), do: :non_retain

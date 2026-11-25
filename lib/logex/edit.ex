@@ -554,7 +554,7 @@ defmodule Logex.Edit do
     do: :ok
 
   defp program!(%FbType{name: name} = type) when is_binary(name),
-    do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
+    do: raise(ArgumentError, "#{quoted(name)} is " <> Declarations.not_a_program(type))
 
   defp program!(other),
     do:
@@ -564,7 +564,7 @@ defmodule Logex.Edit do
       )
 
   defp computable!([]), do: :ok
-  defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp computable!(lines), do: raise(ArgumentError, Declarations.told(lines))
 
   defp named!(%Program{name: name}, %Program{name: name}), do: :ok
 
@@ -577,8 +577,8 @@ defmodule Logex.Edit do
       )
 
   # A program's name is the host's, a program edited by hand may hold anything there, so
-  # it is quoted through the cut: text whole, anything else as `inspect/1` shows it, a
-  # long number cut (RV-32's review, F1).
+  # it is quoted through the cut: text whole up to 4,096 bytes and cut past them (decision
+  # 613), anything else as `inspect/1` shows it, a long number cut (RV-32's review, F1).
   defp named(nil), do: "an unnamed program"
   defp named(name), do: Logex.Lexer.quoted_text(name)
 
@@ -602,4 +602,7 @@ defmodule Logex.Edit do
 
   defp shown(:testing), do: "under test"
   defp shown(stage), do: Atom.to_string(stage)
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

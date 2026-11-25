@@ -152,7 +152,7 @@ defmodule Logex.Edit.Plan do
   # one of every element of an array its elements hold `hs[*].ws[*].x`, ", in every
   # element", where decision 254 cited "`x` of every element of `ws` of every element of
   # `hs`".
-  defp cited(path), do: "`#{starred(path)}`"
+  defp cited(path), do: "#{quoted(starred(path))}"
 
   defp starred({:every, array, member}), do: "#{array}[*].#{starred(member)}"
   defp starred(path), do: path
@@ -1890,4 +1890,7 @@ defmodule Logex.Edit.Plan do
   end
 
   defp nested_prune(_not_a_map, _plan, acc), do: acc
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

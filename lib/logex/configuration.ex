@@ -18,7 +18,8 @@ defmodule Logex.Configuration do
     is likely a slip. They stop nothing, and `new!/1` and `compile/3` give them.
 
   Every way of writing a configuration ends in `check/1`, the one validator: `new!/1`,
-  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each;
+  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each, the
+  first hundred and then how many more there are (decision 610);
   `compile/3`, from a configuration file's text, returns them, and `compile_file/1` from
   the file on disk, its program types loaded from beside it (M2-2); and
   `Logex.Runtime.start/1` checks again. A global built with
@@ -158,9 +159,13 @@ defmodule Logex.Configuration do
   line, `%Global{line: 10 ** 1_000_000}` told in 152 bytes and some 37,000 reductions
   where it took a megabyte and 32 million, `compile/3`'s and `compile_file/1`'s of an
   argument that is no text, and `initial/1`'s and `watchdog/1`'s. A name or a location
-  that is text is quoted whole, in backquotes; one that is no UTF-8 text, as `inspect/1`
-  shows it, `<<97, 98, 255, 99>>`; and a struct that writes itself out, a `Date` among
-  them, field by field where it holds a long number (RV-32's review).
+  that is text is quoted whole, in backquotes, up to 4,096 bytes and past them cut and
+  told how long it was (decision 613), in every diagnostic of a configuration as in a
+  refusal, those `check/1` gives among them, a line to copy giving the cut start or none
+  (provisional: `PLAN.md`'s RV-33 review, question 1); one that is no UTF-8 text, or holds
+  a control character, as `inspect/1` shows it, `<<97, 98, 255, 99>>`; and a struct that
+  writes itself out, a `Date` among them, field by field where it holds a long number
+  (RV-32's review).
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -372,7 +377,7 @@ defmodule Logex.Configuration do
          when is_map_key(seen, key),
          do:
            options(rest, all, global, seen, [
-             "`#{key}:` is given twice for #{label(global.name)}" | problems
+             "#{quoted("#{key}:")} is given twice for #{label(global.name)}" | problems
            ])
 
     defp options([{key, value} | rest], all, global, seen, problems)
@@ -382,7 +387,7 @@ defmodule Logex.Configuration do
     defp options([{key, value} | rest], all, global, seen, problems) when key in @qualifiers,
       do:
         options(rest, all, global, Map.put(seen, key, value), [
-          "`#{key}:` for #{label(global.name)} takes true or false, found #{Logex.Lexer.inspected(value)}"
+          "#{quoted("#{key}:")} for #{label(global.name)} takes true or false, found #{Logex.Lexer.inspected(value)}"
           | problems
         ])
 
@@ -406,18 +411,17 @@ defmodule Logex.Configuration do
       do:
         raise(
           ArgumentError,
-          Enum.join(
+          Declarations.told(
             problems ++
               [
                 "#{label(global.name)} takes `retain: true` or `non_retain: true`, not both, " <>
                   "as a `var_global` line takes `retain` or `non_retain`, not both"
-              ],
-            "\n"
+              ]
           )
         )
 
     defp chosen(_seen, _global, [_ | _] = problems),
-      do: raise(ArgumentError, Enum.join(problems, "\n"))
+      do: raise(ArgumentError, Declarations.told(problems))
 
     defp chosen(seen, global, []),
       do:
@@ -445,6 +449,10 @@ defmodule Logex.Configuration do
           "`retain: true` or `non_retain: true`, found #{Logex.Lexer.inspected(options)}"
 
     defp label(name), do: Logex.Lexer.quoted_text(name)
+
+    # RV-33's review (F2): a word a message writes in backquotes itself, through the cut
+    # (decision 613, `Logex.Lexer.quoted/1`).
+    defp quoted(word), do: Logex.Lexer.quoted(word)
 
     @typedoc "A global's type: an elementary type, or an array of one."
     @type type ::
@@ -616,16 +624,16 @@ defmodule Logex.Configuration do
     defp refusal(true, _reserved, name, kind)
          when binary_part(name, byte_size(name) - 1, 1) == "]",
          do:
-           "`#{name}` cannot name #{a(kind)}: brackets are kept for an element's subscripts, " <>
+           "#{label(name)} cannot name #{a(kind)}: brackets are kept for an element's subscripts, " <>
              "as in `m1.temps[3]`"
 
     defp refusal(true, _reserved, name, kind),
       do:
-        "`#{name}` cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
+        "#{label(name)} cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
           "location, as in `panel.i.0`"
 
     defp refusal(false, true, name, kind),
-      do: "`#{name}` is a keyword and cannot name #{a(kind)}"
+      do: "#{label(name)} is a keyword and cannot name #{a(kind)}"
 
     defp refusal(false, false, _name, _kind), do: nil
 
@@ -785,7 +793,7 @@ defmodule Logex.Configuration do
       do: listed_located(array(%{global | initial: nil}), location, global)
 
     defp listed_located([], location, %Global{name: name} = global),
-      do: ["`#{name}` is #{a_point(location, global)}: " <> no_list(location)]
+      do: ["#{label(name)} is #{a_point(location, global)}: " <> no_list(location)]
 
     defp listed_located(misfits, _location, _global), do: misfits
 
@@ -817,8 +825,8 @@ defmodule Logex.Configuration do
     defp ranged_point(count, {device, io, fields}) when count > 0 do
       {first, [last]} = Enum.split(fields, -1)
 
-      "an array of #{direction_word(io)} points, `#{spelling({device, io, fields})}` to " <>
-        "`#{spelling({device, io, first ++ [last + count - 1]})}`"
+      "an array of #{direction_word(io)} points, #{quoted(spelling({device, io, fields}))} to " <>
+        "#{quoted(spelling({device, io, first ++ [last + count - 1]}))}"
     end
 
     defp ranged_point(_none, {_device, io, _fields}),
@@ -826,7 +834,7 @@ defmodule Logex.Configuration do
 
     defp retained_point(location, %Global{name: name} = global),
       do: [
-        "`#{name}` is #{a_point(location, global)}, and a located global takes no `retain`: " <>
+        "#{label(name)} is #{a_point(location, global)}, and a located global takes no `retain`: " <>
           "an input point is read again at every start, and an output point starts at 0 " <>
           "until logic writes it"
       ]
@@ -846,13 +854,13 @@ defmodule Logex.Configuration do
 
     defp initial(%Global{name: name}, {:ok, {_device, "i", _address}}),
       do: [
-        "`#{name}` is an input point: its value comes from the input image, so it takes no " <>
+        "#{label(name)} is an input point: its value comes from the input image, so it takes no " <>
           "initial value"
       ]
 
     defp initial(%Global{name: name}, {:ok, {_device, "q", _address}}),
       do: [
-        "`#{name}` is an output point: it takes no initial value, and is 0 until its " <>
+        "#{label(name)} is an output point: it takes no initial value, and is 0 until its " <>
           "driver writes it"
       ]
 
@@ -922,14 +930,14 @@ defmodule Logex.Configuration do
     defp place(:error, at),
       do:
         {:refused,
-         "`#{at}` is not a location: a location is a device, `i` or `q`, and an address, " <>
+         "#{label(at)} is not a location: a location is a device, `i` or `q`, and an address, " <>
            "as in `panel.i.0`"}
 
     defp place({:respell, address}, at),
       do:
         {:refused,
-         "`#{at}` is not a location as written: a location's `i` or `q` is lowercase and " <>
-           "its address has no leading zero, so it is written `#{spelling(address)}`"}
+         "#{label(at)} is not a location as written: a location's `i` or `q` is lowercase and " <>
+           "its address has no leading zero, so it is written #{quoted(spelling(address))}"}
 
     defp place({:ok, {device, _io, _fields}} = spelled, _at)
          when byte_size(device) > 1 and
@@ -939,7 +947,7 @@ defmodule Logex.Configuration do
     defp place(spelled, _at), do: spelled
 
     defp device_word(true, {:ok, {device, _io, _fields}}),
-      do: {:refused, "`#{device}` is a keyword and cannot name a device"}
+      do: {:refused, "#{label(device)} is a keyword and cannot name a device"}
 
     defp device_word(false, spelled), do: spelled
 
@@ -974,9 +982,16 @@ defmodule Logex.Configuration do
       do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
 
     defp label(name), do: Logex.Lexer.quoted_text(name)
+
+    # RV-33's review (F2): a word a message writes in backquotes itself, through the cut
+    # (decision 613, `Logex.Lexer.quoted/1`).
+    defp quoted(word), do: Logex.Lexer.quoted(word)
   end
 
   @fields [:name, :programs, :tasks, :globals, :instances, :connections]
+
+  # Decision 613: the longest text a refusal quotes whole, `Logex.Lexer.quoted_text/1`'s.
+  @longest_text Logex.Lexer.longest_text()
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
@@ -1066,7 +1081,7 @@ defmodule Logex.Configuration do
   defp unline_whole(_whole, item, {items, lined}), do: {[item | items], lined}
 
   defp raised([], config), do: config
-  defp raised(problems, _config), do: raise(ArgumentError, Enum.join(problems, "\n"))
+  defp raised(problems, _config), do: raise(ArgumentError, Declarations.told(problems))
 
   # Each field once, and none but the six.
   defp fields(fields) do
@@ -1138,7 +1153,8 @@ defmodule Logex.Configuration do
 
   defp program_named(true, %{name: name}, {programs, problems}),
     do:
-      {programs, ["two programs are named `#{name}`: a configuration has one of each" | problems]}
+      {programs,
+       ["two programs are named #{quoted(name)}: a configuration has one of each" | problems]}
 
   # A list walked to its end, a proper one element by element, and anything else, an
   # improper tail included, handed to `other` once: a host's list is never trusted to be
@@ -1220,7 +1236,7 @@ defmodule Logex.Configuration do
           do: %{
             warning(
               line,
-              "`#{spelling}` is more precise than #{Declarations.a_type(type)} keeps: it is " <>
+              "#{quoted(spelling)} is more precise than #{Declarations.a_type(type)} keeps: it is " <>
                 "held as #{held}"
             )
             | file: config.file
@@ -1329,7 +1345,7 @@ defmodule Logex.Configuration do
         cited(Map.fetch(Map.get(by_line, String.to_integer(line), %{}), shown), line, whole)
       end)
 
-  defp cited({:ok, spelling}, line, _whole), do: "`#{spelling}` (line #{line})"
+  defp cited({:ok, spelling}, line, _whole), do: "#{quoted(spelling)} (line #{line})"
   defp cited(:error, _line, whole), do: whole
 
   defp line_respelled(message, spellings),
@@ -1412,7 +1428,7 @@ defmodule Logex.Configuration do
        [
          file_problem(
            path,
-           "`#{basename}` is not a configuration file: Logex.Configuration.compile_file/1 " <>
+           "#{quoted(basename)} is not a configuration file: Logex.Configuration.compile_file/1 " <>
              "loads a configuration from its `.logex` file"
          )
        ]}
@@ -1498,7 +1514,8 @@ defmodule Logex.Configuration do
 
   defp type_loaded({{type, line}, {:ok, %FbType{} = block}}, {programs, cited, theirs}),
     do:
-      {programs, [diagnostic(line, "`#{type}` is " <> Declarations.not_a_program(block)) | cited],
+      {programs,
+       [diagnostic(line, "#{quoted(type)} is " <> Declarations.not_a_program(block)) | cited],
        theirs}
 
   # The type's mistakes may be in the blocks it holds, so the files named are those they
@@ -1507,7 +1524,7 @@ defmodule Logex.Configuration do
     files = for %Diagnostic{file: file} <- diagnostics, is_binary(file), uniq: true, do: file
 
     message =
-      "program type `#{type}` does not compile: its mistakes follow, cited in " <>
+      "program type #{quoted(type)} does not compile: its mistakes follow, cited in " <>
         listed(Enum.map(files, &Path.basename/1))
 
     {programs, [diagnostic(line, message) | cited], Enum.reverse(diagnostics, theirs)}
@@ -1521,7 +1538,9 @@ defmodule Logex.Configuration do
   defp beside({:error, _reason}), do: []
 
   defp absent({type, line}, beside, names) do
-    unknown = "unknown program type `#{type}`: there is no `#{type}.ld` beside `#{beside}`"
+    unknown =
+      "unknown program type #{quoted(type)}: there is no #{quoted("#{type}.ld")} beside #{quoted(beside)}"
+
     sorted = fn -> Enum.sort(names) end
     diagnostic(line, Declarations.offer(type, sorted, & &1, "program types", &(unknown <> &1)))
   end
@@ -1593,7 +1612,7 @@ defmodule Logex.Configuration do
     do: raise(ArgumentError, "expected a %Logex.Configuration{}, got: #{shown(other)}")
 
   defp checked([], diagnostics), do: diagnostics
-  defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Enum.join(mistakes, "\n"))
+  defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Declarations.told(mistakes))
 
   # Every problem with a configuration, of two kinds, and its warnings: the host's
   # mistakes, which no configuration text can make, each a line of an ArgumentError's
@@ -1814,6 +1833,10 @@ defmodule Logex.Configuration do
 
   defp program_held(lines, _program, ok, mistakes), do: {ok, Enum.reverse(lines, mistakes)}
 
+  # RV-33's review (F1): a struct as the tags, a `Date`, holds no port: its line is
+  # `Logex.Program.edited_by_hand/1`'s, where sorting it raised Protocol.UndefinedError.
+  defp ports_held(%Program{tags: tags}) when is_struct(tags), do: []
+
   defp ports_held(%Program{name: name, tags: tags}),
     do:
       for(
@@ -1821,15 +1844,15 @@ defmodule Logex.Configuration do
         section in [:var_input, :var_output],
         word = held_word(type),
         do:
-          "`#{name}`'s #{section} `#{tag}` holds #{word}, which no text declares: an " <>
-            "instance is the program's own, declared with `var`, so `#{name}` was edited by " <>
+          "#{quoted(name)}'s #{section} #{quoted(tag)} holds #{word}, which no text declares: an " <>
+            "instance is the program's own, declared with `var`, so #{quoted(name)} was edited by " <>
             "hand after it compiled"
       )
 
   defp held_word(%FbType{name: name} = type) when is_binary(name),
     do: Declarations.instance_of(type)
 
-  defp held_word({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
+  defp held_word({:block, name}) when is_binary(name), do: "an instance of #{quoted(name)}"
   defp held_word(_elementary_or_junk), do: nil
 
   # A part's elements: every one that is its struct, a bad line cleared; those whose line
@@ -2066,8 +2089,12 @@ defmodule Logex.Configuration do
 
   defp label(name), do: Logex.Lexer.quoted_text(name)
 
+  # RV-33's review (F2): a word a message writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
+
   defp path(instance, member) when is_binary(instance) and is_binary(member),
-    do: "`#{instance}.#{member}`"
+    do: "#{quoted("#{instance}.#{member}")}"
 
   defp path(instance, member), do: "#{shown(instance)}.#{shown(member)}"
 
@@ -2161,15 +2188,15 @@ defmodule Logex.Configuration do
   end
 
   defp clash({_ref, first, name, first_line, _}, {_, _kind, name, line, _}, acc),
-    do: refused(acc, line, "`#{name}` is declared twice: " <> first_as(first_line, first))
+    do: refused(acc, line, "#{quoted(name)} is declared twice: " <> first_as(first_line, first))
 
   defp clash({_ref, first, twin, first_line, _}, {_, _kind, name, line, _}, acc),
     do:
       refused(
         acc,
         line,
-        "`#{name}` and `#{twin}`#{at_line(first_line)} differ only in case: names are " <>
-          "case-sensitive, so these would be two (`#{twin}` is #{a(first)})"
+        "#{quoted(name)} and #{quoted(twin)}#{at_line(first_line)} differ only in case: names are " <>
+          "case-sensitive, so these would be two (#{quoted(twin)} is #{a(first)})"
       )
 
   defp refused({names, folded, silent, kept, problems}, line, message),
@@ -2233,8 +2260,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         task.line,
-        "`#{task.name}` is a second continuous task: a configuration has one at most, and " <>
-          "`#{first.name}`#{where(first)} is its continuous task"
+        "#{quoted(task.name)} is a second continuous task: a configuration has one at most, and " <>
+          "#{quoted(first.name)}#{where(first)} is its continuous task"
       )
     ]
 
@@ -2244,7 +2271,7 @@ defmodule Logex.Configuration do
     given =
       for {word, value} <- [single: task.single, interval: task.interval, priority: task.priority],
           value != nil,
-          do: "`#{word}`"
+          do: "#{quoted(word)}"
 
     untimed_given(given, task)
   end
@@ -2255,7 +2282,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         task.line,
-        "`#{task.name}` is the continuous task, which takes no #{or_listed(given)}: it runs " <>
+        "#{quoted(task.name)} is the continuous task, which takes no #{or_listed(given)}: it runs " <>
           "every program instance with no timed task, after the due tasks, as in " <>
           "`task #{example(task.name)} continuous watchdog 200`"
       )
@@ -2274,7 +2301,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the watchdog of `#{name}` is 0: a watchdog is at least 1 ms, and a task that sets " <>
+        "the watchdog of #{quoted(name)} is 0: a watchdog is at least 1 ms, and a task that sets " <>
           "none has 500"
       )
     ]
@@ -2283,7 +2310,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the watchdog of `#{name}` is #{Logex.Lexer.quoted_number(watchdog)} ms: a watchdog " <>
+        "the watchdog of #{quoted(name)} is #{Logex.Lexer.quoted_number(watchdog)} ms: a watchdog " <>
           "is 1 to 2147483647 ms"
       )
     ]
@@ -2304,7 +2331,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "task `#{name}` needs an interval or a single, as in " <>
+        "task #{quoted(name)} needs an interval or a single, as in " <>
           "`task #{example(name)} interval 10 priority 1` or " <>
           "`task #{example(name)} single estop priority 0`" <>
           or_continuous(task.priority, continuous, name)
@@ -2325,7 +2352,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the interval of `#{name}` is 0: an interval is at least 1 ms, and a task that " <>
+        "the interval of #{quoted(name)} is 0: an interval is at least 1 ms, and a task that " <>
           "runs only on the rising edges of its single is declared without one"
       )
     ]
@@ -2334,7 +2361,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the interval of `#{name}` is 0: an interval is at least 1 ms, and an instance " <>
+        "the interval of #{quoted(name)} is 0: an interval is at least 1 ms, and an instance " <>
           "that runs every cycle is declared without `with`"
       )
     ]
@@ -2343,7 +2370,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the interval of `#{name}` is #{Logex.Lexer.quoted_number(interval)} ms: an interval " <>
+        "the interval of #{quoted(name)} is #{Logex.Lexer.quoted_number(interval)} ms: an interval " <>
           "is 1 to 2147483647 ms"
       )
     ]
@@ -2359,7 +2386,7 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "task `#{name}` needs a priority, as in " <>
+        "task #{quoted(name)} needs a priority, as in " <>
           "`task #{example(name)}#{shown_kind(task)} priority 1" <>
           "#{shown_watchdog(task.watchdog)}`: 0 is the highest"
       )
@@ -2369,14 +2396,22 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "the priority of `#{name}` is #{Logex.Lexer.quoted_number(priority)}: a priority is 0 to 65535, and 0 is " <>
+        "the priority of #{quoted(name)} is #{Logex.Lexer.quoted_number(priority)}: a priority is 0 to 65535, and 0 is " <>
           "the highest"
       )
     ]
 
   defp priority(_task), do: []
 
-  defp example(name), do: example_named(Declarations.name?(name) and not reserved?(name), name)
+  # RV-33's review (F2): a name past 4,096 bytes, which a refusal cuts, is no name to copy
+  # into a line, so the line's example is `t`.
+  defp example(name),
+    do:
+      example_named(
+        Declarations.name?(name) and not reserved?(name) and
+          byte_size(name) <= @longest_text,
+        name
+      )
 
   defp example_named(true, name), do: name
   defp example_named(false, _name), do: "t"
@@ -2462,7 +2497,7 @@ defmodule Logex.Configuration do
          {[
             diagnostic(
               task.line,
-              "the single of `#{task.name}`, `#{name}`, is #{Declarations.a_type(type)}" <>
+              "the single of #{quoted(task.name)}, #{quoted(name)}, is #{Declarations.a_type(type)}" <>
                 "#{where(global)}: a single is a bool global"
             )
           ], MapSet.new()}
@@ -2472,7 +2507,8 @@ defmodule Logex.Configuration do
 
   defp triggered({:error, message}, task),
     do:
-      {[diagnostic(task.line, prefixed("the single of `#{task.name}`: ", message))], MapSet.new()}
+      {[diagnostic(task.line, prefixed("the single of #{quoted(task.name)}: ", message))],
+       MapSet.new()}
 
   defp triggered(:skip, _task), do: {[], MapSet.new()}
 
@@ -2764,7 +2800,7 @@ defmodule Logex.Configuration do
       noted(
         acc,
         global.line,
-        "the device `#{device}` and the device `#{other}` of `#{first.name}`#{where(first)} " <>
+        "the device #{quoted(device)} and the device #{quoted(other)} of #{quoted(first.name)}#{where(first)} " <>
           "differ only in case: device names are case-sensitive, so these would be two devices"
       )
 
@@ -2804,8 +2840,8 @@ defmodule Logex.Configuration do
       {noted(
          acc,
          global.line,
-         "`#{element.name}` is at `#{element.at}`, where `#{first.name}` already is" <>
-           "#{where(first)}: a location holds one global, and `#{global.name}` is " <>
+         "#{quoted(element.name)} is at #{quoted(element.at)}, where #{quoted(first.name)} already is" <>
+           "#{where(first)}: a location holds one global, and #{quoted(global.name)} is " <>
            "#{a_point(location(global.at), global)}"
        ), MapSet.put(told, owner(first))}
 
@@ -2820,7 +2856,7 @@ defmodule Logex.Configuration do
       noted(
         acc,
         global.line,
-        "`#{global.name}` is at `#{global.at}`, where `#{first.name}` already is" <>
+        "#{quoted(global.name)} is at #{quoted(global.at)}, where #{quoted(first.name)} already is" <>
           "#{where(first)}: a location holds one global"
       )
 
@@ -2868,14 +2904,17 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         instance.line,
-        "`#{instance.type}` cannot name a program type: a type is named by its file, " <>
+        "#{quoted(instance.type)} cannot name a program type: a type is named by its file, " <>
           "`motor.ld` for `motor`, and " <> rule()
       )
     ]
 
   defp type_named(false, true, instance, _programs),
     do: [
-      diagnostic(instance.line, "`#{instance.type}` is a keyword and cannot name a program type")
+      diagnostic(
+        instance.line,
+        "#{quoted(instance.type)} is a keyword and cannot name a program type"
+      )
     ]
 
   defp type_named(false, false, instance, {programs, given}),
@@ -2892,7 +2931,7 @@ defmodule Logex.Configuration do
 
   defp unknown_type(false, instance, programs) do
     names = Enum.sort(Map.keys(programs))
-    unknown = "unknown program type `#{instance.type}`"
+    unknown = "unknown program type #{quoted(instance.type)}"
 
     [
       diagnostic(
@@ -2933,7 +2972,10 @@ defmodule Logex.Configuration do
 
   defp task_held(false, {kind, line, _ref}, instance, _world),
     do: [
-      diagnostic(instance.line, "`#{instance.task}` is #{a(kind)}#{at_line(line)}, not a task")
+      diagnostic(
+        instance.line,
+        "#{quoted(instance.task)} is #{a(kind)}#{at_line(line)}, not a task"
+      )
     ]
 
   defp task_held(false, nil, %Instance{task: task} = instance, world),
@@ -2943,7 +2985,7 @@ defmodule Logex.Configuration do
   # that, never a global's or a member's reading (§4.7).
   defp no_task(true, task, world) do
     dotted =
-      "no task `#{task}`: a task's name has no `.`, which is kept for a path and a location"
+      "no task #{quoted(task)}: a task's name has no `.`, which is kept for a path and a location"
 
     Declarations.offer(task, world.tasks, & &1, "names", &(dotted <> &1))
   end
@@ -2951,7 +2993,7 @@ defmodule Logex.Configuration do
   defp no_task(false, task, world), do: no_named(:task, task, world, nil)
 
   defp listed(names) do
-    quoted = Enum.map(names, &"`#{&1}`")
+    quoted = Enum.map(names, &"#{quoted(&1)}")
     listing(Enum.drop(quoted, -1), List.last(quoted))
   end
 
@@ -3009,7 +3051,7 @@ defmodule Logex.Configuration do
     do: running(Map.fetch(world.runnable, connection.instance))
 
   defp instance_held(false, {kind, line, _ref}, connection, _world),
-    do: {:error, "`#{connection.instance}` is #{a(kind)}#{at_line(line)}, not an instance"}
+    do: {:error, "#{quoted(connection.instance)} is #{a(kind)}#{at_line(line)}, not an instance"}
 
   # A connection line that begins with a location reads it as an instance's member, so
   # where no instance has that name, the message names the location reading (§4.7).
@@ -3025,7 +3067,7 @@ defmodule Logex.Configuration do
   defp no_instance(_location, connection, _world),
     do:
       {:error,
-       "`#{connection.instance}.#{connection.member}` is a location, written only after `at` " <>
+       "#{quoted("#{connection.instance}.#{connection.member}")} is a location, written only after `at` " <>
          "on a `var_global` line: a connection begins with an instance's var_input or " <>
          "var_output, as in `m1.start`"}
 
@@ -3036,7 +3078,7 @@ defmodule Logex.Configuration do
 
   defp unnamed(true, kind, name, _world, _type),
     do:
-      "no #{noun(kind)} `#{name}`: `#{name}` is a keyword of a configuration file, and " <>
+      "no #{noun(kind)} #{quoted(name)}: #{quoted(name)} is a keyword of a configuration file, and " <>
         "nothing in one is named so"
 
   # M5-11: a name with a subscript, `ws[0]`, where a global is wanted whole, a task's
@@ -3065,7 +3107,7 @@ defmodule Logex.Configuration do
   defp element_named({:global, _line, %Global{type: type} = global}, array, name)
        when is_array(type),
        do:
-         "`#{name}` names an element of `#{array}`, #{Declarations.a_global(type)}" <>
+         "#{quoted(name)} names an element of #{quoted(array)}, #{Declarations.a_global(type)}" <>
            "#{where(global)}: a global is named here whole, never by one of its elements"
 
   # M6-3's review: an element of a keyword, `retain[0]`, is told the word is a keyword, as
@@ -3079,24 +3121,35 @@ defmodule Logex.Configuration do
 
   defp keyword_named(array, name),
     do:
-      "no global `#{name}`: `#{array}` is a keyword of a configuration file, and nothing in " <>
+      "no global #{quoted(name)}: #{quoted(array)} is a keyword of a configuration file, and nothing in " <>
         "one is named so"
 
   defp whole_only(name),
-    do: "no global `#{name}`: a global is named here whole, never by one of its elements"
+    do: "no global #{quoted(name)}: a global is named here whole, never by one of its elements"
+
+  # RV-33's review (F2): a name past 4,096 bytes, which a refusal cuts, is no name to copy
+  # into a line, so its message gives no line to declare it, as a long number's gives none.
+  # A name in a line to copy: whole to 4,096 bytes, and past them its cut start, `aaaa…`.
+  defp copied(text) when byte_size(text) > @longest_text, do: Logex.Lexer.cut_start(text)
+  defp copied(text), do: text
+
+  defp declare("", kind, name, _type) when byte_size(name) > @longest_text,
+    do: "no #{noun(kind)} #{quoted(name)}"
 
   defp declare("", :global, name, type),
-    do: "no global `#{name}`: declare it, as in `var_global #{name} #{written_type(type)}`"
+    do:
+      "no global #{quoted(name)}: declare it, as in #{quoted("var_global #{name} #{written_type(type)}")}"
 
   defp declare("", :instance, name, _type),
-    do: "no instance `#{name}`: declare it, as in `program #{name} motor`"
+    do: "no instance #{quoted(name)}: declare it, as in #{quoted("program #{name} motor")}"
 
   defp declare("", :task, name, _type),
     do:
-      "no task `#{name}`: declare it with a `task` line, as in " <>
-        "`task #{name} interval 10 priority 1`"
+      "no task #{quoted(name)}: declare it with a `task` line, as in " <>
+        "#{quoted("task #{name} interval 10 priority 1")}"
 
-  defp declare(suggestion, kind, name, _type), do: "no #{noun(kind)} `#{name}`" <> suggestion
+  defp declare(suggestion, kind, name, _type),
+    do: "no #{noun(kind)} #{quoted(name)}" <> suggestion
 
   defp noun(:global), do: "global"
   defp noun(:instance), do: "instance"
@@ -3146,7 +3199,7 @@ defmodule Logex.Configuration do
     do: element_of_tag(Map.fetch(program.tags, array), {array, subscripts}, program, member)
 
   defp element_of_tag(:error, {array, _subscripts}, program, _member),
-    do: {:element, "`#{program.name}` declares no `#{array}`"}
+    do: {:element, "#{quoted(program.name)} declares no #{quoted(array)}"}
 
   defp element_of_tag({:ok, %Tag{type: {:array, type, dims}} = tag}, {_, subscripts}, _p, member),
     do:
@@ -3159,7 +3212,7 @@ defmodule Logex.Configuration do
   defp element_of_tag({:ok, %Tag{} = tag}, {array, _subscripts}, program, member),
     do:
       {:element,
-       "`#{member}` names an element of `#{array}`, but `#{array}` is " <>
+       "#{quoted(member)} names an element of #{quoted(array)}, but #{quoted(array)} is " <>
          "#{shown_type(tag.type)}#{in_type(tag.line, program)}, no array"}
 
   defp subscripted(subscripts, {tag, type, dims}, member) do
@@ -3171,14 +3224,14 @@ defmodule Logex.Configuration do
   defp element_index([name | _], _subscripts, _array, member),
     do:
       {:element,
-       "`#{member}`'s subscript `#{name}` is a tag's name: a connection names an element by " <>
-         "literal subscripts, as in `#{elem(Logex.Name.element(member), 0)}[0]`"}
+       "#{quoted(member)}'s subscript #{quoted(name)} is a tag's name: a connection names an element by " <>
+         "literal subscripts, as in #{quoted("#{elem(Logex.Name.element(member), 0)}[0]")}"}
 
   defp element_index([], {index, _}, {tag, _type, dims}, member)
        when length(index) != length(dims),
        do:
          {:element,
-          "`#{member}` names an element of `#{tag.name}`, #{Declarations.a_type(tag.type)}, " <>
+          "#{quoted(member)} names an element of #{quoted(tag.name)}, #{Declarations.a_type(tag.type)}, " <>
             "by #{length(index)} subscript#{plural(length(index))}, where it takes " <>
             "#{length(dims)}, one a dimension"}
 
@@ -3197,7 +3250,7 @@ defmodule Logex.Configuration do
   defp in_bounds({i, n}, _index, {tag, _type}, member),
     do:
       {:element,
-       "`#{member}`'s subscript `#{i}` is outside 0 to #{n - 1}: `#{tag.name}` is " <>
+       "#{quoted(member)}'s subscript #{quoted(i)} is outside 0 to #{n - 1}: #{quoted(tag.name)} is " <>
          "#{Declarations.a_type(tag.type)}"}
 
   defp plural(1), do: ""
@@ -3225,8 +3278,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is a var_external of `#{program.name}`, " <>
-          "which reaches the global `#{connection.member}` itself: only a var_input or " <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is a var_external of #{quoted(program.name)}, " <>
+          "which reaches the global #{quoted(connection.member)} itself: only a var_input or " <>
           "var_output connects"
       )
 
@@ -3235,8 +3288,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is internal to `#{program.name}` " <>
-          "(declared `#{section}`): only a var_input or var_output connects"
+        "#{quoted("#{connection.instance}.#{connection.member}")} is internal to #{quoted(program.name)} " <>
+          "(declared #{quoted(section)}): only a var_input or var_output connects"
       )
 
   defp of_member({:ok, _not_a_tag}, _instance, program, connection, acc, _world),
@@ -3253,8 +3306,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` goes too deep: a connection names an " <>
-          "instance's var_input or var_output, as in `#{connection.instance}.start`"
+        "#{quoted("#{connection.instance}.#{connection.member}")} goes too deep: a connection names an " <>
+          "instance's var_input or var_output, as in #{quoted("#{connection.instance}.start")}"
       )
 
   defp unknown_member(false, program, connection, acc) do
@@ -3278,7 +3331,7 @@ defmodule Logex.Configuration do
 
   defp declares_no(connection, program),
     do:
-      "`#{connection.instance}` runs `#{program.name}`, which declares no `#{connection.member}`"
+      "#{quoted(connection.instance)} runs #{quoted(program.name)}, which declares no #{quoted(connection.member)}"
 
   defp connects(message, "", [], _type), do: message <> ": it has no var_input or var_output"
 
@@ -3356,8 +3409,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is already connected, by " <>
-          "`#{connection.instance}.#{member}` to #{end_label(first.to)}#{where(first)}: a " <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is already connected, by " <>
+          "#{quoted("#{connection.instance}.#{member}")} to #{end_label(first.to)}#{where(first)}: a " <>
           "var_input has one source, an array whole or each of its elements"
       )
 
@@ -3366,12 +3419,12 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is already connected, to " <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is already connected, to " <>
           "#{end_label(first.to)}#{where(first)}: a var_input has one source"
       )
 
-  defp end_label(to) when is_binary(to) or is_integer(to), do: "`#{to}`"
-  defp end_label(to) when is_float(to), do: "`#{Float.to_string(to)}`"
+  defp end_label(to) when is_binary(to) or is_integer(to), do: "#{quoted(to)}"
+  defp end_label(to) when is_float(to), do: "#{quoted(Float.to_string(to))}"
   defp end_label(to), do: shown(to)
 
   defp source(:global, connection, tag, acc, world),
@@ -3383,7 +3436,7 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}, and " <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is #{Declarations.a_type(type)}, and " <>
           "the constant #{Logex.Lexer.quoted_number(connection.to)} is one value: connect it to a global " <>
           "array of its sizes, or each element to a constant, " <>
           each_constant(
@@ -3401,8 +3454,12 @@ defmodule Logex.Configuration do
   # The line an element's connection is written in, its constant in it; RV-31's review
   # (F5): with a long constant, which a message quotes cut, the element alone, so that no
   # line to copy holds a cut number.
-  defp each_constant(false, element, to), do: "as in `#{element} #{shown_number(to)}`"
-  defp each_constant(true, element, _to), do: "the first `#{element}`"
+  # A line to copy: the constant whole to 10,000 characters, as decision 584 has it, and
+  # the element's name its cut start past 4,096 bytes (RV-33's review, F2).
+  defp each_constant(false, element, to),
+    do: "as in `#{copied(element)} #{shown_number(to)}`"
+
+  defp each_constant(true, element, _to), do: "the first #{quoted(element)}"
 
   defp constant(true, _connection, _tag, acc), do: acc
 
@@ -3411,7 +3468,7 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}: " <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is #{Declarations.a_type(type)}: " <>
           Declarations.literal_misfit(
             type,
             connection.to,
@@ -3459,8 +3516,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is #{type_word(tag.type)}, but " <>
-          "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}" <>
+        "#{quoted("#{connection.instance}.#{connection.member}")} is #{type_word(tag.type)}, but " <>
+          "#{quoted(global.name)} is #{Declarations.a_type(global.type)}#{where(global)}" <>
           unwidened(Declarations.conversion(from, to), from, to)
       )
 
@@ -3471,7 +3528,7 @@ defmodule Logex.Configuration do
   defp unwidened(conversion, from, to),
     do:
       ": #{Declarations.a_type(from)} does not widen into #{Declarations.a_type(to)}, and a " <>
-        "connection converts nothing: convert it inside the program, with `#{conversion}`"
+        "connection converts nothing: convert it inside the program, with #{quoted(conversion)}"
 
   # A var_input or var_output that holds an instance is the host's mistake, refused before
   # any diagnostic (decision 169), so a connected member's type is elementary here.
@@ -3495,7 +3552,7 @@ defmodule Logex.Configuration do
     do: {:ok, global}
 
   defp global_held({kind, line, _ref}, name, _type, _world),
-    do: {:error, "`#{name}` is #{a(kind)}#{at_line(line)}, not a global"}
+    do: {:error, "#{quoted(name)} is #{a(kind)}#{at_line(line)}, not a global"}
 
   # Decision 223: a connection's far end may be an element of a global array, by literal
   # subscripts, `speeds[1]`, read and driven as a global of the elements' type under the
@@ -3535,7 +3592,7 @@ defmodule Logex.Configuration do
   defp global_element({:global, _line, %Global{} = global}, name, _type, _world),
     do:
       {:error,
-       "`#{name}` names an element of `#{global.name}`, but `#{global.name}` is " <>
+       "#{quoted(name)} names an element of #{quoted(global.name)}, but #{quoted(global.name)} is " <>
          "#{Declarations.a_global(global.type)}#{where(global)}, no array"}
 
   defp global_element(nil, name, _type, world) do
@@ -3547,7 +3604,7 @@ defmodule Logex.Configuration do
     [array | _] = String.split(name, "[")
 
     {:error,
-     "`#{name}` names an element of `#{array}`, but `#{array}` is #{a(kind)}#{at_line(line)}, " <>
+     "#{quoted(name)} names an element of #{quoted(array)}, but #{quoted(array)} is #{a(kind)}#{at_line(line)}, " <>
        "not a global"}
   end
 
@@ -3555,7 +3612,7 @@ defmodule Logex.Configuration do
   defp no_array(true, array, name, _world), do: keyword_named(array, name)
 
   defp no_array(false, array, name, world) do
-    no_array = "no global `#{name}`: there is no global array `#{array}`"
+    no_array = "no global #{quoted(name)}: there is no global array #{quoted(array)}"
     Declarations.offer(array, world.globals, & &1, "names", &(no_array <> &1))
   end
 
@@ -3568,16 +3625,16 @@ defmodule Logex.Configuration do
   defp global_index([tag | _], _index, {global, _etype, dims}, name),
     do:
       {:error,
-       "`#{name}`'s subscript `#{tag}` is a tag's name: a connection names an element of a " <>
-         "global by literal subscripts, as in `#{global.name}[#{zeros(dims)}]`"}
+       "#{quoted(name)}'s subscript #{quoted(tag)} is a tag's name: a connection names an element of a " <>
+         "global by literal subscripts, as in #{quoted("#{global.name}[#{zeros(dims)}]")}"}
 
   defp global_index([], index, {global, _etype, dims}, name) when length(index) != length(dims),
     do:
       {:error,
-       "`#{name}` names an element of `#{global.name}`, " <>
+       "#{quoted(name)} names an element of #{quoted(global.name)}, " <>
          "#{Declarations.a_global(global.type)}#{where(global)}, by #{length(index)} " <>
          "subscript#{plural(length(index))}, where it takes #{length(dims)}, one a dimension, " <>
-         "as in `#{global.name}[#{zeros(dims)}]`"}
+         "as in #{quoted("#{global.name}[#{zeros(dims)}]")}"}
 
   defp global_index([], index, {global, etype, dims}, name),
     do:
@@ -3594,7 +3651,7 @@ defmodule Logex.Configuration do
   defp global_in_bounds({i, n}, _index, {global, _etype}, name),
     do:
       {:error,
-       "`#{name}`'s subscript `#{i}` is outside 0 to #{n - 1}: `#{global.name}` is " <>
+       "#{quoted(name)}'s subscript #{quoted(i)} is outside 0 to #{n - 1}: #{quoted(global.name)} is " <>
          "#{Declarations.a_global(global.type)}#{where(global)}"}
 
   defp zeros(dims), do: Enum.map_join(dims, ",", fn _ -> 0 end)
@@ -3613,8 +3670,8 @@ defmodule Logex.Configuration do
   defp at_point(global, _location, name, _type, _world),
     do:
       {:error,
-       "`#{name}` is a location, written only after `at` on a `var_global` line: name the " <>
-         "global at it, `#{global.name}`#{where(global)}"}
+       "#{quoted(name)} is a location, written only after `at` on a `var_global` line: name the " <>
+         "global at it, #{quoted(global.name)}#{where(global)}"}
 
   defp member_of(name, location, type, world) do
     [first | _rest] = String.split(name, ".")
@@ -3634,7 +3691,7 @@ defmodule Logex.Configuration do
   defp member_held(false, {:instance, _line, _ref}, _location, {name, _first, _type}, _world),
     do:
       {:error,
-       "`#{name}` is an instance's member: instances share a value only through a global, " <>
+       "#{quoted(name)} is an instance's member: instances share a value only through a global, " <>
          "which one drives and the other reads"}
 
   # A raw location in a connection (§4.5: not adopted), its advice in its one spelling, an
@@ -3643,14 +3700,14 @@ defmodule Logex.Configuration do
   defp member_held(false, _held, {_written, address}, {name, _first, type}, _world),
     do:
       {:error,
-       "`#{name}` is a location, written only after `at` on a `var_global` line: declare a " <>
-         "global at it, as in `var_global point #{written_type(type)} at " <>
-         "#{spelling(address)}`, and name that"}
+       "#{quoted(name)} is a location, written only after `at` on a `var_global` line: declare a " <>
+         "global at it, as in " <>
+         "#{quoted("var_global point #{written_type(type)} at #{spelling(address)}")}, and name that"}
 
   defp member_held(false, {kind, line, _ref}, :error, {name, first, _type}, _world),
     do:
       {:error,
-       "`#{name}` names a member of `#{first}`, but `#{first}` is #{a(kind)}#{at_line(line)}, " <>
+       "#{quoted(name)} names a member of #{quoted(first)}, but #{quoted(first)} is #{a(kind)}#{at_line(line)}, " <>
          "not an instance"}
 
   # M5-12's review: a member or bit of an element of a global array, `speeds[1].3`, is told
@@ -3660,7 +3717,9 @@ defmodule Logex.Configuration do
        do: element_member(global_held(nil, first, type, world), name, first)
 
   defp member_held(false, nil, :error, {name, first, _type}, world) do
-    no_instance = "`#{name}` names a member of an instance, and there is no instance `#{first}`"
+    no_instance =
+      "#{quoted(name)} names a member of an instance, and there is no instance #{quoted(first)}"
+
     {:error, Declarations.offer(first, world.instances, & &1, "names", &(no_instance <> &1))}
   end
 
@@ -3668,8 +3727,8 @@ defmodule Logex.Configuration do
     [array | _] = String.split(first, "[")
 
     {:error,
-     "`#{name}` names a member of `#{first}`, but `#{first}` is an element of the global " <>
-       "`#{array}`#{where(element)}, not an instance"}
+     "#{quoted(name)} names a member of #{quoted(first)}, but #{quoted(first)} is an element of the global " <>
+       "#{quoted(array)}#{where(element)}, not an instance"}
   end
 
   defp element_member(error, _name, _first), do: error
@@ -3684,8 +3743,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is a var_output, which drives a " <>
-          "global: it cannot drive the constant `#{connection.to}`"
+        "#{quoted("#{connection.instance}.#{connection.member}")} is a var_output, which drives a " <>
+          "global: it cannot drive the constant #{quoted(connection.to)}"
       )
 
   defp output(:junk, _connection, _tag, acc, _world), do: acc
@@ -3705,8 +3764,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{global.name}` is #{a_point(location, global)}#{where(global)}: " <>
-          "`#{connection.instance}.#{connection.member}`, a var_output, cannot drive it"
+        "#{quoted(global.name)} is #{a_point(location, global)}#{where(global)}: " <>
+          "#{quoted("#{connection.instance}.#{connection.member}")}, a var_output, cannot drive it"
       )
 
   # M5-3 (decision 159): a copy-out widens as a destination takes a value, so the global's
@@ -3751,8 +3810,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{global.name}` is already driven by `#{first.instance}.#{first.member}`" <>
-          "#{where(first)}, which drives `#{array}` whole: one connection drives each element"
+        "#{quoted(global.name)} is already driven by #{quoted("#{first.instance}.#{first.member}")}" <>
+          "#{where(first)}, which drives #{quoted(array)} whole: one connection drives each element"
       )
 
   defp driver({:part, first, element}, global, connection, acc),
@@ -3760,8 +3819,8 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{global.name}` is already driven at its element `#{element}`, by " <>
-          "`#{first.instance}.#{first.member}`#{where(first)}: one connection drives each element"
+        "#{quoted(global.name)} is already driven at its element #{quoted(element)}, by " <>
+          "#{quoted("#{first.instance}.#{first.member}")}#{where(first)}: one connection drives each element"
       )
 
   defp driver(first, global, connection, acc),
@@ -3769,7 +3828,7 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{global.name}` is already driven by `#{first.instance}.#{first.member}`" <>
+        "#{quoted(global.name)} is already driven by #{quoted("#{first.instance}.#{first.member}")}" <>
           "#{where(first)}"
       )
 
@@ -3824,8 +3883,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         instance.line,
-        "`#{instance.name}` leaves its var_input `#{one}` unconnected: connect it to a " <>
-          "global, a point or a constant, as in `#{instance.name}.#{one} 0`"
+        "#{quoted(instance.name)} leaves its var_input #{quoted(one)} unconnected: connect it to a " <>
+          "global, a point or a constant, as in #{quoted("#{instance.name}.#{one} 0")}"
       )
     ]
 
@@ -3833,8 +3892,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         instance.line,
-        "`#{instance.name}` leaves its var_inputs #{listed(names)} unconnected: connect " <>
-          "each to a global, a point or a constant, as in `#{instance.name}.#{first} 0`"
+        "#{quoted(instance.name)} leaves its var_inputs #{listed(names)} unconnected: connect " <>
+          "each to a global, a point or a constant, as in #{quoted("#{instance.name}.#{first} 0")}"
       )
     ]
 
@@ -3959,13 +4018,13 @@ defmodule Logex.Configuration do
 
   defp bound_to({:global, _line, global}, tag, {_writes, program}, _world),
     do: [
-      "#{declares(tag, program)}, but `#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}" <>
+      "#{declares(tag, program)}, but #{quoted(global.name)} is #{Declarations.a_type(global.type)}#{where(global)}" <>
         exactly(conversion_of(global.type, tag.type))
     ]
 
   defp bound_to({kind, line, _ref}, tag, {_writes, program}, _world),
     do: [
-      "#{declares(tag, program)}, but `#{tag.name}` is #{a(kind)}#{at_line(line)}, not a global"
+      "#{declares(tag, program)}, but #{quoted(tag.name)} is #{a(kind)}#{at_line(line)}, not a global"
     ]
 
   # M5-3 (decision 159): a var_external is its global, one copy (decision 49), so it binds
@@ -3987,11 +4046,11 @@ defmodule Logex.Configuration do
 
   defp no_global("", tag, program),
     do:
-      "#{declares(tag, program)}, but there is no global `#{tag.name}`: declare it, as in " <>
-        "`var_global #{tag.name} #{written_type(tag.type)}`"
+      "#{declares(tag, program)}, but there is no global #{quoted(tag.name)}: declare it, as in " <>
+        "#{quoted("var_global #{tag.name} #{written_type(tag.type)}")}"
 
   defp no_global(suggestion, tag, program),
-    do: "#{declares(tag, program)}, but there is no global `#{tag.name}`" <> suggestion
+    do: "#{declares(tag, program)}, but there is no global #{quoted(tag.name)}" <> suggestion
 
   defp written_point(
          {:ok, {_device, "i", _address}} = location,
@@ -4000,8 +4059,8 @@ defmodule Logex.Configuration do
          {tag, program}
        ),
        do: [
-         "`#{program.name}` writes its var_external `#{tag.name}`#{in_type(line, program)}, but " <>
-           "`#{global.name}` is #{a_point(location, global)}#{where(global)}: nothing writes an " <>
+         "#{quoted(program.name)} writes its var_external #{quoted(tag.name)}#{in_type(line, program)}, but " <>
+           "#{quoted(global.name)} is #{a_point(location, global)}#{where(global)}: nothing writes an " <>
            "input point"
        ]
 
@@ -4009,13 +4068,15 @@ defmodule Logex.Configuration do
 
   defp declares(%Tag{} = tag, program),
     do:
-      "`#{program.name}` declares `var_external #{tag.name} #{written_type(tag.type)}`" <>
+      "#{quoted(program.name)} declares #{quoted("var_external #{tag.name} #{written_type(tag.type)}")}" <>
         in_type(tag.line, program)
 
   # Where in a program type's own text a line is: in its file, when it was read from one.
   defp in_type(nil, _program), do: ""
   defp in_type(line, %Program{file: nil}), do: " on its line #{line}"
-  defp in_type(line, %Program{file: file}), do: " on line #{line} of `#{Path.basename(file)}`"
+
+  defp in_type(line, %Program{file: file}),
+    do: " on line #{line} of #{quoted(Path.basename(file))}"
 
   # IEC requires one program at least (Ed 2 Annex B.1.7; Ed 3 Annex A). A broken
   # `program` line counts, as it was reported already, one broken before its name too.
@@ -4071,7 +4132,7 @@ defmodule Logex.Configuration do
         do:
           warning(
             connection.line,
-            "`#{instance}.#{member}` is retained and drives the output `#{target}`: after a " <>
+            "#{quoted("#{instance}.#{member}")} is retained and drives the output #{quoted(target)}: after a " <>
               "warm start it is written in the first round"
           )
   end
@@ -4103,7 +4164,7 @@ defmodule Logex.Configuration do
       {Map.get(order, connection),
        warning(
          connection.line,
-         "`#{target}` is retained but driven by `#{instance}.#{member}`, which is not: the " <>
+         "#{quoted(target)} is retained but driven by #{quoted("#{instance}.#{member}")}, which is not: the " <>
            "first round writes over it"
        )}
     end
@@ -4246,19 +4307,21 @@ defmodule Logex.Configuration do
     do:
       warning(
         instance.line,
-        "`#{instance.name}` #{writes(may)} #{and_listed(Enum.map(told, &elem(&1, 0)))} " <>
-          "through its var_external, as `#{first.name}` #{does(first_may)}#{where(first)}: " <>
+        "#{quoted(instance.name)} #{writes(may)} #{and_listed(Enum.map(told, &elem(&1, 0)))} " <>
+          "through its var_external, as #{quoted(first.name)} #{does(first_may)}#{where(first)}: " <>
           stands(bit, global)
       )
 
   defp and_listed(names) when length(names) > 10,
-    do: Enum.map_join(Enum.take(names, 10), ", ", &"`#{&1}`") <> " and #{length(names) - 10} more"
+    do:
+      Enum.map_join(Enum.take(names, 10), ", ", &"#{quoted(&1)}") <>
+        " and #{length(names) - 10} more"
 
-  defp and_listed([one]), do: "`#{one}`"
+  defp and_listed([one]), do: "#{quoted(one)}"
 
   defp and_listed(names) do
     {rest, [last]} = Enum.split(names, -1)
-    Enum.map_join(rest, ", ", &"`#{&1}`") <> " and `#{last}`"
+    Enum.map_join(rest, ", ", &"#{quoted(&1)}") <> " and #{quoted(last)}"
   end
 
   defp writes(false), do: "writes"
@@ -4308,8 +4371,8 @@ defmodule Logex.Configuration do
     do:
       warning(
         instance.line,
-        "`#{instance.name}` writes `#{global}` through its var_external, and " <>
-          "#{own(name == instance.name)}`#{name}.#{connection.member}` " <>
+        "#{quoted(instance.name)} writes #{quoted(global)} through its var_external, and " <>
+          "#{own(name == instance.name)}#{quoted("#{name}.#{connection.member}")} " <>
           "#{drives(connection.to, global)}#{where(connection)}: " <>
           driven_stands(bit, name == instance.name, global)
       )
@@ -4317,7 +4380,7 @@ defmodule Logex.Configuration do
   # M5-12's review: a connection that drives an element of the array written, or the array
   # an element written is of, is told what it drives, `ins[2]`, as written.
   defp drives(global, global), do: "drives it"
-  defp drives(to, _global), do: "drives `#{to}`"
+  defp drives(to, _global), do: "drives #{quoted(to)}"
 
   defp own(true), do: "its own "
   defp own(false), do: ""
@@ -4331,7 +4394,7 @@ defmodule Logex.Configuration do
   # `ons`, `osr` and `osf` are each said letter by letter, "an".
   defp stands(one_shot, global),
     do:
-      "`#{global}` is the storage bit of an `#{one_shot}`: the one-shot then fires on the " <>
+      "#{quoted(global)} is the storage bit of an `#{one_shot}`: the one-shot then fires on the " <>
         "wrong scans"
 
   # M2-6 (§4.6's caveat; §4.10, M2-6): each timer an instance an event task runs runs,
@@ -4407,8 +4470,8 @@ defmodule Logex.Configuration do
     do:
       warning(
         instance.line,
-        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs the timer `#{path}`#{cited}: " <>
+        "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
+          "#{quoted(program.name)} runs the timer #{quoted(path)}#{cited}: " <>
           across(FbType.family(FbType.builtin(word)), Declarations.a_or_an(word))
       )
 
@@ -4419,8 +4482,8 @@ defmodule Logex.Configuration do
     do:
       warning(
         instance.line,
-        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs the counter `#{path}`#{cited}" <>
+        "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
+          "#{quoted(program.name)} runs the counter #{quoted(path)}#{cited}" <>
           ": a counter sees its rung only at the task's runs, so a pulse between two runs " <>
           "is never counted, and a rung that is the task's trigger is true at every run " <>
           "and never counts"
@@ -4434,8 +4497,8 @@ defmodule Logex.Configuration do
     do:
       warning(
         instance.line,
-        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs an `#{word}`#{cited}, whose storage bit is `#{path}`: " <>
+        "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
+          "#{quoted(program.name)} runs an `#{word}`#{cited}, whose storage bit is #{quoted(path)}: " <>
           sees(word)
       )
 
@@ -4509,7 +4572,7 @@ defmodule Logex.Configuration do
   defp cited(line, {:program, program}), do: in_type(line, program)
 
   defp cited(line, {:block, %Program{file: nil, name: name}}),
-    do: " on line #{line} of block `#{name}`"
+    do: " on line #{line} of block #{quoted(name)}"
 
   defp cited(line, {:block, body}), do: in_type(line, body)
 
@@ -4519,10 +4582,10 @@ defmodule Logex.Configuration do
   defp continuous_name(_timed), do: nil
 
   defp idle(true, _task), do: []
-  defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]
+  defp idle(false, task), do: [warning(task.line, "task #{quoted(task.name)} runs no instance")]
 
   defp doubt(false, global, _seen),
-    do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]
+    do: [warning(global.line, "#{quoted(global.name)} is declared but nothing uses it")]
 
   # M5-13: an array of output points driven element by element is told the elements
   # nothing drives, each at 0; one a connection drives whole is driven (provisional). Since
@@ -4578,7 +4641,7 @@ defmodule Logex.Configuration do
     do: [
       warning(
         global.line,
-        "`#{global.name}` is #{a_point(location(global.at), global)}, but nothing drives " <>
+        "#{quoted(global.name)} is #{a_point(location(global.at), global)}, but nothing drives " <>
           "it: each element stays at 0"
       )
     ]
@@ -4587,19 +4650,21 @@ defmodule Logex.Configuration do
     do: [
       warning(
         global.line,
-        "`#{global.name}` is #{a_point(location(global.at), global)}, but nothing drives " <>
+        "#{quoted(global.name)} is #{a_point(location(global.at), global)}, but nothing drives " <>
           "#{elements_listed(names)}: #{it_they(names)} at 0"
       )
     ]
 
   defp elements_listed(names) when length(names) > 10,
-    do: Enum.map_join(Enum.take(names, 10), ", ", &"`#{&1}`") <> " and #{length(names) - 10} more"
+    do:
+      Enum.map_join(Enum.take(names, 10), ", ", &"#{quoted(&1)}") <>
+        " and #{length(names) - 10} more"
 
-  defp elements_listed([one]), do: "`#{one}`"
+  defp elements_listed([one]), do: "#{quoted(one)}"
 
   defp elements_listed(names) do
     {rest, [last]} = Enum.split(names, -1)
-    Enum.map_join(rest, ", ", &"`#{&1}`") <> " or `#{last}`"
+    Enum.map_join(rest, ", ", &"#{quoted(&1)}") <> " or #{quoted(last)}"
   end
 
   defp it_they([_one]), do: "it stays"
@@ -4611,7 +4676,7 @@ defmodule Logex.Configuration do
     do: [
       warning(
         global.line,
-        "`#{global.name}` is an output point, but nothing drives it: it stays at 0"
+        "#{quoted(global.name)} is an output point, but nothing drives it: it stays at 0"
       )
     ]
 

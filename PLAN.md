@@ -25715,6 +25715,428 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   RV-32, question 1" (610); `Logex.Lexer`'s comment on `quoted_text/1`, RV-32's question 4
   (613); and `quoted_test.exs`'s comment on `@outside`, RV-32's question 7 (616).
 
+  **RV-33 as built** (2026-11-25, branch `rv33` over `dd67105`). Decisions 610, 613 and 616
+  built, each change of `lib/` with a test that fails when it is reverted, judged by the
+  full suite (the mutation table below); the marks they settle made their numbers. No
+  test, walk or oracle was deleted or weakened; the test lines taken out are listed below,
+  each with the decision that changed them. `mix.exs` is untouched, no version is set and
+  no tag made. The working files are under `scratchpad/rv/w33/`.
+
+  - *The first hundred and a count* (decision 610, `bda244f`). The census, every refusal of
+    the host contract that joined its lines one a mistake, each reached with more than a
+    hundred (`w33/reach.exs`, `reach2.exs`, `reach3.exs`):
+
+    | the refusal | how it reaches past a hundred | before, at 100,000 | now |
+    |---|---|---|---|
+    | `put_inputs/3`, its inputs | keys that are no text, names no tag has | 9.6 MB, 9.9 M reductions, 0.6 s; names 3.2 MB, 72.8 M, 1.2 s | 9 KB, 3.7 M, 0.2 s; names 3 KB, 10.6 M, 0.3 s |
+    | `put_inputs/3`, elements set twice | 101 elements of an array, each by two spellings | a line an element | the first hundred and a count |
+    | `call/4`, `put_inputs/3`, `scan/3`, `restart/3`: a state's values outside their types | 101 tags | a line a tag | the same |
+    | `instance/1`, `Logex.Edit.accept/3`, `Logex.Configuration.Edit.accept/2`: a program edited by hand | 101 `add`s retyped | a line an op | the same |
+    | `instance/2` and `start/2`: a retained image | 101 paths or globals no name names | a line each | the same |
+    | `cycle/3`, its inputs | keys that are no text, names no point has, points set twice, arrays set whole and by elements | 11 MB, 10.5 M, 0.6 s; names 3.8 MB, 75.9 M, 1.4 s | 11 KB, 4.2 M, 0.2 s; names 4 KB, 12.8 M, 0.5 s |
+    | `cycle/3`, a copy-in's globals and a var_external's | 101 globals read outside their types | a line a global | the same, the step's refusal counting the copy-in's |
+    | `start/1` and `IO.bind!/2`: a configuration's diagnostics | 101 globals of one name | a line each | the same |
+    | `IO.bind!/2`, its bindings | devices keyed by number, devices no point is at | 4.5 MB, 8.0 M, 0.2 s; named 5.3 MB, 34.5 M, 0.9 s | 4 KB, 2.7 M, 0.08 s; named 5 KB, 8.5 M, 0.3 s |
+    | `Configuration.new!/1` and `check/1`: the host's mistakes | 101 globals with a line, or an unknown qualifier | a line each | the same |
+    | `Global.new!/3` and `Logex.Tag.new!/5`: their options | 101 unknown options, both qualifiers last | 11.9 MB and 8.3 MB, 12.5 M and 13.0 M | 11 KB and 8 KB, 12.3 M each |
+
+    Left as they were, none reaching past a hundred: `Global.new!/3`'s judge of the one
+    global and `initial/1`, whose array's misfits are ten and a count already; the
+    runner's force of an array, the same; and the store's and the forces file's
+    refusals, fifty and a count (decision 457), which since this item count what
+    `Runtime.start/2`'s refusal they relay counted. A line that lists names in one line,
+    "the var_inputs are …", is one line, as decision 520's lists are (left; question 3
+    below).
+
+    One place: `Logex.Declarations.told/3`, beside `offered/1`, its bound decision 520's
+    `@offered`, the hundred; `made` the lines' last pass, where `Logex.Runtime`'s
+    `once/1` lists the names once; `more` the count a refusal it relays did not list,
+    read back by `untold/1`, which the step's refusal (`externals_told/3`, a copy-in's
+    count beside a var_external's lines) and the runner's start (`started!/3`, through
+    `Logex.Refusal.told/3`) use. A line that quotes a key that is no text, or looks for a
+    did-you-mean among the var_inputs, the input points or the devices, is a function
+    made only among the hundred (`put_inputs/3`'s, `cycle/3`'s and `bind!/2`'s), as a name
+    past decision 520's hundred is looked for among nothing; every other refusal's lines
+    are made and then cut, their cost linear in the mistakes and their text the
+    hundred's. The count's words, `and 99900 more mistakes, not listed`, are the store's
+    refusal's form with the host contract's word (provisional, question 1). No pin of more
+    than a hundred lines existed in the suite, so none changed; the one test the change
+    turned red, `retain_store_test.exs`'s count of a store's image refused through a
+    fresh start (`and 70 more problems`), is held as it was by the relay's count.
+
+    Tests, `quoted_test.exs`: each refusal above pinned whole at 100 mistakes and at 101,
+    its lines written out in its order (24 refusals, 48 pins); the step's refusal that
+    counts a copy-in's lines past its hundred, and the one that takes none of a state's;
+    and a growth test of six, `put_inputs/3`'s, `cycle/3`'s and `bind!/2`'s keys that are no
+    text and names with no near name, an element of no array among them, each at 100,000
+    mistakes against 1,000 and 100 and one in the same run, in reductions, the least of
+    three: its message pinned whole, the 1,000's and two bytes; its cost under 120 times
+    the 1,000's; and a mistake past the hundred under three quarters of one among them,
+    0.09 to 0.41 of it as built, where a line made for every mistake reads 1.0.
+  - *A text past 4,096 bytes cut* (decision 613, `bda244f`). `Logex.Lexer.quoted_text/1`
+    cuts a valid text past 4,096 bytes there, at a character's boundary, a split
+    character's bytes dropped, `` `aaaa…` (1000000 bytes) ``, reading its first 4,096
+    bytes alone; one whose start is no text however cut is shown as `inspected/2` shows
+    a binary. Where a refusal wrote a host's name or location in backquotes itself, it
+    goes through the cut: `put_inputs/3`'s and `cycle/3`'s keys (`label/1`, never lexed
+    past 4,096 bytes, and the element's lines), `get/2`'s and `get!/2`'s paths and their
+    parts (`shown_path/1`, every line of the path's refusals), and the configuration's
+    judge's names and locations, `Global.new!/3`'s and `check/1`'s. A name past 4,096
+    bytes is offered no did-you-mean (`Logex.Declarations.suggest/4`, `spelled/1`), where
+    a megabyte's Jaro distance to every name was the cost: `Logex.Tag.new!/5` of a
+    megabyte's type text 197 M reductions and 17 s, now 40,000 and 13 ms. Found by a walk:
+    the hostile walk's values now hold a text of 100,000 bytes, every refusal under 10,000
+    bytes, which found `put_inputs/3`'s, `cycle/3`'s and `get!/2`'s megabyte and
+    `Global.new!/3`'s location. A text a refusal shows as a value, a type's text among
+    them, is cut as `inspect/1` cuts it, at 4,096 characters, `"…" <> ...`, as decision 585
+    pinned (provisional, question 2).
+
+    | the call, a megabyte | before | now |
+    |---|---|---|
+    | `put_inputs/3`, a key | 26.0 M reductions, 1.6 s, 1,000,078 bytes | 12,917, 7 ms, 4,193 |
+    | `get!/2`, a path | 31.3 M, 2.8 s, 1,000,045 | 1.0 M, 18 ms, 4,160 (the path lexed, as every path is) |
+    | `IO.bind!/2`, a device's name | 13.1 M, 1.2 s, 1,000,045 | 13,456, 7 ms, 4,160 |
+    | `Logex.Tag.new!/5`, a type's text | 196.9 M, 17.0 s, 4,791 | 39,580, 13 ms, 4,791 |
+    | `Global.new!/3`, a location | 3.0 M, 17 ms, 1,000,091 | 3.0 M, 14 ms, 4,206 (the location lexed) |
+
+    Tests: `put_inputs/3`'s key, `get!/2`'s path and `IO.bind!/2`'s device name pinned whole
+    at 4,096 bytes and 4,097, and `Tag.new!/5`'s type text, a value, at both; the cut at a
+    character's boundary and a binary that is no text; an element's key of a 5,000-digit
+    subscript in three lines, a global's name in five and a location; and a growth test,
+    each of the four at a megabyte against ten bytes in the same run, its message the
+    4,097 bytes' but for the count, its cost no more than the short one's and twice what
+    the call reads of the text, the cut's look, a split at `.` and, for a path, its
+    lexing.
+  - *A struct where a map is due* (decision 616, `bda244f`). `Logex.Program.edited_by_hand/1`,
+    `instance/1`'s check where a program is handed in, refuses a struct as a routine's
+    tags, `` `p`'s tags are no map of its tags by name, got: ~D[2026-11-24]: `p` was
+    edited by hand after it compiled ``, and as the program's blocks, arrays, units or
+    reals, each the line it gave a value that is no map, where a `Date` or a `Time` in
+    the tags or the blocks raised `Protocol.UndefinedError`, 100 KB with a long year, a
+    `MapSet` in the blocks `FunctionClauseError`, and a struct as the arrays, units or
+    reals was told each of its fields as a name. `Logex.Configuration.check/1` and both
+    edits check a program so, and refuse it the same; `put_inputs/3` and `call/4` check
+    the shape alone, as before. `quoted_test.exs`'s `@outside` is empty: what the walk
+    found escaping, four rows, is now refused, eight pins of it. Found beside it, not
+    built: a tag table whose value is a struct, `%{"total" => ~D[...]}`, raises
+    `FunctionClauseError` out of `instance/1` (question 4).
+  - *The marks*. Made: `Logex.Runtime`'s moduledoc, a line a mistake, decision 610 where
+    it said "provisional: `PLAN.md`'s RV-32, question 1"; `Logex.Lexer`'s comment on
+    `quoted_text/1`, decision 613 where it said RV-32's question 4; `quoted_test.exs`'s
+    comment on `@outside`, decision 616 where it said RV-32's question 7. No other mark
+    610 to 616 settles was left. New, with this record, the marks of its questions.
+  - *The documents*: `Logex`'s, `Logex.Runtime`'s, `Logex.Lexer`'s, `Logex.IO`'s,
+    `Logex.Configuration`'s, `Logex.Tag`'s moduledocs and `Logex.Program.edited_by_hand/1`'s
+    doc where they say what a refusal quotes or lists; `guides/reference/host-contract.md`'s
+    "the message has 1 line for each problem" and "The form of a message", two sentences;
+    CHANGELOG.md's three items under "The host's API"; decisions 610, 613 and 616 each
+    with a landed note; CLAUDE.md's line for `quoted_test.exs`. README's "What logex is
+    not", read claim by claim: none says what a refusal quotes or lists, and none is
+    changed by this work.
+  - *The cost against the parent* (`dd67105`; `w33/cost33.exs`, each count in a process of
+    its own, the least of three, the time of one): the refusals as above; a small
+    refusal, `put_inputs/3` of one key that is no text 212 and 231 reductions, one name
+    730 and 722, `get!/2` 673 and 684, `bind!/2` 5,540 and 5,561; success the parent's to
+    the reduction, `put_inputs/3` 209, `scan/3` 796, `instance/1` of the motor 368,
+    `cycle/3` 777, `get!/2` 61, `IO.bind!/2` 5,318, `Tag.new!/5` 103, `Global.new!/3` 115,
+    `check/1` of the plant 14,494, `Logex.compile/2` of the motor 9,154, `start/1` of the
+    plant 17,108.
+  - *The mutation table* (`scripts/mutate.sh`, each patch judged by the full suite, in this
+    clone at `bda244f` with the record's tests, one patch at a time under the machine's
+    load beside DOC-1's third step; patches and logs under `w33/m33/`):
+
+    | mutant | what it does | the full suite |
+    |---|---|---|
+    | `m01_told_whole` | `told/3` tells every line, no cut | red: test/logex/quoted_test.exs (6) |
+    | `m02_no_count` | no line counts the rest | red: test/logex/quoted_test.exs (6), test/logex/readme_test.exs (1), test/logex/retain_store_test.exs (1) |
+    | `m03_bound_101` | the bound a hundred and one | red: test/logex/quoted_test.exs (6) |
+    | `m04_rest_made` | every line past the hundred made | red: test/logex/quoted_test.exs (1) |
+    | `m05_tag_join` | `Tag.new!/5`'s options joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m06_tag_both_join` | `Tag.new!/5`'s options and both qualifiers joined whole | red: test/logex/quoted_test.exs (1), test/logex/retain_test.exs (1) |
+    | `m07_global_join` | `Global.new!/3`'s options joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m08_global_both_join` | `Global.new!/3`'s, both qualifiers, joined whole | red: test/logex/quoted_test.exs (1), test/logex/retain_configuration_test.exs (1) |
+    | `m09_new_join` | `new!/1`'s problems joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m10_check_join` | `check/1`'s mistakes joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m11_io_diagnostics_join` | `bind!/2`'s diagnostics joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m12_io_bound_join` | `bind!/2`'s bindings joined whole | red: test/logex/quoted_test.exs (2) |
+    | `m13_image_join` | a retained image's lines joined whole | red: test/logex/quoted_test.exs (2) |
+    | `m14_edit_join` | `Edit.accept/3`'s lines joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m15_config_edit_join` | `Configuration.Edit`'s lines joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m16_instance_join` | `instance/1`'s lines joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m17_state_join` | a state's misfits joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m18_inputs_join` | `put_inputs/3`'s problems joined whole | red: test/logex/quoted_test.exs (2) |
+    | `m19_clashes_join` | `put_inputs/3`'s clashes joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m20_start_join` | `start/1`'s diagnostics joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m21_cycle_inputs_join` | `cycle/3`'s problems joined whole | red: test/logex/quoted_test.exs (2) |
+    | `m22_cycle_clashed_join` | `cycle/3`'s whole-array clashes joined whole | red: test/logex/quoted_test.exs (1) |
+    | `m23_globals_join` | a copy-in's and a step's globals joined whole | red: test/logex/quoted_test.exs (2), test/logex/readme_test.exs (1) |
+    | `m24_copy_in_count_dropped` | a step's refusal drops a copy-in's count | red: test/logex/quoted_test.exs (1) |
+    | `m25_state_count_taken` | a step's refusal takes a state's count | red: test/logex/force_test.exs (1), test/logex/quoted_test.exs (1) |
+    | `m26_runner_relay_count` | the runner's start drops `start/2`'s count | red: test/logex/retain_store_test.exs (1) |
+    | `m27_eager_key` | `put_inputs/3`'s key that is no text made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m28_eager_undeclared` | `put_inputs/3`'s undeclared name made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m29_eager_element` | `put_inputs/3`'s element of no array made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m30_eager_point_key` | `cycle/3`'s key that is no text made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m31_eager_no_point` | `cycle/3`'s name no point has made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m32_eager_io_key` | `bind!/2`'s key that is no text made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `m33_eager_io_device` | `bind!/2`'s device no point is at made eagerly | red: test/logex/quoted_test.exs (1) |
+    | `n01_text_whole` | `quoted_text/1` cuts no text | red: test/logex/quoted_test.exs (5) |
+    | `n02_cut_splits` | the cut splits a character | red: test/logex/quoted_test.exs (1) |
+    | `n03_no_length` | the cut tells no length | red: test/logex/quoted_test.exs (3) |
+    | `n04_label_lexed` | a long key lexed and quoted whole | red: test/logex/quoted_test.exs (3) |
+    | `n05_path_whole` | a path quoted whole | red: test/logex/quoted_test.exs (3) |
+    | `n06_suggest_long` | a long name looked for among every name | red: test/logex/quoted_test.exs (1) |
+    | `n07_spelled_long` | a long type text looked for among the type words | red: test/logex/quoted_test.exs (1) |
+    | `n08_judge_location_whole` | the judge's location written whole | red: test/logex/end_to_end_test.exs (1), test/logex/quoted_test.exs (1) |
+    | `n09_keyed_whole` | a clash's keys written whole | red: test/logex/quoted_test.exs (1) |
+    | `n10_input_key_whole` | a subscript's key written whole | red: test/logex/quoted_test.exs (1) |
+    | `n11_judge_name_whole` | the judge's point's name written whole | red: test/logex/quoted_test.exs (1) |
+    | `o01_tags_struct` | a struct as the tags walked | red: test/logex/quoted_test.exs (2), test/logex/readme_test.exs (1) |
+    | `o02_blocks_struct` | a struct as the blocks walked | red: test/logex/quoted_test.exs (2) |
+    | `o03_units_struct` | a struct as the units read as a map | red: test/logex/quoted_test.exs (1) |
+    | `o04_reals_struct` | a struct as the reals read as a map | red: test/logex/quoted_test.exs (1) |
+    | `o05_arrays_struct` | a struct as the arrays read as a map | red: test/logex/quoted_test.exs (1) |
+
+    None survives. Each changes `lib/` and each is red by the suite, so Dialyzer was not run
+    on them; it is green at each commit, in its gate. The `readme_test.exs` lines of
+    `m02`, `m23` and `o01` are the examples' project rebuilding the changed `lib/`, as
+    RV-32's `n05`; `m25`'s `force_test.exs` and `n08`'s `end_to_end_test.exs` lines a
+    real-clock and a timed test under a load average near 14, beside the row's own red.
+  - *The gate*: `bda244f`, the build, `GATE-OK` 4,267 (4,256 tests and 11 doctests) on its
+    second run, the first `GATE-FAIL` with four tests timed out on the VM's file server
+    under a load average near 13 (`claude_md_test.exs:57`, `pictures_test.exs:424`,
+    `release_test.exs:359`, `retain_store_test.exs:3292`), each passing alone and in the
+    second run; `DOCS-OK`. CI and Docs green on `bda244f` (45554370167, 45554370217). This
+    record's commit: `GATE-OK` 4,269 (4,258 tests and 11 doctests) on its first run, `DOCS-OK`.
+  - *The test lines taken out*, against `dd67105`, 14 in `quoted_test.exs` (+721 −14), each
+    replaced: the walk's comment's two lines on what it gives, extended to the text of
+    100,000 bytes; its two on `@outside`, now decision 616's; `@outside`'s eight lines, its
+    four rows of what `instance/1` let escape, now refused and pinned whole (decision 616's
+    leave); the hostile list's last row, given a comma for the new one; and the walk's bound,
+    `byte_size(message) < 5_000`, now `< longest(kind)`, 5,000 for every value it gave
+    before and 10,000 for the text of 100,000 bytes, which a value holding it shows
+    beside the rest of the value. No pin of more than a hundred lines existed (decision
+    610's leave unused), and none of a text past 4,096 bytes quoted whole (decision 613's
+    leave unused). No other test file changed.
+  - *CLAUDE.md*: the line for `test/logex/quoted_test.exs` names the first hundred, the cut
+    name and `instance/1`'s struct.
+  - *Provisional readings, and questions for the maintainer*, each the closest reading of
+    the record, marked where it stands (`Logex.Declarations`' comment on `told/3`,
+    questions 1 and 3; `Logex.Lexer`'s on `quoted_text/1`, question 2; `Logex.Declarations`'
+    doc of `suggest/4`, question 5; `quoted_test.exs`'s comment on `@outside`, question 4).
+    1. *The count's words* (decision 610: "how many more there are"). A box counter's
+       bridge sends 100,000 inputs keyed by register number. (a) As built: the hundredth
+       line, then `and 99900 more mistakes, not listed`, the store's refusal's form
+       (decision 457) with the host contract's word, "mistake". (b) The store's own words,
+       `and 99900 more problems, not listed`, one form across logex. (c) The total as
+       well, `100000 mistakes in all, the first 100 listed`. Neither IEC nor Logix has a
+       host API to compare.
+    2. *A text a refusal shows as a value, past 4,096 bytes* (decision 613: "a text past
+       4,096 bytes is cut … as `inspect/1` cuts a text by default"). A lamp panel's host
+       hands `Logex.Tag.new!/5` a type's text of 6,000 bytes of `é`, or `put_inputs/3` a
+       key of them, which is no name and is shown as a value. (a) As built: as
+       `inspect/1` cuts it, at 4,096 characters, `"éé…é" <> ...`, up to 16 KB of a text of
+       four-byte characters, told it was cut but not how long, decision 585's pinned form;
+       a 6,000-byte text of `é`, 3,000 characters, is shown whole. (b) At 4,096 bytes and
+       told how long, `"éé…" (6000 bytes)`, as a name is, which changes decision 585's
+       pinned form for every value. Elixir's own messages cut at `printable_limit`, in
+       characters.
+    3. *A line that lists names* (decision 610: "a refusal that tells a line a mistake").
+       A fan controller's program declares 10,000 var_inputs, and the host sends one key no
+       tag has. (a) As built: one line, "the var_inputs are `f00001`, …", every name, some
+       100 KB, as decision 520's lists are given once. (b) The first hundred names and how
+       many more. IEC and Logix have no host API to compare.
+    4. *A tag that is no tag* (found beside decision 616). A box counter's host puts a
+       `Date` where one tag of the table goes, `%{p | tags: %{"total" => ~D[2026-11-24]}}`.
+       (a) As built: outside the contract, as `Logex.Runtime`'s moduledoc has a program
+       edited by hand, `FunctionClauseError` out of `instance/1`. (b) `instance/1` refuses a
+       tag that is no `%Logex.Tag{}`, a line each, as it now refuses a struct as the table.
+       In Logix a program is downloaded whole and checked when it is.
+    5. *A did-you-mean for a name past 4,096 bytes* (decision 613; decision 520 bounds
+       the look). A bridge's megabyte of a key. (a) As built: offered none, looked for
+       among nothing, as a name past decision 520's hundred is; the Jaro distance cannot
+       reach 0.8 between names of lengths further apart than 2.5 times, so it changes
+       nothing for a program whose names are shorter than 1,639 characters. (b) Looked for
+       among the names of a like length, which a program of names past 1,638 characters
+       would need. IEC has no host API; Logix's tag names are 40 characters at most.
+
+
+  **RV-33's review** (2026-11-25, of `6178871`, in its own clone, against `dd67105`; the
+  findings mended in `cd66b6a`, `main` merged in at `5128b18` with DOC-1's third step).
+  The review found decisions 613 and 616 short of the places they name, and five lesser
+  findings. Each is mended with a test that fails when the mend is reverted (the mutation
+  table below), or a document made true; no test, walk or oracle was deleted or weakened.
+  - *F1 (high): decision 616 not built on a configuration's paths.* A configuration's
+    check sorted a program's tags for its ports before the program's own check, so a
+    `Date` there escaped `check/1`, `new!/1`, `start/1` and a configuration's edit as
+    `Protocol.UndefinedError`, 100 KB with a long year; beside it a held body's table a
+    `Date` or `:x` escaped `instance/1`, and a body's tags of `:x`, `nil` or a list were
+    taken. Became: the ports' read passes over a struct (`ports_held/1`), and
+    `Logex.Program.edited_by_hand/1` refuses a held body's table that is a struct or no
+    map, its tags no map, its rungs no list, a block type's members no list of members,
+    and an entry of the rungs that is no rung, `` `m`'s rungs hold 10, which is no rung ``,
+    each a line, where they raised or were taken and a scan or a configuration's walk of
+    the writes raised `FunctionClauseError`; a held body's retained path that is no text
+    is passed over where the holder's paths are made, and told by the body's own check.
+    The hostile walk now walks a program's fields inside a configuration at `check/1`,
+    `start/1` and a configuration's edit, and a held block type's and its body's at
+    `instance/1` and `check/1` (`held_callers/1`), each field the walk gives a value that
+    nothing reads listed in `@unread` with its reason; `@outside` stays empty. Pins: two
+    tests, five refusals of a configuration's paths and thirteen of a held block's.
+  - *F2 (high): decision 613 incomplete.* Refusals that wrote a name in backquotes
+    themselves quoted a megabyte whole: `Tag.new!/5`'s name with `.` parts or a subscript,
+    `get!/2`'s tag an instance does not declare, a path's task, instance and member, and a
+    configuration's diagnostics, a task declared twice 5 MB, the types given 1 MB and 16 M
+    reductions. Became: every such word goes through one function, `Logex.Lexer.quoted/1`
+    (a text through the cut, a number as `quoted_number/1` quotes it, any other word as it
+    was), in `Logex.Configuration`, `Logex.Runtime`, `Logex.Configuration.Edit`,
+    `Logex.Runner`, `Logex.IO`, `Logex.IO.Sim`, `Logex.Program`, `Logex.Edit` and its
+    plan, so a configuration's diagnostics cut a name past 4,096 bytes, `check/1`'s
+    returned ones among them (provisional, question 1); a line to copy holds the name's cut
+    start, `` `ton aaaa… 5000` ``, or none, `no task `aaaa…` (4097 bytes)`; a tag declared
+    from Elixir is refused with its name cut (`Logex.Declarations`' `cut_name/2`); and a
+    name past 4,096 bytes is never the did-you-mean looked at, so `new!/1` past a
+    megabyte's program type costs 14,202 reductions where it cost 16.3 M. The hostile walk
+    gives every argument a text with `.` parts and one with a subscript, each of 100,000
+    bytes, which no lexer takes for one name. What is left is the checks' own reading of
+    the text, linear in it: a task declared twice by a megabyte's name 15.2 M reductions,
+    where a configuration that holds that one task and is taken costs 9.1 M, the name
+    folded to lower case seven times and lexed four. Pins: thirteen refusals at 4,097 bytes.
+  - *F3 (medium): a compile's diagnostics changed with no item.* Decision 613 cut a name in
+    the declaration check a compile shares with `Tag.new!/5`, so a compile cut it in one
+    place of a message and not the other. Became: a compile's diagnostics quote a name
+    whole, as before decision 613 (`Logex.Lexer.quoted_whole/1`), and `Tag.new!/5`'s
+    refusal cuts it where it raises; no item under "The language" is owed, the compile's
+    text being the release's (provisional, question 2). Pin: the ton's diagnostic of a
+    5,000-byte name, whole in both places.
+  - *F4 (medium): a global counted twice.* A step's refusal read the copy-in's count back
+    from its text, so a global both connected and read through a var_external past the
+    copy-in's hundred was counted and listed. Became: the copy-in's misfits are thrown to
+    the step whole (`read_in!/3`), which tells them with the var_externals' as one list,
+    each global once; no text is read back (`refused_globals/3` and its count gone). Pins:
+    150 globals with `g150` the var_external's, 100 and 50 more, and 101 with `g101`.
+  - *F5 (medium-low): "up to 100 lines" untrue for arrays.* Became: the documents say the
+    hundred and the count are of mistakes, an array input's value one mistake told in up
+    to eleven lines (host-contract.md's two sentences, `Logex`'s and `Logex.Runtime`'s
+    moduledocs, CHANGELOG.md); the unit is put to the maintainer (question 3). Pin: 120
+    arrays of 20 sints, 1,100 lines and `and 20 more mistakes, not listed`.
+  - *F6 (low): the cut's judgement of UTF-8.* A text past 4,096 bytes is judged text by
+    them, as `inspect/1` judges one by its `printable_limit`, now documented (`Logex`'s
+    moduledoc, `Logex.Lexer`'s comment); and the cut drops only a split character's start,
+    a lead byte and the continuation bytes that fit (`split/1`), so a byte that starts no
+    character, `0x80` or `0xFF`, in the last three makes the start no text, shown as
+    `inspect/1` shows a binary, where it was dropped. Pins: ten texts, each split of a
+    three- and a four-byte character among them.
+  - *F7 (low): a forged count line.* Became: a text that holds a control character, a
+    newline among them, is quoted as `inspect/1` shows it, escaped, so no name writes a
+    line of a refusal; and the one relay inside `Logex.Runtime` that read a count back
+    from text reads none (F4). The runner's start still reads `start/2`'s count back
+    (`Logex.Declarations.untold/1`), whose lines no name can now forge. Pins: a device named
+    `"x\nand 7 more mistakes, not listed"`, a tab and a long text with a newline.
+  - *F8 (low): survivors.* R04 and R08 now meet the new code (the cut's `split/1`, the
+    suggestion's bound) and R22, R23 and R24 a pin each, a path's instance example, a
+    member no type has and a task, each at 4,097 bytes, and a did-you-mean at 4,096 bytes
+    and none at 4,097; each is a row of the table below. R27 equivalent, as the review
+    found.
+  - *F9 (low).* `Logex.Lexer.long_text?/1` removed, used by nothing. The "both qualifiers"
+    line past a hundred unknown options is as built, pinned, and put to the maintainer
+    (question 4).
+  - *The mutation table of the mends*: 41 patches over `5128b18`'s `lib/`, each judged by
+    the full suite alone with `scripts/mutate.sh`, under load averages of 2 to 9: f1a to
+    f1i (decision 616 on a configuration's paths and a held body's shape), f2a to f2r
+    (every name through the cut), f3a (a compile's name whole), f4a and f4b (the copy-in's
+    misfits thrown whole, the var_externals kept), f6a to f6e (the cut's `split/1` and its
+    start judged after the drop), f7a and f7b (a control character), and R08, R22, R23 and
+    R24 (the review's survivors). 29 were red at the first pass. Twelve were not: the
+    `quoted/1` of `Logex.Configuration`'s judge, `Logex.Configuration.Edit`,
+    `Logex.Runner`, `Logex.IO.Sim`, `Logex.Program`, `Logex.IO` and `Logex.Edit.Plan`
+    (f2c, f2e to f2i, f2k), each a site no pin reached with a name past 4,096 bytes; f2j,
+    `Logex.Edit`'s, red only by a life walk's forces timeout under load, counted a
+    survivor; f2n, a name past 4,096 bytes among those a did-you-mean looks at, a cost and
+    no text; f2o and f2q, a line to copy given the long name whole; and f2r,
+    `Logex.Tag.new!/5`'s dotted name written raw. Each but f2r now meets a pin of
+    `quoted_test.exs` at 4,097 bytes: a location's own spelling, a configuration edit's
+    task added, the runner's force, the sim's check, an unbound device's point, a program
+    edited by hand whose destination is a member of an undeclared instance, an online
+    edit's type change and its function block type, a task with no priority, and a
+    constant connected to an array input; f2n a same-run cost bound, a megabyte's program
+    type among the types given against a short one's and the cut's (16 M reductions with
+    the mutant, 14,202 without). Re-run by the full suite with these pins, the eleven are red, each by `quoted_test.exs`. f2r is equivalent: a
+    dotted name that holds a control character or is no UTF-8 is refused before, `"a.\tb"
+    is not a tag name`, a lexed name holds neither, and `cut_name/2` cuts a name past 4,096
+    bytes in the whole message after, so the raw and the quoted name give one text;
+    Dialyzer on it `DIALYZER-OK`, as a change to a message's text alone is to it. Three more, f2q, f4b (a periodic task's step) and f6e (a byte that starts no
+    character early in a text whose window ends in a split character), were found by
+    running `quoted_test.exs` alone against each patch before the full run reached it, and
+    given a pin; f4b is red by `runtime_test.exs` too. The `readme_test.exs` lines of f1b
+    to f1g, f2l and f2p are the examples' project rebuilding the changed `lib/`, as
+    RV-32's `n05`.
+  - *Cost*, `cd66b6a` against `6178871`, reductions the least of three: `Tag.new!/5` of a
+    megabyte's dotted name 5.3 M where 4.5 M, its message 4,186 bytes where 1,000,072;
+    `get!/2` of a tag an instance lacks 1.0 M both, 4,174 bytes where 1,000,059; `new!/1`
+    of a task declared twice 15.2 M where 15.8 M, 12,791 bytes where 5,000,444; of the
+    types given 14,202 where 16.3 M; of an unknown program type 5.2 M both, 4,167 bytes
+    where 1 MB; `check/1` of a `Date` as the tags 3,976 where 1,321, a refusal of 112 bytes
+    where `Protocol.UndefinedError`'s 238. Small refusals: `put_inputs/3` of one unknown
+    name 815 where 722, the did-you-mean's names filtered by length; `get!/2` 705 where
+    684; `bind!/2` 5,587 where 5,561. Success paths: `instance/1` of a program holding a
+    block 452 where 439, the held body's shape checked; `bind!/2` 5,334 where 5,318; every
+    other the same (`put_inputs/3` 209, `scan/3` 796, `instance/1` 368, `cycle/3` 777,
+    `get!/2` 61, `Tag.new!/5` 103, `Global.new!/3` 115, `check/1` 14,494, a compile
+    9,154, `start/1` 17,108). The commit after `5128b18` changes no code of `lib/`, only
+    two comments made true under decision 613.
+  - *Record 0008* states decision 613's cut of a name or a location past 4,096 bytes and
+    decision 610's hundred, where it said a text is shown as `inspect/1` shows it; its list
+    of decisions gains 610, 613 and 616, and its date runs to 2026-11-24 (DOC-1's third
+    step's records lane).
+  - *The test lines taken out*, against `6178871`: two, each given a comma for a row after
+    it, the hostile list's `long_text` and the walk's list of unread fields. Against
+    `dd67105`, `quoted_test.exs` is +1,393 −15, the build's fourteen and one of these (the other a line the build added); no other test
+    file changed for RV-33 (`docs_test.exs`, `pictures_test.exs`, `prose_test.exs` and
+    `readme_test.exs` changed by DOC-1's third step, merged in).
+  - *The gate*: `cd66b6a` `GATE-OK` on its second run, the first red on two pins the mends
+    had changed (`runtime_test.exs:657`, `type_table_test.exs:346`), mended before the
+    commit; `5128b18` `GATE-OK` 4,419, `DOCS-OK`, CI 45639884282 and Docs 45639884045
+    green. This record's commit: `GATE-OK` 4,425 (4,414 tests and 11 doctests) on its
+    first run, `DOCS-OK`.
+  - *The side effect the review reported*: its `pkill` of `mix test` at about 12:09 came
+    before DOC-1's third step's last runs; that step has since landed on `main`
+    (`d82a4af`), its record naming no lost run.
+  - *Questions for the maintainer*, each the closest reading of the record, marked where it
+    stands (`Logex.Configuration`'s moduledoc, question 1; `Logex.Lexer`'s
+    `quoted_whole/1`, `Logex`'s moduledoc, question 2; `Logex`'s and `Logex.Runtime`'s
+    moduledocs, question 3; decision 610's note, question 4).
+    1. *A configuration's diagnostics* (F2; decision 613: "a text past 4,096 bytes is cut
+       in a refusal", amending 585, which took `check/1`'s quoting as its model). A fan
+       plant's host builds 300 instances in Elixir, one named by a megabyte of garbage
+       text, and calls `new!/1`, or `check/1` to show the problems on a screen. (a) As
+       built: the name cut in every diagnostic of a configuration, `check/1`'s returned
+       ones as well as those `new!/1` and `start/1` raise, a line of some 4 KB on the
+       screen and in the log alike, and a line to copy holding none. (b) Cut only where
+       `new!/1` and `start/1` raise, `check/1` returning the megabyte whole for the host
+       to show as it likes. (c) Whole everywhere, as a compile's diagnostics are, a
+       megabyte in the log. IEC has no host API; Logix refuses a tag name past 40
+       characters where it is typed.
+    2. *A compile's diagnostics* (F3). A conveyor program's source declares a tag of 5,000
+       characters, `var aaaa… ton 5`. (a) As built: the compile's diagnostic quotes the
+       name whole in every place, as before RV-33, a 10 KB line, the release's text
+       unchanged. (b) Cut past 4,096 bytes in every place, as a refusal is, with an item
+       under "The language". Logix's editor refuses such a name as it is typed; IEC sets
+       no length (its implementations do).
+    3. *The unit of the hundred* (F5; decision 610: "the first hundred and how many more
+       there are"). A box counter's bridge sends 120 arrays of 20 counts, each out of its
+       type. (a) As built: the first hundred arrays, each its first ten misfits and a count
+       of the rest, 1,100 lines and 65 KB, then `and 20 more mistakes, not listed`. (b) The
+       first hundred lines, whatever they belong to, about 6 KB, the count then of lines
+       or of what they belong to. IEC and Logix have no host API to compare.
+    4. *The "both qualifiers" line* (F9). A lamp panel's host calls `Tag.new!/5` with
+       `retain: true, non_retain: true` and 150 options it misspelt. (a) As built: the
+       first hundred unknown options and `and 51 more mistakes, not listed`, the line that
+       says both qualifiers were given among the 51 not shown, as it is last below a
+       hundred. (b) That line always told, after the hundred, so 101 lines and a count of
+       50. (c) That line first, which changes the order the pins below a hundred hold. IEC
+       and Logix have no host API to compare.
+
 - **RV-34 — the behaviours DOC-1's close found** (decisions 596 to 607). The review item
   decision 596 makes, of question 8's findings in three of its groups, each run again on
   `main`, then mended with a test that fails when the mend is reverted, or put to the

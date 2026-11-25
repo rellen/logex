@@ -370,7 +370,7 @@ defmodule Logex.Image do
   end
 
   defp raised([]), do: :ok
-  defp raised(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp raised(lines), do: raise(ArgumentError, Declarations.told(lines))
 
   defp configuration_line(name, name), do: []
 
@@ -398,7 +398,7 @@ defmodule Logex.Image do
     do: map |> Enum.sort() |> Enum.flat_map(fn {key, value} -> fun.(key, value) end)
 
   defp map_lines(other, what, _fun),
-    do: ["the retained image's `#{what}` are no map, got: #{Logex.Lexer.inspected(other)}"]
+    do: ["the retained image's #{quoted(what)} are no map, got: #{Logex.Lexer.inspected(other)}"]
 
   defp global_lines(name, entry),
     do:
@@ -417,7 +417,7 @@ defmodule Logex.Image do
   defp named(true, _name, _what), do: []
 
   defp named(false, name, what),
-    do: ["`#{what}` holds #{Logex.Lexer.inspected(name)}, which names no #{singular(what)}"]
+    do: ["#{quoted(what)} holds #{Logex.Lexer.inspected(name)}, which names no #{singular(what)}"]
 
   defp singular("globals"), do: "global"
   defp singular("instances"), do: "instance"
@@ -455,8 +455,8 @@ defmodule Logex.Image do
 
   defp one_path({path, paths}, what, at),
     do: [
-      "#{at}#{what} holds #{paths |> Enum.sort() |> Enum.map_join(" and ", &"`#{&1}`")}, " <>
-        "which name one path, `#{path}`"
+      "#{at}#{what} holds #{paths |> Enum.sort() |> Enum.map_join(" and ", &"#{quoted(&1)}")}, " <>
+        "which name one path, #{quoted(path)}"
     ]
 
   defp program_lines(program, at) do
@@ -493,7 +493,7 @@ defmodule Logex.Image do
 
   defp kind_word(false, kind, path, at),
     do: [
-      "#{at}`kinds` holds `#{path}` as #{Logex.Lexer.inspected(kind)}, which is no kind of instance: a " <>
+      "#{at}`kinds` holds #{quoted(path)} as #{Logex.Lexer.inspected(kind)}, which is no kind of instance: a " <>
         "built-in's or a block's name, or {:array, name, sizes}"
     ]
 
@@ -505,7 +505,7 @@ defmodule Logex.Image do
 
   defp value_at(segments, path, entry, kinds, at),
     do:
-      entry_lines(entry, "#{at}`values` holds `#{path}`") ++
+      entry_lines(entry, "#{at}`values` holds #{quoted(path)}") ++
         whole_lines(segments, path, "`values`", at) ++
         both_lines(Map.has_key?(kinds, canonical(path)), path, at) ++
         clock_lines(segments, kinds, path, at) ++
@@ -539,13 +539,13 @@ defmodule Logex.Image do
   defp last_whole({_name, nil}, _path, _what, _at), do: []
 
   defp last_whole({_name, _index}, path, what, at),
-    do: ["#{at}#{what} holds `#{path}`, an element: an array is retained whole"]
+    do: ["#{at}#{what} holds #{quoted(path)}, an element: an array is retained whole"]
 
   defp both_lines(false, _path, _at), do: []
 
   defp both_lines(true, path, at),
     do: [
-      "#{at}`kinds` and `values` both hold `#{path}`, which is an instance or a value, never both"
+      "#{at}`kinds` and `values` both hold #{quoted(path)}, which is an instance or a value, never both"
     ]
 
   # Decision 273: a timer's `last` is never in an image.
@@ -560,7 +560,7 @@ defmodule Logex.Image do
 
   defp clocked_kind(%{kind: :timer}, path, at),
     do: [
-      "#{at}`values` holds `#{path}`, a timer's clock, which no image holds: each retained " <>
+      "#{at}`values` holds #{quoted(path)}, a timer's clock, which no image holds: each retained " <>
         "timer starts at the start's `now`"
     ]
 
@@ -586,7 +586,9 @@ defmodule Logex.Image do
   end
 
   defp above(nil, _segment, above, {path, what, at}),
-    do: ["#{at}#{what} holds `#{path}`, under `#{above}`, which `kinds` does not hold"]
+    do: [
+      "#{at}#{what} holds #{quoted(path)}, under #{quoted(above)}, which `kinds` does not hold"
+    ]
 
   defp above({_segments, {:array, _kind, dims}}, {_name, index}, above, {path, what, at})
        when is_list(index) do
@@ -599,12 +601,12 @@ defmodule Logex.Image do
 
   defp above({_segments, {:array, _kind, _dims}}, {_name, nil}, above, {path, what, at}),
     do: [
-      "#{at}#{what} holds `#{path}`, under `#{above}`, an array of instances, by no element"
+      "#{at}#{what} holds #{quoted(path)}, under #{quoted(above)}, an array of instances, by no element"
     ]
 
   defp above({_segments, _kind}, {_name, index}, above, {path, what, at}) when is_list(index),
     do: [
-      "#{at}#{what} holds `#{path}`, by an element of `#{above}`, which is no array of instances"
+      "#{at}#{what} holds #{quoted(path)}, by an element of #{quoted(above)}, which is no array of instances"
     ]
 
   defp above(_kind, _segment, _above, _at), do: []
@@ -612,7 +614,7 @@ defmodule Logex.Image do
   defp in_array(true, _above, _at), do: []
 
   defp in_array(false, above, {path, what, at}),
-    do: ["#{at}#{what} holds `#{path}`, by an element outside `#{above}`'s sizes"]
+    do: ["#{at}#{what} holds #{quoted(path)}, by an element outside #{quoted(above)}'s sizes"]
 
   defp within?(index, dims), do: Enum.all?(Enum.zip(index, dims), fn {i, n} -> i < n end)
 

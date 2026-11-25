@@ -553,7 +553,7 @@ defmodule Logex.Configuration.Edit do
   end
 
   defp unedited!([]), do: :ok
-  defp unedited!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp unedited!(lines), do: raise(ArgumentError, Logex.Declarations.told(lines))
 
   # Decision 139: the step's time, `elapsed_ms` after the resource's last cycle, counted as
   # Logex.Runtime.cycle/3 counts it, in its words; 0, the resource's own time, by default.
@@ -578,7 +578,7 @@ defmodule Logex.Configuration.Edit do
     do:
       raise(
         ArgumentError,
-        "the candidate is `#{candidate}`, but the running configuration is `#{running}`: " <>
+        "the candidate is #{quoted(candidate)}, but the running configuration is #{quoted(running)}: " <>
           "an edit keeps the configuration's name"
       )
 
@@ -672,7 +672,7 @@ defmodule Logex.Configuration.Edit do
   defp by_name(elements), do: Map.new(elements, &{&1.name, &1})
 
   defp task(nil, %Configuration.Task{name: name}),
-    do: ["task `#{name}` is added: a task is added only with a restart"]
+    do: ["task #{quoted(name)} is added: a task is added only with a restart"]
 
   # Decision 129: a task made continuous, or a continuous one made timed, is refused as one
   # change, its kind's, and its single and interval are then not compared.
@@ -684,7 +684,7 @@ defmodule Logex.Configuration.Edit do
 
   defp task(was, task),
     do: [
-      "task `#{task.name}` is #{kind(was)} in the running configuration and #{kind(task)} " <>
+      "task #{quoted(task.name)} is #{kind(was)} in the running configuration and #{kind(task)} " <>
         "in the candidate: a task's kind changes only with a restart"
     ]
 
@@ -696,12 +696,12 @@ defmodule Logex.Configuration.Edit do
 
   defp single(was, single, name),
     do: [
-      "task `#{name}`'s single changes from #{named(was)} to #{named(single)}: a task's " <>
+      "task #{quoted(name)}'s single changes from #{named(was)} to #{named(single)}: a task's " <>
         "single changes only with a restart"
     ]
 
   defp named(nil), do: "none"
-  defp named(name), do: "`#{name}`"
+  defp named(name), do: "#{quoted(name)}"
 
   # An event task, with the same single in both, whose interval is added or removed. A
   # periodic task always has an interval, so its own changes, decision 40's.
@@ -717,11 +717,12 @@ defmodule Logex.Configuration.Edit do
 
   defp event_interval(name, how),
     do:
-      "task `#{name}` has a single, and its interval is #{how}: an event task's interval " <>
+      "task #{quoted(name)} has a single, and its interval is #{how}: an event task's interval " <>
         "is added or removed only with a restart"
 
   defp removed_task(%Configuration.Task{name: name, line: line}),
-    do: "task `#{name}`#{running_line(line)} is removed: a task is removed only with a restart"
+    do:
+      "task #{quoted(name)}#{running_line(line)} is removed: a task is removed only with a restart"
 
   defp running_line(nil), do: ""
   defp running_line(line), do: " (line #{line} of the running configuration)"
@@ -729,7 +730,7 @@ defmodule Logex.Configuration.Edit do
   defp global(nil, %Configuration.Global{at: nil}), do: []
 
   defp global(nil, %Configuration.Global{name: name} = global),
-    do: ["`#{name}` at #{span(global)} is added: #{located()}"]
+    do: ["#{quoted(name)} at #{span(global)} is added: #{located()}"]
 
   # Decision 244: a located array whose range changes, grown, shrunk, moved, made a scalar
   # or unlocated, `zone_t real[8]` to `real[10]` at `card.i.0`, is refused once, for the
@@ -756,7 +757,7 @@ defmodule Logex.Configuration.Edit do
 
   defp typed(was, type, name),
     do: [
-      "`#{name}` is #{Declarations.a_global(was)} in the running configuration and " <>
+      "#{quoted(name)} is #{Declarations.a_global(was)} in the running configuration and " <>
         "#{Declarations.a_type(type)} in the " <>
         "candidate: a global's type changes only with a restart"
     ]
@@ -765,7 +766,7 @@ defmodule Logex.Configuration.Edit do
 
   defp located(was, at, name),
     do: [
-      "`#{name}` #{where(was, at)} in the candidate: #{located()}"
+      "#{quoted(name)} #{where(was, at)} in the candidate: #{located()}"
     ]
 
   defp where(nil, at),
@@ -784,21 +785,22 @@ defmodule Logex.Configuration.Edit do
   defp span(%Configuration.Global{at: at, type: {:array, _type, dims}}),
     do: ranged(Configuration.location(at), dims, at)
 
-  defp span(%Configuration.Global{at: at}), do: "`#{at}`"
+  defp span(%Configuration.Global{at: at}), do: "#{quoted(at)}"
 
   defp ranged({:ok, {device, io, fields}}, dims, _at) do
     points = Logex.Array.points("", dims, fields)
     {_, _, from} = hd(points)
     {_, _, to} = List.last(points)
-    "`#{Enum.join([device, io | from], ".")}` to `#{Enum.join([device, io | to], ".")}`"
+
+    "#{quoted(Enum.join([device, io | from], "."))} to #{quoted(Enum.join([device, io | to], "."))}"
   end
 
-  defp ranged(:error, _dims, at), do: "`#{at}`"
+  defp ranged(:error, _dims, at), do: "#{quoted(at)}"
 
   defp located, do: "located I/O changes only with a restart"
 
   defp removed_point(%Configuration.Global{name: name, line: line} = global),
-    do: "`#{name}` at #{span(global)}#{running_line(line)} is removed: #{located()}"
+    do: "#{quoted(name)} at #{span(global)}#{running_line(line)} is removed: #{located()}"
 
   # An instance both configurations run as one program type, on another task. One retyped
   # is a new instance, which may run on any task (decision 61). Decision 129: an instance
@@ -840,7 +842,7 @@ defmodule Logex.Configuration.Edit do
 
   defp placed(was, task, i),
     do: [
-      "`#{i.name}` runs #{with_task(was)} in the running configuration and " <>
+      "#{quoted(i.name)} runs #{with_task(was)} in the running configuration and " <>
         "#{with_task(task)} in the candidate: an instance moves to another task only " <>
         "with a restart"
     ]
@@ -857,8 +859,8 @@ defmodule Logex.Configuration.Edit do
   defp continuous(_timed), do: nil
 
   defp with_task({:untimed, :none}), do: "with no task"
-  defp with_task({:untimed, task}), do: "with `#{task}`"
-  defp with_task(task), do: "with `#{task}`"
+  defp with_task({:untimed, task}), do: "with #{quoted(task)}"
+  defp with_task(task), do: "with #{quoted(task)}"
 
   # Fix F5: each program type an instance runs as that type in both, once, in the order of
   # its first such instance in the candidate, refused by Logex.Edit's own rules in its own
@@ -1292,7 +1294,7 @@ defmodule Logex.Configuration.Edit do
     {type, read} = Map.fetch!(reads, connection.instance)
 
     read_at(read_line(read, member), %{
-      wire: "`#{connection.instance}.#{member}`#{line}",
+      wire: "#{quoted("#{connection.instance}.#{member}")}#{line}",
       type: type,
       name: name,
       held: held
@@ -1303,8 +1305,8 @@ defmodule Logex.Configuration.Edit do
 
   defp read_at(line, wire),
     do: [
-      "#{wire.wire} is a var_output no rung of `#{wire.type}` writes and line #{line} of " <>
-        "`#{wire.type}` reads, wired to `#{wire.name}`, a global #{wire.held}: holding it " <>
+      "#{wire.wire} is a var_output no rung of #{quoted(wire.type)} writes and line #{line} of " <>
+        "#{quoted(wire.type)} reads, wired to #{quoted(wire.name)}, a global #{wire.held}: holding it " <>
         "would change what that rung gives, so a held point is wired to a var_output a rung " <>
         "reads only with a restart"
     ]
@@ -1318,7 +1320,7 @@ defmodule Logex.Configuration.Edit do
     {type, read} = Map.fetch!(reads, connection.instance)
 
     own_read(read_line(read, member), {connection, member, name}, %{
-      wire: "`#{connection.instance}.#{member}`#{line}",
+      wire: "#{quoted("#{connection.instance}.#{member}")}#{line}",
       type: type,
       held: held,
       program: Map.fetch!(config.programs, type),
@@ -1339,11 +1341,11 @@ defmodule Logex.Configuration.Edit do
 
   defp unequal(false, {line, instance, name, was, value}, context),
     do: [
-      "#{context.wire} is a var_output no rung of `#{context.type}` writes and line #{line} " <>
-        "of `#{context.type}` reads, wired to `#{name}`, a global #{context.held}, and holds " <>
-        "#{Logex.Lexer.inspected(host(was))} where `#{name}` holds #{Logex.Lexer.inspected(host(value))} until `#{instance}` " <>
+      "#{context.wire} is a var_output no rung of #{quoted(context.type)} writes and line #{line} " <>
+        "of #{quoted(context.type)} reads, wired to #{quoted(name)}, a global #{context.held}, and holds " <>
+        "#{Logex.Lexer.inspected(host(was))} where #{quoted(name)} holds #{Logex.Lexer.inspected(host(value))} until #{quoted(instance)} " <>
         "first runs after a start or a restart: holding it now would change what that rung " <>
-        "gives, so the edit is accepted only once `#{instance}` has run, or with a restart"
+        "gives, so the edit is accepted only once #{quoted(instance)} has run, or with a restart"
     ]
 
   # The fan-out (the review of RV-10, decision 428): a var_output, or an element of one,
@@ -1363,7 +1365,7 @@ defmodule Logex.Configuration.Edit do
           do: point
 
     fan_at(others, %{
-      wire: "`#{connection.instance}.#{member}`#{line}",
+      wire: "#{quoted("#{connection.instance}.#{member}")}#{line}",
       type: type,
       name: name,
       held: held
@@ -1374,8 +1376,8 @@ defmodule Logex.Configuration.Edit do
 
   defp fan_at([point | _], wire),
     do: [
-      "#{wire.wire} is a var_output no rung of `#{wire.type}` writes, wired to `#{wire.name}`, " <>
-        "a global #{wire.held}, and to `#{point}`: holding it would move `#{point}`, so a " <>
+      "#{wire.wire} is a var_output no rung of #{quoted(wire.type)} writes, wired to #{quoted(wire.name)}, " <>
+        "a global #{wire.held}, and to #{quoted(point)}: holding it would move #{quoted(point)}, so a " <>
         "held point is wired to a var_output that drives another point only with a restart"
     ]
 
@@ -1553,7 +1555,7 @@ defmodule Logex.Configuration.Edit do
     point = global_type(Logex.Name.element(name), name, config.globals)
 
     other_type(output == point, %{
-      wire: "`#{connection.instance}.#{member}`#{line}",
+      wire: "#{quoted("#{connection.instance}.#{member}")}#{line}",
       output: output,
       type: type,
       name: name,
@@ -1567,7 +1569,7 @@ defmodule Logex.Configuration.Edit do
   defp other_type(false, wire),
     do: [
       "#{wire.wire} is #{Declarations.a_type(wire.output)} var_output no rung of " <>
-        "`#{wire.type}` writes, wired to `#{wire.name}`, #{Declarations.a_global(wire.point)} " <>
+        "#{quoted(wire.type)} writes, wired to #{quoted(wire.name)}, #{Declarations.a_global(wire.point)} " <>
         "#{wire.held}: a held point is wired to a var_output of another type only with a " <>
         "restart"
     ]
@@ -2472,4 +2474,8 @@ defmodule Logex.Configuration.Edit do
 
     {List.to_tuple(kept), reports}
   end
+
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

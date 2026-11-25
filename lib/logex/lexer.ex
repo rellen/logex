@@ -47,7 +47,12 @@ defmodule Logex.Lexer do
   them too. Since decision 583 a host's refusal quotes a long number it is given the same
   way, by its first 24 characters and how many it has, `` `100000000000000000000000…`
   (100001 characters) ``: `Logex.Tag.new!/5`'s, `Logex.Configuration.Global.new!/3`'s
-  and `Logex.Configuration.check/1`'s.
+  and `Logex.Configuration.check/1`'s, and since decision 586 every refusal of the host
+  contract. Since decision 613 a name or a location a refusal quotes past 4,096 bytes is
+  cut there, at a character's boundary, and told it was cut and how long it was, `` `aaaa…`
+  (1000000 bytes) ``; a value that is a text, as `inspect/1` cuts it. Since RV-33's
+  review a name that holds a control character is quoted as `inspect/1` shows it, and a
+  compile's diagnostic quotes a name whole however long.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
@@ -193,17 +198,112 @@ defmodule Logex.Lexer do
 
   defp long_within?([_term | terms], left), do: long_within?(terms, left - 1)
 
-  @doc false
   # A name or a location as a message quotes it: text whole, in backquotes, as decision
   # 585 has it, and a binary that is no text, not UTF-8, or any other value, as
   # `inspected/2` shows it, so that a refusal is text however a host's name is made
-  # (RV-32's review, F1 and F4). A long name that is text is whole however long
-  # (`PLAN.md`'s RV-32, question 4).
+  # (RV-32's review, F1 and F4). Since decision 613 (RV-33) a text past 4,096 bytes,
+  # `inspect/1`'s `printable_limit`, is cut there, at a character's boundary, and told it
+  # was cut and how long it was, `` `aaaa…` (1000000 bytes) ``, as a long number is told
+  # its count (decision 583): its first 4,096 bytes are all the cut reads, so a megabyte
+  # of a name costs what 4,096 bytes do, where it was told whole, a megabyte in some 2 s.
+  # A text of 4,096 bytes or fewer is whole. A text past them is judged text by those
+  # first 4,096 bytes alone, as `inspect/1` judges one by its `printable_limit`, so one
+  # whose bytes past them are no UTF-8 is cut as text (RV-33's review, F6); and one whose
+  # first 4,096 bytes are no text, but for the start of a character the cut split, is shown
+  # as `inspected/2` shows a binary that is none, a byte that starts no character among
+  # them, `0x80` or `0xFF`, never taken for a split one's. Since RV-33's review (F7) a text
+  # that holds a control character, a newline among them, is shown as `inspected/2` shows
+  # it, `"x\\nand 7 more mistakes, not listed"`, so that no name a host gives writes a line
+  # of a refusal of its own, a count's among them. A text shown as a value, through
+  # `inspected/2`, is cut as `inspect/1` cuts it, at 4,096 characters (provisional:
+  # `PLAN.md`'s "RV-33 as built", question 2).
+  @longest_text 4_096
+
+  # The bytes of the control characters, C0 and DEL, which `inspect/1` writes escaped.
+  @controls Enum.map(Enum.to_list(0..31) ++ [127], &<<&1>>)
+
+  @doc false
+  def longest_text, do: @longest_text
+
+  @doc false
+  def quoted_text(text) when is_binary(text) and byte_size(text) > @longest_text do
+    start = binary_part(text, 0, @longest_text)
+    cut_text(text_start(String.valid?(start), start), text)
+  end
+
   def quoted_text(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
   def quoted_text(other), do: inspected(other)
 
-  defp quoted_text(true, text), do: "`" <> text <> "`"
+  @doc false
+  # RV-33's review (F3): a name as a compile's diagnostic quotes it, whole however long, as
+  # before decision 613, which cuts a name in a refusal of the host contract alone
+  # (provisional: `PLAN.md`'s RV-33 review, question 2); a binary that is no text as
+  # `inspected/2` shows it.
+  def quoted_whole(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
+  def quoted_whole(other), do: inspected(other)
+
+  @doc false
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, `` `#{word}` ``: a
+  # text through the cut above, a number as `quoted_number/1` quotes it, and an atom or any
+  # other word as it was, so that every refusal of the host contract quotes a name past
+  # 4,096 bytes cut, where some wrote it out whole, a megabyte (decision 613).
+  def quoted(text) when is_binary(text), do: quoted_text(text)
+  def quoted(n) when is_number(n), do: quoted_number(n)
+  def quoted(word), do: "`#{word}`"
+
+  defp quoted_text(true, text),
+    do: plain(:binary.match(text, @controls), text, "`" <> text <> "`")
+
   defp quoted_text(false, bytes), do: inspected(bytes)
+
+  # A text with no control character in it as `shown`, and one with one as `inspected/2`
+  # shows it, escaped, whole or cut as `inspect/1` cuts it.
+  defp plain(:nomatch, _text, shown), do: shown
+  defp plain(_control, text, _shown), do: inspected(text)
+
+  # A cut text's start, its last character whole: the bytes that start a character the cut
+  # split dropped, a lead byte and as many of its continuation bytes as fit, at most three,
+  # or `:none` where the start is no text so cut, a byte that starts no character in its
+  # last three among them (RV-33's review, F6).
+  defp text_start(true, start), do: start
+
+  defp text_start(false, start) do
+    kept = byte_size(start) - split(binary_part(start, byte_size(start) - 3, 3))
+    started_whole(kept < byte_size(start), binary_part(start, 0, kept))
+  end
+
+  # How many bytes of a character the cut split end the start: a lead byte of a two-, three-
+  # or four-byte character alone, a three- or four-byte one's lead and one continuation, or
+  # a four-byte one's lead and two; 0 where the last three bytes end no such start.
+  defp split(<<_, _, lead>>) when lead in 0xC2..0xF4, do: 1
+  defp split(<<_, lead, c>>) when lead in 0xE0..0xF4 and c in 0x80..0xBF, do: 2
+
+  defp split(<<lead, c, d>>) when lead in 0xF0..0xF4 and c in 0x80..0xBF and d in 0x80..0xBF,
+    do: 3
+
+  defp split(_whole), do: 0
+
+  defp started_whole(true, start), do: valid_start(String.valid?(start), start)
+  defp started_whole(false, _start), do: :none
+
+  defp valid_start(true, start), do: start
+  defp valid_start(false, _start), do: :none
+
+  @doc false
+  # RV-33's review (F2): a text past `longest_text/0` bytes as a line to copy writes it,
+  # unquoted: its cut start and `…`, or as `inspected/2` shows a binary that is no text.
+  def cut_start(text) when is_binary(text) and byte_size(text) > @longest_text do
+    start = binary_part(text, 0, @longest_text)
+    started(text_start(String.valid?(start), start), text)
+  end
+
+  defp started(:none, bytes), do: inspected(bytes)
+  defp started(start, _text), do: start <> "…"
+
+  defp cut_text(:none, bytes), do: inspected(bytes)
+
+  defp cut_text(start, text),
+    do: plain(:binary.match(start, @controls), text, "`#{start}…` (#{byte_size(text)} bytes)")
 
   defp cut_shown({start, count}), do: "#{start} (#{count} characters)"
   defp cut_quoted({start, count}), do: "`#{start}` (#{count} characters)"
