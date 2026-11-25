@@ -12,7 +12,7 @@ from the pages and the module documentation, or at `README.md`.
 | Know exactly what a [rung](../guides/reference/glossary.md#rung) does in logex | [What logex is](../guides/explanation/what-logex-is.md), then the [instruction cheatsheet](../guides/reference/cheatsheet.cheatmd) |
 | Change the code of logex | [The toolchain and the gates](contributing/toolchain.md), then [The parts of logex](architecture/overview.md), then [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | Write a page of the documentation | The [style guide](style-guide.md), then [Add and check a page](check-a-page.md) |
-| Find the meaning of a word | The [glossary](../guides/reference/glossary.md) |
+| Find the meaning of a word | The [glossary](../guides/reference/glossary.md). For a word of the suite, such as mutant or walk, [The words of the contributor pages](contributing/words.md) |
 
 > #### Warning {: .warning}
 >
@@ -127,6 +127,7 @@ To work on the code:
 |---|---|
 | [The toolchain and the gates](contributing/toolchain.md) | The pinned versions of Elixir and Erlang/OTP, how to install them, the gates and CI. Read it before your first build |
 | [The changelog and the release step](contributing/releasing.md) | The rules of `CHANGELOG.md`, which the suite checks at each commit, and the script that makes the Git tag of a release |
+| [The words of the contributor pages](contributing/words.md) | The words of the suite, the checks and the toolchain, such as ExUnit test, mutant, gate, walk, oracle and golden record |
 | [Project history](contributing/project-history.md) | What logex has, milestone by milestone, what changed for a program and the work that waits |
 | [The review after Milestone 6](contributing/project-history-review.md) | The review of the whole code after Milestone 6, its close and the items after it |
 

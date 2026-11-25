@@ -184,6 +184,7 @@
   {"docs/README.md", :contributor, "Project"},
   {"docs/contributing/toolchain.md", :contributor, "Project"},
   {"docs/contributing/releasing.md", :contributor, "Project"},
+  {"docs/contributing/words.md", :contributor, "Project"},
   {"docs/style-guide.md", :contributor, "Project"},
   {"docs/house-manner.md", :contributor, "Project"},
   {"docs/examples-and-pictures.md", :contributor, "Project"},

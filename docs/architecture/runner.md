@@ -244,7 +244,8 @@ of that document.
   (decisions 108 and 396).
   [0011. Tasks and rounds](../adr/0011-tasks-and-rounds.md).
 - **The share.** C and S follow the system overhead time slice of
-  [Logix](../../guides/reference/glossary.md#logix) (decision 122). The runner keeps an
+  [Logix](../../guides/reference/glossary.md#logix) (decision 122). The source is
+  1756-RM094N, September 2025, page 35. The runner keeps an
   unused slot (decision 442). On the manual clock, a call waits for its slot
   (decision 131).
 - **1 path for a trip.** Each task has its watchdog, and each trip takes the same path

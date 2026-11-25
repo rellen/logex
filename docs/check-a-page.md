@@ -22,7 +22,8 @@ Link between them.
 Each template is a file that you copy. It has the sections of its kind in their sequence.
 
 - A tutorial must work exactly as the page gives it. The suite runs its examples.
-- A how-to guide has a title that is the task, and a table "If it does not work".
+- A how-to guide has a title that is the task, and a table "If it does not work" with
+  3 columns: `What you see`, `Cause` and `What to do`.
 - A reference page has the same headings for each item of a kind. It has no steps and no
   history. Each rule on it must be true of the code.
 - An explanation page has no steps. It can compare logex with IEC 61131-3 and Logix.
@@ -30,6 +31,21 @@ Each template is a file that you copy. It has the sections of its kind in their 
   also".
 - A contributor page and a decision record can cite a decision of
   [`docs/organisation.md`](organisation.md) by its number. A user page cannot.
+- A page has about 1,500 words, and 2,000 at most. A reference page can have more. The
+  [style guide](style-guide.md#format) gives the rule.
+
+## Change a decision record
+
+A later decision of `docs/organisation.md` can change a decision record. Find the case
+in this table before you edit the record.
+
+| The later decision | What to do |
+|---|---|
+| Keeps the choice of the record, and changes a rule | Edit the record in place, so that it states the new rule. In "Status", name the new decision and the decision that it changes. Add the new decision to the last section of the record |
+| Changes the choice of the record | Write a new record for the new choice. Give the old record the status Replaced, with a link to the new record. Do not change its other sections |
+| Drops the choice, and gives no new choice | Give the record the status Withdrawn, with the number of the decision that drops it |
+
+The [index of the records](adr/README.md) lists each record and its status.
 
 ## Add a page
 
