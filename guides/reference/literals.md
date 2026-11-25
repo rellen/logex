@@ -570,7 +570,6 @@ logex keeps the text of each literal. Each rule of this page uses only the value
 | Item | Rule |
 |---|---|
 | A diagnostic and a warning | The message shows the literal with the characters of the source text: `16#ffff`, `007`, `-0`. |
-| The printer | `Logex.Printer.print/1` prints the tree that `Logex.Parser.parse/1` gives, as text. It prints each literal with the characters of the source text: `move 16#00ff mask`. It does not take a compiled program. `Logex.Printer` is not a part of the [host contract](glossary.md#host-contract). |
 | The value | `255`, `16#ff`, `16#00ff` and `2#1111_1111` have the same value. Each rule reads them as the same. `1500.0` and `1.5e3` have the same value also. |
 | An [online edit](glossary.md#online-edit) | If you change only the text of a literal and not its value, the rung does not change. The same rule applies to an initial value. The report of the edit is empty. [Online edit](online-edit.md) gives the rules. |
 

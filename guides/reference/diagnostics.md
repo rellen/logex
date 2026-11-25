@@ -353,7 +353,7 @@ and its cause.
 | A program from a text | The field `warnings` of the program. It holds the warnings of the program only. |
 | A program from a file | The field `warnings` of the program. It holds the warnings of the program, in line order. Then it holds the warnings of each function block file that the compile loads. Each of those warnings has the path of its file. |
 | A program from a list of files | The same as from a file. But the warnings of a function block file are only in the first program of the list that loads the file. |
-| A function block type | The field `warnings` of its field `body`. The struct `%Logex.FbType{}` has no field `warnings`. |
+| A function block type | The host contract gives no warnings of a type from `Logex.compile/2`. Compile a program that uses the block with `Logex.compile_file/1`: the program holds the warnings of the block file. |
 | A configuration | The field `warnings` of the configuration. It holds the warnings of the configuration only. |
 | A program type of a configuration | The field `warnings` of that program, in the field `programs` of the configuration |
 
