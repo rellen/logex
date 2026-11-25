@@ -36,6 +36,20 @@ the [outputs](../reference/glossary.md#output).
   [The dialect and IEC 61131-3](the-dialect-and-iec.md). If you know a Logix
   controller, then read [How logex differs from Logix](differences-from-logix.md).
 
+These are 4 uses of logex:
+
+- Learn ladder logic on a computer, with no controller.
+- Simulate a machine, for example a conveyor or a box counter, before you commission it.
+- Run ExUnit tests of ladder programs in CI.
+- Control a lab rig that has no safety function.
+
+[Your first program](../tutorials/first-program.md) teaches the language.
+[Try an edit on a simulated device](../howto/try-an-edit-on-a-simulated-device.md) runs a
+conveyor and a box counter on [simulated devices](../reference/glossary.md#simulated-device).
+[Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md) gives the
+ExUnit tests. A real device needs an [adapter](../reference/glossary.md#adapter) that you
+write.
+
 Know these 4 limits before you start:
 
 - logex is a library. It has no hardware.
@@ -231,7 +245,7 @@ These things are different:
   and the Elixir compiler has no part in the change.
   [Programs as data](programs-as-data.md) gives the reasons. The decision record is
   [A program is data](../../docs/adr/0001-a-program-is-data.md).
-- **The host gives the time.** A test of a timer of 10 s gives the scans 10000 ms. It
+- **The host gives the time.** An ExUnit test of a timer of 10 s gives the scans 10000 ms. It
   does not wait 10 s, and it gets the same result each time.
   [The scan, the cycle and time](scan-cycle-and-time.md) gives the reasons. The decision
   record is [The host gives the time](../../docs/adr/0007-the-host-gives-the-time.md).

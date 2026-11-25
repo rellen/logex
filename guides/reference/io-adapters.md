@@ -5,7 +5,7 @@ an Elixir developer who does 1 of these jobs:
 
 - connects a [plant](glossary.md#plant) to its [devices](glossary.md#device)
 - writes an [adapter](glossary.md#adapter)
-- runs a plant on a [simulated device](glossary.md#simulated-device) in test code
+- runs a plant on a [simulated device](glossary.md#simulated-device) in an ExUnit test
 
 The page defines the [points](glossary.md#point) that a
 [configuration](glossary.md#configuration) gives each device, and the
@@ -42,7 +42,7 @@ device to its adapter, each callback of the behaviour `Logex.IO`, and the simula
 
 > #### Note {: .info}
 >
-> logex has 1 adapter only: `Logex.IO.Sim`, a simulated device for tests and examples.
+> logex has 1 adapter only: `Logex.IO.Sim`, a simulated device for ExUnit tests and examples.
 > logex has no adapter for a fieldbus or for an I/O card. You write each such adapter in
 > your [host](glossary.md#host), with the behaviour `Logex.IO`.
 > [Write a device adapter](../howto/write-a-device-adapter.md) shows how. The file
@@ -749,8 +749,8 @@ open.
 
 ## The simulated device
 
-`Logex.IO.Sim` is an adapter, and a small process that a test owns. The test sets the
-inputs of the sim, and reads what the runner wrote to its outputs. The sim has no
+`Logex.IO.Sim` is an adapter, and a small process that the host owns, for example an
+ExUnit test. The host sets the inputs of the sim, and reads what the runner wrote to its outputs. The sim has no
 hardware.
 
 ### `start_link/1`
@@ -772,7 +772,7 @@ address of 2 integers or more, such as `[2, 4]`, is past them.
 
 ### Addresses before and after the open
 
-The address that a test gives to the sim, and that the sim gives back, has 2 forms.
+The address that the host gives to the sim, and that the sim gives back, has 2 forms.
 
 | When | The form of an address | Example |
 |---|---|---|
@@ -781,13 +781,13 @@ The address that a test gives to the sim, and that the sim gives back, has 2 for
 
 - A sim gets the name of its device when the process of a runner's device calls `init/3`.
   The sim keeps that name after the device closes it, also after a stop.
-- A test that calls the callbacks itself opens no runner's device. Its sim keeps the list
+- A host that calls the callbacks itself opens no runner's device. Its sim keeps the list
   form.
 - `outputs/1` and `writes/1` give each write in the form of the device that last opened
   the sim. This includes the writes from before that open.
 - `fail/3` takes the address of `{:value, address, value}` as a list in each case.
 
-### The functions of a test
+### The functions for the host
 
 | Function | What it does |
 |---|---|
@@ -804,14 +804,14 @@ The address that a test gives to the sim, and that the sim gives back, has 2 for
 
 Rules of `set/2` and `set/3`:
 
-- An input that no test sets reads 0.
+- An input that the host does not set reads 0.
 - An address past `inputs:` is an error. The sim sets no value of that call.
 - The sim takes the address of an input that no global is at. No point reads that value.
-- If the sim reports, the caller waits until the device handled the report. Thus a test
+- If the sim reports, the caller waits until the device handled the report. Thus a host
   that sets an input and then moves the clock finds the change in the runner.
 - A device that is down, or that stops while it handles the report, does not stop the
   call.
-- A device that is alive and does not answer in `wait:` ms is an error of the test.
+- A device that is alive and does not answer in `wait:` ms is an error of the call.
 
 The script `io-adapters-sim.exs` runs `packing.logex` on a sim, on a manual clock.
 
@@ -894,8 +894,8 @@ hangs makes `advance/2` raise after its wait. Use `:hang` on the clock of the co
 
 ### The hold of a restart
 
-`hold/1` holds the next read of a restart of a device that stayed up. A test on the clock
-of the computer uses it to let a different device poll while the runner waits.
+`hold/1` holds the next read of a restart of a device that stayed up. An ExUnit test on the
+clock of the computer uses it to let a different device poll while the runner waits.
 
 - A read at a poll passes the hold. Only the read of a restart waits in it.
 - `holding?/1` gives `true` while a read waits in the hold.
@@ -905,11 +905,11 @@ of the computer uses it to let a different device poll while the runner waits.
   gives `false`.
 - `reads/1` counts a held read when it continues.
 
-| Error of the test | When |
+| Wrong call | When |
 |---|---|
 | `hold/1` | The sim holds already. |
-| `let_go/1` | The sim holds no read, and the test did not call `hold/1`. |
-| `let_go/1` | The test called `hold/1`, and no restart read the device after it. The hold stays. |
+| `let_go/1` | The sim holds no read, and the host did not call `hold/1`. |
+| `let_go/1` | The host called `hold/1`, and no restart read the device after it. The hold stays. |
 
 ### The adapter side
 
@@ -930,7 +930,7 @@ again.
 
 ### Messages of the simulated device
 
-Each wrong call of a test raises an `ArgumentError`. The script
+Each wrong call raises an `ArgumentError`. The script
 `io-adapters-sim-wrong.exs` makes wrong calls and prints each message.
 
 ```elixir

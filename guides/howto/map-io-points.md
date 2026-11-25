@@ -262,7 +262,7 @@ The last 3 lines show a value on each path of the diagram:
 
 > #### Warning {: .warning}
 >
-> Do a test of the plant on simulated devices before you use an adapter for hardware.
+> Run the plant on simulated devices before you use an adapter for hardware.
 > With that adapter, the program writes to the outputs of the machine.
 
 To use a device with hardware, give the module of your adapter in `io:`, alone or with a
@@ -342,5 +342,5 @@ The runner starts. After a [round](../reference/glossary.md#round),
   point with no connection.
 - [Force an input point](force-inputs.md): how to hold an input point at a value.
 - [Write ExUnit tests on the manual clock](test-on-the-manual-clock.md): the
-  simulated device in a test.
+  simulated device in an ExUnit test.
 - [Glossary](../reference/glossary.md): the technical words.

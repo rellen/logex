@@ -239,8 +239,8 @@ A runner has 3 rules for the time:
   the same cycles again and get the same outputs.
 - **An ExUnit test does not wait.** A test of a 10 s timer gives 10,000 ms to its scans
   as a number. It gets the same result on a fast machine and on a slow machine.
-- **Only 1 part of logex reads a clock.** That part is the runner. A test gives the
-  runner a manual clock and moves the time.
+- **Only 1 part of logex reads a clock.** That part is the runner. An ExUnit test gives
+  the runner a manual clock and moves the time.
 
 The decision record is
 [The host gives the time](../../docs/adr/0007-the-host-gives-the-time.md).
@@ -256,6 +256,6 @@ The decision record is
 - [Execution model](../reference/execution-model.md): the exact rules of a scan, a cycle
   and the time.
 - [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
-  a test moves the time of a runner.
+  an ExUnit test moves the time of a runner.
 - [Timing and capacity](timing-and-capacity.md): how late a round can be.
 - [Glossary](../reference/glossary.md): the technical words of logex.

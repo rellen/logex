@@ -147,6 +147,7 @@ start at 1.
 | `a runner restarts :cold or :warm, got: :hot` | The mode is not `:warm` or `:cold`. | Give `:warm` or `:cold`. |
 | `the runner #PID<0.155.0> is not running` | The runner stopped, or it crashed. A runner does not start again by itself. | Start a new runner with `Logex.Runner.start_link/1`. |
 | `restart/2` gives `:ok`, then the status is `:tripped` again, with the same `{:fault, ...}` | A retained value causes the fault again in the first round. | Do 1 of the actions of [A retained value trips the plant again](#a-retained-value-trips-the-plant-again). |
+| `trip` is `{:internal, message}` | An exception in logex. It is a defect of logex, and the host cannot cause it. | Keep the message and the values of the resource. Report the defect in the [issues of logex](https://github.com/rellen/logex/issues). |
 | An output comes on immediately after a warm restart | A rung writes the output from a retained value, or a force holds an input. | Make the output safe at the machine. Remove each force that holds an input. Stop the runner with `Logex.Runner.stop/2`. Start a new runner. If it has a store, give the option `start: :cold`. |
 
 The messages of the 4 rows that begin with a path or with `the runner` or `a runner`

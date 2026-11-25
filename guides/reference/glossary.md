@@ -442,8 +442,8 @@ The modules that a host calls. Each of these modules refuses a wrong argument wi
 ### reduction
 
 A unit of work that the Erlang VM counts for each process. A function call costs about 1
-reduction. `Process.info(pid, :reductions)` gives the count of a process. The tests of
-logex measure the cost of a compile, a scan, a cycle and a round in reductions. A busy
+reduction. `Process.info(pid, :reductions)` gives the count of a process. The ExUnit tests
+of logex measure the cost of a compile, a scan, a cycle and a round in reductions. A busy
 computer changes the time of a scan a lot. It changes the count of reductions only
 through the work of garbage collection.
 
@@ -581,7 +581,8 @@ A module that reads and writes 1 kind of device for the runner.
 
 ### simulated device
 
-A device with no hardware: `Logex.IO.Sim`. A test sets its inputs and reads its outputs.
+A device with no hardware: `Logex.IO.Sim`. The host, for example an ExUnit test, sets its
+inputs and reads its outputs.
 
 ## The runner
 

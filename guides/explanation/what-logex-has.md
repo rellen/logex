@@ -32,7 +32,7 @@ flowchart TD
 Figure: the parts of logex at each level. A host at level 1 has only the parts of the
 first box.
 
-Each of these parts works, and the tests of logex run it from source text to outputs.
+Each of these parts works, and the ExUnit tests of logex run it from source text to outputs.
 Online edits and retained values are available at more than 1 level, and they have
 separate sections.
 
@@ -125,7 +125,7 @@ If a bit number or a subscript in a tag is out of range, the scan reports a
 `Logex.Runner` runs 1 configuration on a [clock](../reference/glossary.md#clock).
 
 - **The clock.** The runner reads the time from a clock. The manual clock moves only
-  when a test moves it.
+  when an ExUnit test moves it.
   [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md) gives
   the steps.
 - **Devices.** The runner reads and writes each

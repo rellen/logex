@@ -214,11 +214,11 @@ end
    the file. In it, the first write of the device takes 2 ms of the manual clock.
 
    If no round moves the manual clock, the runner answers a call before the next round.
-   Thus steps 2 to 5 call the runner from the test process.
+   Thus steps 2 to 5 call the runner from the process of the ExUnit test.
 
 > #### Caution {: .error}
 >
-> If a round moves the manual clock, do not call the runner from the test process. The
+> If a round moves the manual clock, do not call the runner from the process of the ExUnit test. The
 > call waits for ever, and after 60 s ExUnit gives `ExUnit.TimeoutError`. Call the runner
 > from a task, and move the clock by 0 ms until the task has the answer.
 
@@ -258,7 +258,7 @@ end
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 20, "width": 90, "diagramMarginX": 5}}}%%
 sequenceDiagram
-  participant T as Test process
+  participant T as ExUnit test
   participant K as Task
   participant R as Runner
   Note over R: Round at 0 ms.<br/>Its write moves<br/>the clock to 2 ms.
@@ -274,7 +274,7 @@ sequenceDiagram
   K-->>T: {:ok, 0}
 ```
 
-Figure: a call from a task while a round is late. The test process moves the clock until
+Figure: a call from a task while a round is late. The ExUnit test moves the clock until
 the task has the answer.
 
 7. Make sure that the file `test/packing_test.exs` has this text.
@@ -393,7 +393,7 @@ If the script gives more than 0 failures, run `mix test` to see each failure.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| `test timed out after 60000ms` | A call from the test process waits for a slot. | Make the call from a task, as in step 6. |
+| `test timed out after 60000ms` | A call from the process of the ExUnit test waits for a slot. | Make the call from a task, as in step 6. |
 | `MatchError` and `unknown program type` | A file is not in the root directory of the project. | Put the 3 files there. |
 | `MatchError` and `cannot be read` | The ExUnit test cannot find a file of the plant. | Run `mix test` from the root directory of the project. |
 | An output does not change, and no error | No point reads the address. | Compare the address with the `at` of the global. |

@@ -70,7 +70,7 @@ change it. Then the other reasons:
 
 | `trip` | What occurred | Where to look |
 |---|---|---|
-| `{:io, ...}` | `{:io, device, detail}`. The device or its [adapter](../reference/glossary.md#adapter) failed. | The device. [Do a test of a device adapter](test-a-device-adapter.md#when-the-plant-runs) gives each `detail`. |
+| `{:io, ...}` | `{:io, device, detail}`. The device or its [adapter](../reference/glossary.md#adapter) failed. | The device. [Check a device adapter](test-a-device-adapter.md#when-the-plant-runs) gives each `detail`. |
 | `{:fault, ...}` | `{:fault, task, instance, fault}`. A [major fault](../reference/glossary.md#major-fault): a bit number or a [subscript](../reference/glossary.md#subscript) that a [tag](../reference/glossary.md#tag) holds is out of range. `fault` gives the file, the line and the value. | That line of the program, and the tag that holds the value. |
 | `{:clock, ...}` | `{:clock, {:now_ms, answer}}` or `{:clock, {:wall_ms, answer}}`. The [clock](../reference/glossary.md#clock) of the [host](../reference/glossary.md#host) gave a time that the runner cannot use. | The clock module of the host. |
 | `{:internal, ...}` | `{:internal, message}`. An exception in logex. The host cannot cause it. | A defect of logex. Keep the message and the values of the resource. Report it in the [issues of logex](https://github.com/rellen/logex/issues). |
