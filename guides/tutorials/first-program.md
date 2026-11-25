@@ -87,7 +87,10 @@ The first 8 lines are [declarations](../reference/glossary.md#declaration). Each
 |---|---|
 | `var_input` | The host gives the value. An instruction cannot write to it. |
 | `var_output` | The program writes the value. A scan returns it to the host. |
-| `var` | The program writes the value. A scan does not return it. The host can read it in the state. |
+| `var` | The program writes the value. A scan does not return it. The host can read it in the field `env` of the state, for example `state.env["fault"]`. |
+
+The type `bool` holds 0 or 1. The type `dint` holds an integer from -2147483648 to
+2147483647.
 
 A tag starts at 0. The tag `speed_sp` starts at 1200, because its declaration gives that
 value.

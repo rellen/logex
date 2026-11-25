@@ -16303,6 +16303,15 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      long tables go to a contributor page it links. Not taken: 1,500 held now, about 50
      pages more; the rule changed to the pages as built; the checker made to count no table
      or alternative text and the pages judged again. DOC-1's third step builds it.
+     *(Landed with DOC-1's third step, 2026-11-25, `3e7f75a`, `ae149ea`, `d89ece4` and the
+     merge's `19ab7a6`: the five how-to guides, six contributor pages and twenty decision
+     records over 2,000 words cut or split, three how-to guides, six contributor pages and
+     sixteen pages of the records' runs and long tables made,
+     `docs/implementation/record-runs-*.md`, each record linking its own; with its review, `scripts/prose.exs`'s
+     rule `length` refuses a page that is not a reference over 2,000 words, held by
+     `prose_test.exs` at 2,000 and 2,001. The records hold 1,367 to 1,999 words, 22 of
+     them over 1,650: the aim of about 1,500 is not met. Provisional: a reference page has
+     no limit, as the style guide had it, `PLAN.md`'s "DOC-1's step 3 reviewed", question 2.)*
 
 590. **"Test", the online edit's step and an ExUnit test (DOC-1's close),** DOC-1's close's
      question 2: the glossary's `test` is the edit's step, `Logex.Edit.test/2`, and about
@@ -16314,6 +16323,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      own words are a words table on the contributor pages, not entries of the user's
      glossary. Not taken: two glossary headings; the step always "the test step"; a group
      "Contributors" in the glossary. DOC-1's third step builds it.
+     *(Landed with DOC-1's third step, 2026-11-25, `be727ca`, `fa69ea4` and `d89ece4`: on
+     the user's pages "test" is the edit's step alone and a test of the suite an "ExUnit
+     test", a heading of the glossary; the contributors' words are one page,
+     `docs/contributing/words.md`, that `docs/README.md` and the contributor template link.
+     Provisional: one page of words, not a table on each page, `PLAN.md`'s "DOC-1's step 3
+     reviewed", question 7.)*
 
 591. **What a user page shows outside the host contract (DOC-1's close),** DOC-1's close's
      question 3: `literals.md` names `Logex.Printer.print/1` and `Logex.Parser.parse/1`,
@@ -16324,6 +16339,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      2026-11-24): a reference page and a how-to guide use the host contract alone; an
      explanation page may show one example from outside it, under a Caution. Not taken: as
      built; the contract only, on every user page. DOC-1's third step builds it.
+     *(Landed with DOC-1's third step, 2026-11-25, `f92a5e0`: `Logex.Printer`,
+     `Logex.Parser` and `instructionize/3` gone from the reference pages, the printed text
+     of a configuration gone from two pages, `print/1` held by `configuration_test.exs`
+     alone; `function-blocks.md` reads a block's members from an instance's state, and since
+     its review `readme_test.exs` holds the page's member tables to
+     `Logex.FbType.builtins/0`. Provisional: a tutorial follows the contract by its
+     template alone, and `function-blocks.md`'s text 35 renames a type a host was given,
+     `PLAN.md`'s "DOC-1's step 3 reviewed", questions 5 and 6.)*
 
 592. **A statement about Logix that no manual supports (DOC-1's close),** DOC-1's close's
      question 4: decision 484 says a Logix connection "faults after four missed packets at
@@ -16342,6 +16365,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      packets. Not taken: sourced claims alone everywhere; the sources on a contributor
      page; decision 484's words kept. DOC-1's third step builds the pages; the notes are
      made with this record.
+     *(Landed with DOC-1's third step, 2026-11-25, `b3a2759`, `fa69ea4` and `d89ece4`:
+     `differences-from-logix.md` gives each claim its source or "Not recorded", its one
+     "Not recorded" left the rung that ends in an output; the other user pages cite §8's
+     manuals or drop the claim; `runner-devices.md` follows decision 134. With its review:
+     the major fault's outputs cited to 1756-UM900B p.242, the watchdog's major fault on
+     `safety-and-limits.md` to 1756-PM005M p.34, and every record's claim about Logix with
+     no source dropped or cited, the forces held by the controller to 1756-PM004L p.53, the
+     "not recorded" of twelve places gone from the records, the one left of record 0022
+     about the tools of IEC 61131-3, and the one of `warm-and-cold-restarts.md`.
+     Provisional: the records read under (b) as every page but `differences-from-logix.md`,
+     `PLAN.md`'s "DOC-1's step 3 reviewed", question 4.)*
 
 593. **The pages on a phone (DOC-1's close),** DOC-1's close's question 5: at a column of
      about 350 px a timing diagram of up to 741 px is cut, a Mermaid diagram's labels
@@ -16354,6 +16388,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      are made the template's again (the close's C20). Not taken: desktop first, every table
      the template's; a phone a target, the template two columns. DOC-1's third step builds
      it.
+     *(Landed with DOC-1's third step, 2026-11-25, `dd417cc`: `mix.exs`'s head of each page
+     shrinks a picture to the column, scrolls a wide table and wraps a heading's code; a
+     Mermaid diagram at its default; the failure tables of 20 how-to guides, where the
+     question counted 16, made the template's three columns, each page measured at 350 px
+     with no part past the column.)*
 
 594. **What logex is for, and where a defect is reported (DOC-1's close),** DOC-1's
      close's question 6: the first page names no use of logex, and only a how-to's row of
@@ -16370,6 +16409,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      question gave `restart-after-a-trip.md` as the page whose `{:internal, message}` row
      links the issues today; that row is `find-why-a-plant-tripped.md`'s, and
      `restart-after-a-trip.md` links none. DOC-1's third step builds it.
+     *(Landed with DOC-1's third step, 2026-11-25, `be727ca`: four uses, in the same words
+     on README's "What logex is for" and `what-logex-is.md`, held to each other by
+     `readme_test.exs` since its review; README and `restart-after-a-trip.md` link the
+     GitHub issues. The draft waits for the maintainer to correct, `PLAN.md`'s "DOC-1's
+     step 3 reviewed", question 1.)*
 
 595. **A decision record when a later decision changes it (DOC-1's close),** DOC-1's
      close's question 7: the records' index says a record is edited in place, and defines
@@ -16381,6 +16425,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      changes; and "Withdrawn" stays for a record whose choice was dropped. Not taken: in
      place always, "Withdrawn" dropped; a record fixed once accepted, as Nygard's are.
      DOC-1's third step builds it.
+     *(Landed with DOC-1's third step, 2026-11-25, `d89ece4` and `fa69ea4`:
+     `docs/adr/README.md`'s "Change a record", `docs/check-a-page.md`'s "Change a decision
+     record" and `docs/templates/adr.md` give the three cases in the same words; records
+     0013, 0014 and 0023 edited in place, each citing the decision that changed it.)*
 
 596. **The behaviours the writers found, beside questions 9 to 32 (DOC-1's close),**
      DOC-1's close's question 8, some 46 findings: one element of a retained array out of

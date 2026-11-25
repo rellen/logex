@@ -1,13 +1,13 @@
-# Do a test of a device adapter
+# Check a device adapter
 
 This guide is for a reader who has an [adapter](../reference/glossary.md#adapter) for a
-[device](../reference/glossary.md#device) with hardware. It shows how to do a test of
-the adapter with a test card, before you connect the hardware.
+[device](../reference/glossary.md#device) with hardware. It shows how to check
+the adapter with a card program, before you connect the hardware.
 [Write a device adapter](write-a-device-adapter.md) shows how to write the adapter.
 
 > #### Warning {: .warning}
 >
-> Do the tests of this guide before you connect the adapter to the hardware. With the
+> Do the checks of this guide before you connect the adapter to the hardware. With the
 > hardware, the program of the plant controls the machine through the output
 > [points](../reference/glossary.md#point).
 
@@ -35,10 +35,10 @@ The example is the script `line_device.exs`. It has 3 parts.
 | Lines | Part | What it is |
 |---|---|---|
 | 1 to 96 | The module `LineDevice` | The adapter: a client of a card that answers lines of text on a TCP socket. |
-| 98 to 172 | The module `Card` | The test card: a TCP server on this computer with the protocol of the card. It is not a part of logex. |
-| 174 to 214 | The run | The [plant](../reference/glossary.md#plant) runs with the adapter and the test card, on the manual [clock](../reference/glossary.md#clock). |
+| 98 to 172 | The module `Card` | The card program: a TCP server on this computer with the protocol of the card. It is not a part of logex. |
+| 174 to 214 | The run | The [plant](../reference/glossary.md#plant) runs with the adapter and the card program, on the manual [clock](../reference/glossary.md#clock). |
 
-The test controls the test card with these functions.
+The run controls the card program with these functions.
 
 | Function | What it does |
 |---|---|
@@ -352,9 +352,9 @@ the card told the controller left: true
 
 ## The result
 
-The run does 5 tests of the adapter. Each line of the output is 1 result.
+The run does 5 checks of the adapter. Each line of the output is 1 result.
 
-| Test | Line | What the run does | What the line shows |
+| Check | Line | What the run does | What the line shows |
 |---|---|---|---|
 | A wrong option | 1 | It starts a [runner](../reference/glossary.md#runner) with no option `host:`. | `check/3` returns 1 message, and `start_link/1` raises an `ArgumentError`. logex opens no device. |
 | A read and a write | 2 | It starts a runner. It sets the channels 0 and 12 of the card to 1, and moves the clock by 10 ms. | `read/1` returns the 4 input points, and not channel 12. The program sets `k1`, and `write/2` sends `0=1 4=0`. |
@@ -366,12 +366,12 @@ The run does 5 tests of the adapter. Each line of the output is 1 result.
 | A stop | 8 | It stops the runner. | The last `write/2` has 0 for each output point. |
 | | 9 | | `close/1` sends `quit`, and the card knows that the adapter stops. |
 
-For your device, change `LineDevice` to your adapter and `Card` to a test card with the
-protocol of your device. Then do the same 5 tests.
+For your device, change `LineDevice` to your adapter and `Card` to a card program with
+the protocol of your device. Then do the same 5 checks.
 
 > #### Caution {: .error}
 >
-> Do a separate test of a card that does not answer, on the clock of the computer. The
+> Do a separate check of a card that does not answer, on the clock of the computer. The
 > run of this guide uses the manual clock, which does not move while a callback waits.
 > Thus the run does not show a callback that is too slow for the runner.
 > [Write a device adapter](write-a-device-adapter.md#the-time-limit-of-a-callback) gives
@@ -383,7 +383,7 @@ protocol of your device. Then do the same 5 tests.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| A `MatchError` with `{:error, {:io_init, "panel", :econnrefused}}` | No test card listens at the address in the options of the adapter. | Start the test card before the runner, and give its port to the adapter. |
+| A `MatchError` with `{:error, {:io_init, "panel", :econnrefused}}` | No card program listens at the address in the options of the adapter. | Start the card program before the runner, and give its port to the adapter. |
 | No line 1 | The adapter has no `check/3`, or `check/3` does not find the wrong option. | Correct `check/3`. |
 | A different `trip:` in line 3 or in line 6 | The adapter does not return that failure as `{:error, reason, state}`. | Find the `trip:` that you see in [When the plant runs](#when-the-plant-runs). |
 | `0 => 1` in line 4, then a `MatchError` with `{:error, {:io_init, "panel", {:error, :closed}}}` | The adapter did not connect again. The card did not get the 0 of the trip. | Put into `state` that the socket is closed, and connect again in the next call. |
@@ -411,7 +411,7 @@ errors of the option `io:`.
 The runner trips. `Logex.Runner.status/1` shows the cause in the field `trip:`, as
 `{:io, "panel", detail}`. The table gives each `detail`.
 
-| The `detail` that you see | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `{:error, reason}` | A callback returned `{:error, reason, state}`. | Correct the device, its cable or its address. |
 | `{:unknown_address, "panel.i.12"}` | `read/1` or `report/2` returned an address that is not an input point of the device. | Return only the addresses of the input points that `init/3` gets. |
@@ -434,7 +434,7 @@ Correct the cause. Then go to [Restart after a trip](restart-after-a-trip.md). A
 - [Restart after a trip](restart-after-a-trip.md): how to find the cause of a trip and
   start the plant again.
 - [Write ExUnit tests on the manual clock](test-on-the-manual-clock.md): the manual
-  clock and the simulated device in a test.
+  clock and the simulated device in an ExUnit test.
 - [Run a plant on the clock](run-on-the-clock.md): a runner on the clock of the computer.
 - [I/O adapters](../reference/io-adapters.md): the rules of each callback.
 - [Glossary](../reference/glossary.md): the technical words.

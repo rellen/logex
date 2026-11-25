@@ -66,12 +66,12 @@ The head of `CHANGELOG.md` gives what each section holds.
 - a decision that 2 entries name
 - a decision of §7 that no entry names, and a decision that §7 does not record
 
-Each refusal is a line that starts with `changelog:`, and the exit code is 1. On this
-tree, the script prints this line and exits with 0:
+Each refusal is a line that starts with `changelog:`, and the exit code is 1. On a tree
+whose §7 has the decisions 1 to 616, the script prints this line and exits with 0:
 
-<!-- unchecked: the output of scripts/changelog.exs on this tree -->
+<!-- unchecked: the output of scripts/changelog.exs on a tree with decisions 1 to 616 -->
 ```text
-changelog: every decision of §7, 1–574, named once
+changelog: every decision of §7, 1–616, named once
 ```
 
 ### The release step
@@ -103,9 +103,10 @@ clone, and check 5 refuses. If the push fails, the tag stays in the clone, and t
 script prints the command that pushes it.
 
 This is a run of `scripts/release.sh --dry-run` in a copy of the repository with no
-origin and a stand-in gate. The page omits the first line and the line of `gh`:
+origin, a stand-in gate and a stand-in `gh` that fails. The page omits the first line,
+which names the commit, and the 2 lines of `gh`:
 
-<!-- unchecked: lines of a run in a copy of the repository; the line of gh is omitted -->
+<!-- unchecked: lines of a run in a copy of the repository; the first line and the 2 lines of gh are omitted -->
 ```text
 release: origin's main, fetched now
 refused: origin's main cannot be fetched (git fetch exited 128)
@@ -151,7 +152,8 @@ These tests fail on a wrong change:
 
 ## See also
 
-- [The toolchain and the gates](toolchain.md): the gates and CI.
+- [The toolchain and the gates](toolchain.md) and [Dialyzer and CI](dialyzer-and-ci.md):
+  the gates and CI.
 - [0021. A pinned toolchain and the gates](../adr/0021-pinned-toolchain-and-gates.md).
 - [`CONTRIBUTING.md`, "Releasing"](../../CONTRIBUTING.md#releasing): the procedure of a
   release.

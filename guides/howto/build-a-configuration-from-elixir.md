@@ -7,8 +7,8 @@ This guide is for an Elixir developer. Your application, the
 [configuration file](../reference/glossary.md#configuration-file). An example is a host
 that reads the plant from a database. This guide builds the plant of
 [Write a configuration file](write-a-configuration-file.md) as Elixir data with
-`Logex.Configuration.new!/1`. Then a script prints the configuration as the text of a
-file and runs 7 [cycles](../reference/glossary.md#cycle) of the plant.
+`Logex.Configuration.new!/1`. Then a script runs 7
+[cycles](../reference/glossary.md#cycle) of the plant.
 
 > #### Warning {: .warning}
 >
@@ -48,15 +48,13 @@ flowchart TB
   structs["the structs"] --> new
   new -- "an error" --> error["ArgumentError"]
   new -- "no error" --> config["%Logex.Configuration{}"]
-  config --> print["print/1: the text"]
   config --> start["start/1, then cycle/3"]
 ```
 
 Figure: the path of the data in this guide. `new!/1` gives a configuration, or raises 1
 `ArgumentError` that lists each error.
 
-The configuration goes to 2 places: to `Logex.Configuration.Text.print/1` as text, and to
-`Logex.Runtime.start/1` to run.
+The configuration goes to `Logex.Runtime.start/1`, which runs it.
 
 ## Steps
 
@@ -155,13 +153,12 @@ connections =
    - `programs:` is a list of the program types. A file reads each program type from the
      `.ld` file beside it.
 
-   Then print each [warning](../reference/glossary.md#warning), and the configuration as
-   the text of a file.
+   Then print each [warning](../reference/glossary.md#warning).
 
 <!-- part of: build-a-configuration-from-elixir.exs -->
 ```elixir
 # Part 6: build the configuration. new!/1 checks it, and raises an ArgumentError if the
-# data has an error. Print each warning, then the configuration as the text of a file.
+# data has an error. Print each warning.
 plant =
   Configuration.new!(
     name: "plant",
@@ -173,11 +170,10 @@ plant =
   )
 
 Enum.each(plant.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
-IO.write(Configuration.Text.print(plant))
 ```
 
-7. Run the script with `mix run build-a-configuration-from-elixir.exs`. It prints the
-   configuration as 26 lines. The first line is `task fast interval 10 priority 1`.
+7. Run the script with `mix run build-a-configuration-from-elixir.exs`. The plant has no
+   warning, and the script prints nothing.
 
    The first run also prints the messages of Mix as it compiles logex and your project.
    If the data has an error, the script stops with an `ArgumentError`.
@@ -263,7 +259,7 @@ connections =
     wire.("m2", [{"reset", 0}, {"motor", "k2"}, {"speed_sp", "sp_2"}])
 
 # Part 6: build the configuration. new!/1 checks it, and raises an ArgumentError if the
-# data has an error. Print each warning, then the configuration as the text of a file.
+# data has an error. Print each warning.
 plant =
   Configuration.new!(
     name: "plant",
@@ -275,7 +271,6 @@ plant =
   )
 
 Enum.each(plant.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
-IO.write(Configuration.Text.print(plant))
 
 # Part 7: run 7 cycles. Each line gives the ms since the last cycle, and the input
 # points that change before the cycle. An input point keeps its value until it changes.
@@ -307,32 +302,6 @@ end)
 
 ```console
 $ mix run build-a-configuration-from-elixir.exs
-task fast interval 10 priority 1
-task slow interval 50 priority 2
-var_global pb_start_1 bool at panel.i.0
-var_global pb_stop_1 bool at panel.i.1
-var_global tt_1 bool at panel.i.2
-var_global pb_start_2 bool at panel.i.3
-var_global pb_stop_2 bool at panel.i.4
-var_global pb_reset bool at panel.i.5
-var_global k1 bool at panel.q.0
-var_global k2 bool at panel.q.1
-var_global sp_1 dint at drive.q.0
-var_global sp_2 dint at drive.q.1
-program m1 motor with fast
-program m2 motor with slow
-m1.start pb_start_1
-m1.stop pb_stop_1
-m1.overtemp tt_1
-m1.reset pb_reset
-m1.motor k1
-m1.speed_sp sp_1
-m2.start pb_start_2
-m2.stop pb_stop_2
-m2.overtemp 0
-m2.reset 0
-m2.motor k2
-m2.speed_sp sp_2
   time    k1    k2  sp_1  sp_2  ran
      0     0     0  1200  1200  m1 m2
     10     1     0  1200  1200  m1
@@ -345,21 +314,16 @@ m2.speed_sp sp_2
 
 ## The result
 
-You have a configuration that you built from Elixir data. The script prints 2 parts:
-
-- The first 26 lines are the configuration as the text of a file. They have the tasks,
-  globals, instances and connections of `plant.logex`, with no comment, no indent and no
-  empty line. The tasks come first, then the globals, then the instances, then the
-  connections.
-- The last 8 lines are a table of the cycles. It is the same as the table of
-  [Write a configuration file](write-a-configuration-file.md#the-result), which gives
-  the reason for each row. At 30 ms, the thermal switch `tt_1` sets the tag `fault` of
-  `m1`, and `m1` sets `sp_1` to 0. `m2` does not change.
+You have a configuration that you built from Elixir data. The script prints a table of
+the cycles. It is the same as the table of
+[Write a configuration file](write-a-configuration-file.md#the-result), which gives the
+reason for each row. At 30 ms, the thermal switch `tt_1` sets the tag `fault` of `m1`,
+and `m1` sets `sp_1` to 0. `m2` does not change.
 
 ## Other lines as data
 
 Each item of this list gives the Elixir data for a line of a file. Then it gives the line
-that `Logex.Configuration.Text.print/1` prints for the data.
+of a file that gives the same item.
 
 - A [continuous task](../reference/glossary.md#continuous-task) with a
   [watchdog](../reference/glossary.md#watchdog):
@@ -589,41 +553,41 @@ of a correct line.
 
 ### Errors of the script
 
-| What you see | What to do |
-|---|---|
-| `` ** (MatchError) no match of right hand side value: `` and a diagnostic of `motor.ld` | No `motor.ld` in the directory where you run `mix run`. Put the file there. |
-| `` ** (KeyError) key :name not found `` for the struct `Task` | `%Task{}` in place of the struct of logex. Write `Configuration.Task`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` ** (MatchError) no match of right hand side value: `` and a diagnostic of `motor.ld` | No `motor.ld` in the directory where you run `mix run`. | Put the file there. |
+| `` ** (KeyError) key :name not found `` for the struct `Task` | `%Task{}` in place of the struct of logex. | Write `Configuration.Task`. |
 
 ### Errors that only Elixir data can have
 
-| What you see | What to do |
-|---|---|
-| `:program is not a field of a configuration` | A key that `new!/1` does not know. Use only the 6 keys of step 6. |
-| `` programs: is a list of %Logex.Program{}, as in programs: [motor] `` | 1 program type with no list. Write `programs: [motor]`. |
-| `` programs: must be a list of %Logex.Program{} `` and the map | A map in `programs:`. Write a list: `programs: [motor]`. |
-| `a configuration needs a name, as in name: "plant"` | No `name:`. Add `name: "plant"`. |
-| `` program instance `m1` from Elixir has no line, got: 3 `` | A struct with `line:`. Remove `line:`. |
-| `` task `fast`: a priority is 0, the highest, to 65535, found 1.5 `` | A number that is not an integer. Write an integer. |
-| `` global `pb_start_1` has type "bool" `` | A type as a string. Write an atom, such as `:bool`. |
-| `` `m1.overtemp` is connected to "0" `` | A number as a string. Write the integer `0`. |
-| `` unknown option :keep for `total` `` | A wrong option of `Global.new!/3`. Use `initial:`, `at:`, `retain:` or `non_retain:`. |
-| `` `retain:` for `total` takes true or false, found "yes" `` | Write `retain: true`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `:program is not a field of a configuration` | A key that `new!/1` does not know. | Use only the 6 keys of step 6. |
+| `` programs: is a list of %Logex.Program{}, as in programs: [motor] `` | 1 program type with no list. | Write `programs: [motor]`. |
+| `` programs: must be a list of %Logex.Program{} `` and the map | A map in `programs:`. | Write a list: `programs: [motor]`. |
+| `a configuration needs a name, as in name: "plant"` | No `name:`. | Add `name: "plant"`. |
+| `` program instance `m1` from Elixir has no line, got: 3 `` | A struct with `line:`. | Remove `line:`. |
+| `` task `fast`: a priority is 0, the highest, to 65535, found 1.5 `` | A number that is not an integer. | Write an integer. |
+| `` global `pb_start_1` has type "bool" `` | A type as a string. | Write an atom, such as `:bool`. |
+| `` `m1.overtemp` is connected to "0" `` | A number as a string. | Write the integer `0`. |
+| `` unknown option :keep for `total` `` | A wrong option of `Global.new!/3`. | Use `initial:`, `at:`, `retain:` or `non_retain:`. |
+| `` `retain:` for `total` takes true or false, found "yes" `` | A string in place of `true` or `false`. | Write `retain: true`. |
 
 ### Errors that a file can also have
 
-| What you see | What to do |
-|---|---|
-| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task or a global. Write the name that the message gives. |
-| `` `m1` runs `motor`, which declares no `mtor` — did you mean `motor`? `` | A spelling error in the name of a tag. Write the name that the message gives. |
-| `` unknown program type `pump`: the types given are `motor` `` | A program type that is not in `programs:`. Compile it and add it to `programs:`. |
-| `` `m1` leaves its var_inputs `overtemp` and `reset` unconnected `` | A `var_input` tag with no connection. Connect each tag that the message names. |
-| `` `m2.motor` is a var_output, which drives a global: it cannot drive the constant `0` `` | An output connected to a number. Connect it to a global. |
-| `` `pb_stop_1` is an input point: `m1.run_lamp`, a var_output, cannot drive it `` | An output connected to an input point. Connect it to an output point, or to a global with no `at:`. |
-| `` `m1.speed_sp` is a dint, but `k1` is a bool `` | A global with a type that does not agree with the tag. Give the global the type of the tag. |
-| `` `k1` is already driven by `m1.motor` `` | 2 outputs that write 1 global. Give each output its own global. |
-| `` `panel.I.0` is not a location as written `` | An uppercase `I` or `Q`, or an address with a leading 0. Write `panel.i.0`. |
-| `` task `fast` needs a priority `` | A periodic task or an event task with no `priority:`. Add `priority:`. |
-| `` `m1.overtemp` is a bool: only 0 or 1 fit, found `2` `` | A number that the type of the tag does not hold. Write a value of the type. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` no task `fsat` — did you mean `fast`? `` | A spelling error in the name of a task or a global. | Write the name that the message gives. |
+| `` `m1` runs `motor`, which declares no `mtor` — did you mean `motor`? `` | A spelling error in the name of a tag. | Write the name that the message gives. |
+| `` unknown program type `pump`: the types given are `motor` `` | A program type that is not in `programs:`. | Compile it and add it to `programs:`. |
+| `` `m1` leaves its var_inputs `overtemp` and `reset` unconnected `` | A `var_input` tag with no connection. | Connect each tag that the message names. |
+| `` `m2.motor` is a var_output, which drives a global: it cannot drive the constant `0` `` | An output connected to a number. | Connect it to a global. |
+| `` `pb_stop_1` is an input point: `m1.run_lamp`, a var_output, cannot drive it `` | An output connected to an input point. | Connect it to an output point, or to a global with no `at:`. |
+| `` `m1.speed_sp` is a dint, but `k1` is a bool `` | A global with a type that does not agree with the tag. | Give the global the type of the tag. |
+| `` `k1` is already driven by `m1.motor` `` | 2 outputs that write 1 global. | Give each output its own global. |
+| `` `panel.I.0` is not a location as written `` | An uppercase `I` or `Q`, or an address with a leading 0. | Write `panel.i.0`. |
+| `` task `fast` needs a priority `` | A periodic task or an event task with no `priority:`. | Add `priority:`. |
+| `` `m1.overtemp` is a bool: only 0 or 1 fit, found `2` `` | A number that the type of the tag does not hold. | Write a value of the type. |
 
 A warning does not stop `new!/1`. The configuration holds it in the field `warnings`,
 and the script prints it first. An example is a global that nothing uses:

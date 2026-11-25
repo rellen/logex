@@ -180,8 +180,9 @@ In a program, logex stops at the first text that it cannot read. That diagnostic
 only one for the program. Line 5 of `conveyor` has no `)`, and logex finds the error at
 the end of the line. The cause can be earlier on the line than the column.
 
-In a configuration file, logex stops only at an illegal character, for example `@`. For a
-different error with a column, logex reads the next lines and continues.
+In a configuration file, logex stops at a character, a number or a name that it cannot
+read, for example `@` or `12x`. For an error in the words of a line, for example
+`interval` with no number, logex reads the next lines and continues.
 
 5. Correct each line that the other diagnostics name. These diagnostics have no column.
 
@@ -295,8 +296,9 @@ different form, for example for an editor, read its fields.
 | `stage` | The part of logex that found the error: `:file`, `:lex`, `:parse`, `:validate`, `:configure` or `:edit` |
 | `message` | The text after the place |
 
-This script prints the diagnostics of `broken.logex`, as this guide shows it before the
-corrections, in the form `file:line: severity: message`.
+Make the file `read-diagnostics-editor.exs` in the root directory of your project, with
+this text. The script prints the diagnostics of `broken.logex`, as this guide shows it
+before the corrections, in the form `file:line: severity: message`.
 
 ```elixir
 {:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
@@ -318,7 +320,8 @@ broken.logex:10: error: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
 broken.logex:11: error: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`
 ```
 
-[Diagnostics](../reference/diagnostics.md) gives the rules of each field.
+[The fields of a diagnostic](../reference/diagnostics.md#the-fields-of-a-diagnostic) gives
+the rules of each field.
 
 ## If it does not work
 

@@ -347,7 +347,8 @@ diagnostic of `xnor`.
 [Instructions: contacts and coils](instructions-contacts-and-coils.md#xio) gives `xio`.
 
 A [Logix](glossary.md#logix) controller fills a narrower source with 0 bits before its
-NOT. Thus its NOT of an `sint` -1 into a `dint` gives `16#ffff_ff00`, and logex gives 0.
+NOT (1756-RM018A, page 871). Thus its NOT of an `sint` -1 into a `dint` gives
+`16#ffff_ff00`, and logex gives 0.
 [How logex differs from Logix](../explanation/differences-from-logix.md#what-is-different-in-behaviour)
 gives this difference and its source.
 

@@ -45,7 +45,7 @@ ideas.
 | A [bit](../reference/glossary.md#bit) of an integer | `status.3`. A [tag](../reference/glossary.md#tag) can hold the number of the bit: `faults.[sel]`. A literal can be in brackets: `faults.[4]` is the bit `faults.4` |
 | An [array](../reference/glossary.md#array) | The sizes come after the type: `int[8]`, `int[2,8]`. An array has 1 to 3 dimensions, and the first [subscript](../reference/glossary.md#subscript) is 0 |
 | An [element](../reference/glossary.md#element) | A tag can hold a subscript: `weights[slot]`. A bit of an element is `faults[2].3` |
-| A rung must do something | In Logix, the last instruction of a rung is an output. logex refuses a rung that writes no value, runs no [instance](../reference/glossary.md#instance) and has no `jmp` |
+| A rung must do something | In Logix, the last instruction of a rung is an output (Not recorded). logex refuses a rung that writes no value, runs no [instance](../reference/glossary.md#instance) and has no `jmp` |
 
 ## What is different in behaviour
 
@@ -73,7 +73,9 @@ subscript is a rule of logex only.
 
 ### The sources for Logix
 
-Each statement about Logix on this page is from a publication of its vendor.
+Each statement about Logix on this page is from a publication of its vendor, or the
+table says "Not recorded". No publication that logex cites gives a statement of that
+row.
 
 | Publication | Statement, with its page |
 |---|---|
@@ -81,7 +83,8 @@ Each statement about Logix on this page is from a publication of its vendor.
 | 1756-RM094N | A bit of an integer (86). An array of timers (85, 86) |
 | 1756-PM004L | An array (34 to 36). A bit of an element, and the range of a bit number (44) |
 | 1756-PM014O | A major fault and its handler (9, 20) |
-| The ladder manual of Logix | The last instruction of a rung |
+| 1756-UM900B, Nov 2025 | A major fault sends the outputs to their configured fault state (242) |
+| Not recorded | The last instruction of a rung is an output |
 
 ## What is different in the vocabulary
 
@@ -163,7 +166,7 @@ Scan 3 shows the rules of logex:
 - The `gt` of rung 4 is on line 13. It passes no power, thus `ote heavy` writes 0 to
   the [output](../reference/glossary.md#output) `heavy`.
 - The scan runs each rung and reports 2 major faults. A Logix controller with no fault
-  handler stops at the first fault.
+  handler stops at the first fault (1756-PM014O, page 9).
 
 Scan 4 runs with no [restart](../reference/glossary.md#restart). The instance keeps no
 fault from scan 3.
@@ -188,9 +191,10 @@ goes to the host or to the runner.
 
 A runner trips after the run of the [task](../reference/glossary.md#task) that has the
 fault. It does not write the outputs of that [round](../reference/glossary.md#round).
-It writes 0 to each output [point](../reference/glossary.md#point) 1 time. Thus, with a
-runner as with a Logix controller, the outputs get no value from a scan that has a
-major fault. A trip is not a guarantee that each output is off.
+It writes 0 to each output [point](../reference/glossary.md#point) 1 time. In a Logix
+controller, "A major fault on the controller causes the outputs to go to their configured
+fault state" (1756-UM900B, Nov 2025, page 242). A trip is not a guarantee that each
+output is off.
 [Safety and limits](safety-and-limits.md) gives the limits of a trip.
 
 ## Why logex does it this way

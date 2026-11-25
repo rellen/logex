@@ -24,7 +24,7 @@ report.(31, [program], &Logex.compile(&1, name: "panel", types: [line]))
 # each message in lines of 80 characters or fewer. Of a message that is longer than 300
 # characters, it prints the first 120 characters.
 belts = File.read!("belts.ld")
-changed = %{seal | members: Enum.reverse(seal.members)}
+changed = %{seal | name: "seal2"}
 
 calls = [
   {"[seal, seal]", [seal, seal]},

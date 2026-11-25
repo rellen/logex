@@ -30,17 +30,16 @@ is warm unless the host gives the option `start: :cold`. A warm start reads the 
 
 ## The runner does not write the store at each change
 
-| Event | Does the runner write the store? |
-|---|---|
-| A start with no store file, or with `start: :cold` | Yes |
-| Each period of the option `retain_period:`, 1 s unless the host sets it | Yes, while the runner is not tripped |
-| A [trip](../reference/glossary.md#trip) | Yes |
-| `Logex.Runner.stop/2`, a shutdown by the supervisor of the runner, and each other normal exit | Yes |
-| A [cold restart](../reference/glossary.md#cold-restart) | Yes |
-| A warm start | No |
-| A warm restart | No |
-| A period while the runner is tripped | No |
-| A crash or a kill of the runner | No |
+The runner writes the store at these events:
+
+- a start with no store file, or with `start: :cold`
+- each period of the option `retain_period:`, while the runner is not tripped
+- a [trip](../reference/glossary.md#trip) and a stop
+- a [cold restart](../reference/glossary.md#cold-restart)
+
+It does not write the store at a warm start, at a warm restart, or at a crash or a kill.
+[When the runner writes the store](../reference/store.md#when-the-runner-writes-the-store)
+gives each event.
 
 Thus the next start after a crash gets the values of the last write. The crash loses
 each change after that write:

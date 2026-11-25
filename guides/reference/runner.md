@@ -1277,7 +1277,7 @@ the runner's retain: "./p7.retain" names the store of another runner of this VM,
 - [Restart after a trip](../howto/restart-after-a-trip.md): the steps after a trip.
 - [Set watchdogs](../howto/set-watchdogs.md): how to choose `watchdog` and `idle:`.
 - [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
-  to move the time of a runner in a test.
+  to move the time of a runner in an ExUnit test.
 - [Trips and watchdogs](../explanation/trips-and-watchdogs.md): why the runner trips, and
   what a trip cannot do.
 - [Execution model](execution-model.md): when a round runs.

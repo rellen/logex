@@ -40,6 +40,8 @@
 #   callout       a callout whose class is not warning, error, info, tip or neutral
 #   see-also      a tutorial, a how-to guide, a reference or an explanation whose last
 #                 section is not "See also"
+#   length        a page that is not a reference of more than 2,000 words, counted as the
+#                 page's line counts them (decision 589)
 #
 # What is not prose, and so is not read: a fenced code block; a code span, which counts as
 # one word of its sentence; a link's or a picture's target, its text being prose; an HTML
@@ -72,6 +74,8 @@ defmodule Prose do
   # The user pages a reader goes on from: each ends with "See also".
   @onward [:tutorial, :howto, :reference, :explanation]
   @classes ~w(warning error info tip neutral)
+  # The most words a page that is not a reference has (decision 589).
+  @most 2000
 
   # A word of the `word` rule that stands straight after one of these is a noun, "the
   # display", "a power supply", and is left: the rule is of verbs.
@@ -277,13 +281,15 @@ defmodule Prose do
     {units, structure} = units(read)
     units = Enum.map(units, &unit(&1, quotes?(kind)))
     blocks = Page.blocks(read)
+    words = units |> Enum.map(&count(&1.plain)) |> Enum.sum()
 
     failures =
       structure ++
         for({n, message} <- Page.problems(read, true), do: {n, "#{n}: [block] #{message}"}) ++
         Enum.flat_map(units, &lengths/1) ++
         Enum.flat_map(units, &words(&1, rules(tools, kind in Page.user()), terms)) ++
-        see_also(kind in @onward, read)
+        see_also(kind in @onward, read) ++
+        long_page(kind, words)
 
     used =
       for unit <- units,
@@ -295,7 +301,7 @@ defmodule Prose do
     %{
       file: file,
       failures: failures |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&"#{file}:#{elem(&1, 1)}"),
-      words: units |> Enum.map(&count(&1.plain)) |> Enum.sum(),
+      words: words,
       sentences: units |> Enum.map(&length(&1.sentences)) |> Enum.sum(),
       quotations: units |> Enum.map(& &1.quotations) |> Enum.sum(),
       unchecked: for(%{above: above} = block <- blocks, unchecked?(above), do: block),
@@ -610,6 +616,19 @@ defmodule Prose do
   defp hits(text, regex, unit) do
     for [{at, length}] <- Regex.scan(regex, text, return: :index, capture: :first),
         do: {line_at(unit, at), binary_part(text, at, length)}
+  end
+
+  # A page that is not a reference has 2,000 words at most: a reference page is read for
+  # one rule at a time, and has more (the style guide's "Format").
+  defp long_page(:reference, _words), do: []
+  defp long_page(_kind, words) when words <= @most, do: []
+
+  defp long_page(_kind, words) do
+    [
+      {1,
+       "1: [length] a page of #{words} words: #{@most} is the limit. Write: cut it, or make " <>
+         "2 pages that each have 1 job"}
+    ]
   end
 
   defp see_also(false, _read), do: []

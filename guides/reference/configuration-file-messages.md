@@ -4,7 +4,7 @@ This page is for a reader who has a message of a configuration and looks for its
 It gives each [diagnostic](glossary.md#diagnostic) and each
 [warning](glossary.md#warning) of a [configuration file](glossary.md#configuration-file)
 and of a [configuration](glossary.md#configuration) from Elixir data. A script makes
-each message from a text, and the suite runs each script.
+each message from a text. A check of the repository runs each script of this page and compares its output with the page.
 [Configuration file](configuration-file.md) gives the rules that the messages name.
 
 Each case has a number. For each case, a script prints the number and the text of the

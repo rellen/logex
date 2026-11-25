@@ -277,15 +277,23 @@ log.
 
 - **A device is a process.** A device polls or reports by itself (decisions 112, 120
   and 124). Each refresh carries a deadline (decision 125), and each write of a round has
-  its own deadline (decision 348). A device writes its outputs again at each poll, as
-  [Logix](../../guides/reference/glossary.md#logix) does at each requested packet interval (decision 130).
+  its own deadline (decision 348).
   [0014. Devices are processes](../adr/0014-devices-are-processes.md).
+
+  A device writes its outputs again at each poll (decision 130).
+  [Logix](../../guides/reference/glossary.md#logix) also sends the data of a module at
+  each requested packet interval, the RPI. The source is 1756-UM058L, September 2026,
+  pages 24 and 25.
 - **The 0 of a trip.** A device writes its 0 again until the adapter takes it
   (decision 262). The trip names the time from the refresh to the deadline
   (decision 137).
-- **Silent devices.** The runner kills a device hung in its adapter (decision 134). A
-  late computer does not trip a healthy device (decisions 461, 484, 485, 486 and 490).
-  Logix also faults a connection only after 4 missed packets.
+- **Silent devices.** The runner kills a device hung in its adapter after the idle
+  watchdog and a poll period (decision 134). A late computer does not trip a healthy
+  device (decisions 461, 484, 485, 486 and 490).
+
+  A Logix connection also times out after a time, not after a count of missed packets.
+  The time is 100 ms at least, and it grows with the RPI. At the default RPI of 20 ms, it
+  is 160 ms. The source is 1756-UM001Q, December 2024, page 158.
   [0013. Watchdogs and the trip](../adr/0013-watchdogs-and-the-trip.md).
 
 ## How to change it

@@ -605,111 +605,49 @@ and the value of each name after the scan.
 
 ### The members of 7 built-in types and of `fan_relay`
 
-The script declares 1 instance of each of 8 type words and prints the members of its
-type. The types `tof` and `tp` have the members of `ton`, and `ctu_dint` is `ctu`. The
-role `local` is a local member. The type `clock` is the time of `last` in ms.
-
-The script reads fields of the compiled program that are not part of the host contract.
-Do not use these fields in an application.
+The script declares 1 instance of each of 8 type words. It makes a
+[state](glossary.md#state) of each program with `Logex.Runtime.instance/1` and prints
+the members that the state holds for the instance, with their first values. The types
+`tof` and `tp` have the members of `ton`, and `ctu_dint` is `ctu`. The state holds the
+members of each role, `last` too. [Members](#members) gives the type, the role and the
+write of each member.
 
 ```elixir
-# For each type word, the script declares 1 instance and prints the members of its type.
-# For each member, it prints the name, the type and the role. It prints `write` if a rung
-# outside the instance can write the member. The script reads the fields `tags`, `blocks`
-# and `members`, which are not part of the host contract. Do not use them in a host.
+# For each type word, the script declares 1 instance `x` and makes a state of the program
+# with Logex.Runtime.instance/1. It prints each member that the state holds for `x`, with
+# its first value. The members of a member that is an instance have its name before them.
 {:ok, fan_relay} = Logex.compile_file("function-blocks/fan_relay.ld")
 words = ~w(ton rto ton_ltime ctu ctd ctud ctu_int fan_relay)
 
-type_of = fn
-  program, {:block, name} -> program.blocks[name]
-  _program, type -> type
-end
+flat = fn
+  members, prefix, flat when is_map(members) ->
+    Enum.flat_map(members, fn {name, value} -> flat.(value, prefix <> name <> ".", flat) end)
 
-word_of = fn
-  %Logex.FbType{name: name} -> name
-  type -> to_string(type)
+  value, prefix, _flat ->
+    [String.trim_trailing(prefix, ".") <> "=#{value}"]
 end
-
-write = fn
-  true -> "write"
-  false -> ""
-end
-
-row = fn cells ->
-  cells
-  |> Enum.zip([10, 8, 8, 10, 0])
-  |> Enum.map_join(fn {cell, width} -> String.pad_trailing("#{cell}", width) end)
-  |> String.trim_trailing()
-  |> IO.puts()
-end
-
-row.(["type word", "member", "type", "role", "write"])
 
 for word <- words do
   {:ok, program} = Logex.compile("var x #{word}", name: "members", types: [fan_relay])
-  type = type_of.(program, program.tags["x"].type)
-
-  for {member, index} <- Enum.with_index(type.members) do
-    first = Enum.at([word], index, "")
-    row.([first, member.name, word_of.(member.type), member.role, write.(member.write)])
-  end
+  members = Logex.Runtime.instance(program).env["x"]
+  IO.puts(String.pad_trailing(word, 10) <> Enum.join(flat.(members, "", flat), " "))
 end
 ```
 
 ```console
 $ mix run function-blocks-members.exs
-type word member  type    role      write
-ton       pre     dint    input     write
-          acc     dint    output    write
-          dn      bool    output
-          tt      bool    output
-          en      bool    output
-          last    clock   internal
-rto       pre     dint    input     write
-          acc     dint    output    write
-          dn      bool    output
-          tt      bool    output
-          en      bool    output
-          r       bool    input     write
-          last    clock   internal
-ton_ltime pre     lint    input     write
-          acc     lint    output    write
-          dn      bool    output
-          tt      bool    output
-          en      bool    output
-          last    clock   internal
-ctu       cu      bool    input
-          r       bool    input     write
-          pv      dint    input     write
-          q       bool    output
-          cv      dint    output
-          ov      bool    output
-ctd       cd      bool    input
-          ld      bool    input     write
-          pv      dint    input     write
-          q       bool    output
-          cv      dint    output
-          un      bool    output
-ctud      cu      bool    input
-          cd      bool    input
-          r       bool    input     write
-          ld      bool    input     write
-          pv      dint    input     write
-          qu      bool    output
-          qd      bool    output
-          cv      dint    output
-          ov      bool    output
-          un      bool    output
-ctu_int   cu      bool    input
-          r       bool    input     write
-          pv      int     input     write
-          q       bool    output
-          cv      int     output
-          ov      bool    output
-fan_relay motor   bool    input
-          fan     bool    output
-          run_on  tof     local
+ton       acc=0 dn=0 en=0 last=0 pre=0 tt=0
+rto       acc=0 dn=0 en=0 last=0 pre=0 r=0 tt=0
+ton_ltime acc=0 dn=0 en=0 last=0 pre=0 tt=0
+ctu       cu=0 cv=0 ov=0 pv=0 q=0 r=0
+ctd       cd=0 cv=0 ld=0 pv=0 q=0 un=0
+ctud      cd=0 cu=0 cv=0 ld=0 ov=0 pv=0 qd=0 qu=0 r=0 un=0
+ctu_int   cu=0 cv=0 ov=0 pv=0 q=0 r=0
+fan_relay fan=0 motor=0 run_on.acc=0 run_on.dn=0 run_on.en=0 run_on.last=0 run_on.pre=5000 run_on.tt=0
 ```
+
+The script prints the members in the sequence of their names, not of their declarations.
+`run_on.pre` starts at 5000, the preset of the `tof` instruction in `fan_relay.ld`.
 
 ### The program `fan_panel.ld`: an instance in a function block
 
@@ -1474,7 +1412,7 @@ report.(31, [program], &Logex.compile(&1, name: "panel", types: [line]))
 # each message in lines of 80 characters or fewer. Of a message that is longer than 300
 # characters, it prints the first 120 characters.
 belts = File.read!("belts.ld")
-changed = %{seal | members: Enum.reverse(seal.members)}
+changed = %{seal | name: "seal2"}
 
 calls = [
   {"[seal, seal]", [seal, seal]},
@@ -1541,7 +1479,7 @@ $ mix run function-blocks-types.exs
 35  Logex.compile(belts, name: "belts", types: [changed])
       ArgumentError
       types must be function block types from Logex.compile/2, got:
-      %Logex.FbType{name: "seal", members: [%Logex.FbType.Member ...
+      %Logex.FbType{name: "seal2", members: [%Logex.FbType.Membe ...
 ```
 
 | Text | What it shows |
@@ -1550,7 +1488,7 @@ $ mix run function-blocks-types.exs
 | 32 | 2 types of 1 name |
 | 33 | A value that is not a type |
 | 34 | `line` holds a `seal`, and `other_seal` is a different `seal`. |
-| 35 | A type that the script changed. The message gives the value, and the script prints its first 120 characters. |
+| 35 | A type that the script changed: its name is not the name that `Logex.compile/2` gave it. The message gives the value, and the script prints its first 120 characters. |
 
 ## Programs and their warnings
 

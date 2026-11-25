@@ -4,7 +4,9 @@ This page is for a reader who looks for an exact rule. Say in 1 sentence what th
 defines.
 
 Copy this file to `guides/reference/`, give it a name and add its line to
-`docs/pages.exs`. Then replace each paragraph with the rules.
+`docs/pages.exs`. Then replace each paragraph with the rules. Show only the modules and
+the functions of the [host contract](../../guides/reference/host-contract.md). A
+reference page can have more than 2,000 words. If it has 2 subjects, make 2 pages.
 
 ## The first group of items
 

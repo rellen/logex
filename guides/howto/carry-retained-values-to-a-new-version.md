@@ -136,8 +136,9 @@ program.
 
 Each entry of the list is `{path, reason}`. If the kind of an instance changes, 1 entry
 names the whole instance, for example `{"boxes", {:retyped, "ctu", "ctd"}}`.
+The first column of the table gives the reason.
 
-| Reason | Cause | What to do |
+| What you see | Cause | What to do |
 |---|---|---|
 | `:undeclared` | The new version does not declare the path. | Declare it, if the new version must keep the value. |
 | `:unretained` | The path has no `retain` in the new version. | Add `retain`. |

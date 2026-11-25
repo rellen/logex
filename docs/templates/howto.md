@@ -3,7 +3,9 @@
 This guide is for a reader who knows the basics of logex. Say the goal in 1 sentence.
 
 Copy this file to `guides/howto/`, give it a name that is the task and add its line to
-`docs/pages.exs`. Then replace each paragraph with the text of the guide.
+`docs/pages.exs`. Then replace each paragraph with the text of the guide. Keep the
+guide to about 1,500 words, and 2,000 words at most. Show only the modules and the
+functions of the [host contract](../../guides/reference/host-contract.md).
 
 ## Before you start
 

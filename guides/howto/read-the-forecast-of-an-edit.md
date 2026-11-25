@@ -214,7 +214,8 @@ ms. For a long timer, for example `ton_ltime`, the time is in ns.
 | A `tof` timer with a true rung and the new preset 0 | `dn` goes to 0 in the scan in which the rung becomes false. |
 | A `tp` timer in its pulse | `dn` goes to 1 and the pulse ends in the next scan that runs the timer. |
 
-[Online edit](../reference/online-edit.md) gives the cases in which the change of an
+[Timers](../reference/online-edit.md#timers) and
+[Counters](../reference/online-edit.md#counters) give the cases in which the change of an
 entry does not occur.
 
 ### A blocked rising edge
@@ -235,8 +236,8 @@ at the next [rising edge](../reference/glossary.md#rising-edge) after that scan.
 An edit of a [plant](../reference/glossary.md#plant) names each entry of 1 instance by
 its path, for example `{:preset, "b1.boxes", {3, 5}}`. It also has kinds of entry for
 the [configuration](../reference/glossary.md#configuration). The table gives the kinds
-that you find most frequently. [Online edit](../reference/online-edit.md) gives each
-kind. [Edit a running plant](edit-a-running-plant.md) shows such an edit.
+that you find most frequently. [The switch of a configuration](../reference/online-edit.md#the-switch-of-a-configuration)
+gives each kind. [Edit a running plant](edit-a-running-plant.md) shows such an edit.
 
 | Entry | What it tells you |
 |---|---|

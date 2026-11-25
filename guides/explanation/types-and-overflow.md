@@ -180,10 +180,9 @@ Rung 3 reads `count_ok` only when `new_box` is on. Thus `overflow` latches only 
   in logex.
 - A [Logix](../reference/glossary.md#logix) controller wraps an integer result, passes
   the power that it gets and sets the status bit `S:V`. It gives a minor fault only if a
-  setting of the controller tells it to.
-- A Logix `CTUD` wraps to -2147483648. An IEC 61131-3 counter stops at a limit that the
-  implementer sets.
-- Logix puts -1 into an `INT` for `move 16#ffff i`. logex refuses this `move`, because
+  setting of the controller tells it to (1756-RM018A, page 868, and 1756-PM014O,
+  page 25).
+- Logix puts -1 into an `INT` for `move 16#ffff i` (1756-RM018A, page 869). logex refuses this `move`, because
   `16#ffff` is 65535. In logex, `word_to_int` of `16#ffff` gives -1.
 
 [How logex differs from Logix](differences-from-logix.md) gives the other differences,
@@ -191,7 +190,7 @@ for example `sqrt` of a negative value.
 
 ## Why logex does it this way
 
-- **A value wraps as it does in Logix and the S7-1200.** logex writes the same low bits
+- **A value wraps as it does in Logix (1756-RM018A, page 868) and the S7-1200.** logex writes the same low bits
   as those controllers. The type of the calculation can be different, because logex
   calculates in the type of the destination.
 - **The program sees the overflow in the same scan, with no fault.** In IEC 61131-3, the

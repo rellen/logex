@@ -4,7 +4,8 @@ This tutorial is for a reader who is new to logex. Say in 1 sentence what the re
 makes. Say in 1 sentence what the reader learns.
 
 Copy this file to `guides/tutorials/`, give it a name and add its line to
-`docs/pages.exs`. Then replace each paragraph with the text of the lesson.
+`docs/pages.exs`. Then replace each paragraph with the text of the lesson. Keep the
+lesson to about 1,500 words, and 2,000 words at most.
 
 ## What you make
 

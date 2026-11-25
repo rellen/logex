@@ -325,46 +325,46 @@ Each row gives a part of the message. The full message of a
 
 ### The configuration does not compile
 
-| What you see | Cause and what to do |
-|---|---|
-| ``a watchdog is at least 1 ms`` or ``a watchdog is 1 to 2147483647 ms`` | The number is out of the range. Give a number from 1 to 2147483647. |
-| `` `watchdog` takes a number of milliseconds, as in `watchdog 50` `` | No whole number follows `watchdog`, for example `1.5`. Give a whole number. |
-| `` `watchdog` is given twice `` | The line has 2 watchdogs. Remove 1. |
-| `` `priority` goes before `watchdog` ``, or `interval` or `continuous` | A word is after the watchdog. Put `watchdog` and its number at the end of the line. |
-| `` unexpected `ms` on the line of task `fast` `` | The number has a unit. Remove the unit. |
-| ``is the continuous task, which takes no `priority` `` (or `interval`, or `single`) | Remove the word from the continuous task line. |
-| ``is a second continuous task: a configuration has one at most`` | Remove the second line, and `with` and its name from each `program` line that names it. |
-| `` `task` needs a name before `Continuous` `` | You gave a task the name `continuous`, in any case. In a configuration file, it is a [reserved word](../reference/glossary.md#reserved-word). Give the task a different name. |
+| What you see | Cause | What to do |
+|---|---|---|
+| ``a watchdog is at least 1 ms`` or ``a watchdog is 1 to 2147483647 ms`` | The number is out of the range. | Give a number from 1 to 2147483647. |
+| `` `watchdog` takes a number of milliseconds, as in `watchdog 50` `` | No whole number follows `watchdog`, for example `1.5`. | Give a whole number. |
+| `` `watchdog` is given twice `` | The line has 2 watchdogs. | Remove 1. |
+| `` `priority` goes before `watchdog` ``, or `interval` or `continuous` | A word is after the watchdog. | Put `watchdog` and its number at the end of the line. |
+| `` unexpected `ms` on the line of task `fast` `` | The number has a unit. | Remove the unit. |
+| ``is the continuous task, which takes no `priority` `` (or `interval`, or `single`) | The line of the continuous task has a word that only a periodic task or an event task takes. | Remove the word from the continuous task line. |
+| ``is a second continuous task: a configuration has one at most`` | 2 task lines with no `interval` and no `single`. | Remove the second line, and `with` and its name from each `program` line that names it. |
+| `` `task` needs a name before `Continuous` `` | You gave a task the name `continuous`, in any case. In a configuration file, it is a [reserved word](../reference/glossary.md#reserved-word). | Give the task a different name. |
 
 ### The runner does not start
 
-| What you see | Cause and what to do |
-|---|---|
-| `the runner's idle: is a whole number of milliseconds, 1 to 2147483647` | Give `idle:` a whole number from 1 to 2147483647. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `the runner's idle: is a whole number of milliseconds, 1 to 2147483647` | `idle:` is not a whole number in this range. | Give `idle:` a whole number from 1 to 2147483647. |
 
 ### logex refuses an online edit
 
-| What you see | Cause and what to do |
-|---|---|
-| `a task is added only with a restart`, `a task is removed only with a restart`, `a task's kind changes only with a restart` or `an instance moves to another task only with a restart` | An online edit cannot do these changes, also to the continuous task. Stop the runner with `Logex.Runner.stop/2`. Then start it with the new configuration. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `a task is added only with a restart`, `a task is removed only with a restart`, `a task's kind changes only with a restart` or `an instance moves to another task only with a restart` | An online edit cannot do these changes, also to the continuous task. | Stop the runner with `Logex.Runner.stop/2`. Then start it with the new configuration. |
 
 ### The plant trips, or a figure is not as you expect
 
 `Logex.Runner.status/1` gives the reason of a trip in `trip`. Each subscriber gets the
 message `{Logex.Runner, runner, {:trip, reason}}`.
 [Restart after a trip](restart-after-a-trip.md) gives the steps after a trip.
-[Runner](../reference/runner.md) gives each reason.
+[The reasons of a trip](../reference/runner.md#the-reasons-of-a-trip) gives each reason.
 
-| What you see | Cause and what to do |
-|---|---|
-| `{:watchdog, {:task, task, ms, watchdog}}` or `{:watchdog, {:round, task, ms, watchdog, steps}}` in a normal run | A run or a round took more than its watchdog. `steps` gives the time of each task. Make the run shorter, or give a larger watchdog. A large [array](../reference/glossary.md#array) makes a run long. On 1 machine, an array of 65,536 counters took 487 ms, and 542 ms in a run that tripped at 500 ms. Keep a plant to about 32,768 [elements](../reference/glossary.md#element) of arrays. |
-| `{:watchdog, {:round, :none, ms, 500, steps}}` | A program has no `with`, and no line declares a continuous task. The runner times its rounds against 500 ms. To change it, add a continuous task line. Then stop the runner and start it with the new configuration. |
-| `{:watchdog, {:idle, ms, work}}` | The work of the runner, `work`, took more than `idle:`. Give `idle:` a larger number. |
-| `{:watchdog, {:device, device, ms}}` | The device got no message from the runner for the watchdog of the step and 1 poll period. It wrote 0 to its output points by itself. A run did not end, or the machine did not run the runner. |
-| `{:watchdog, {:late, ms}}` | The runner was late. It did not look at its devices for more than 4 times `idle:` and 1 poll period. Give `idle:` more, or reduce the load of the machine. |
-| `overlaps` is more than 0 | A run was longer than the interval of its task, and the task missed periods. Make the run shorter, or give the task a larger interval. |
-| `runs` gives a task at `{0, ...}` | Each run took less than 1 ms. Or, for the continuous task, each `program` line has `with` and another task. Then its watchdog times nothing. |
-| `runs` gives `{0, ...}` on the manual clock | No time passes in a run on the manual clock. Start the runner with no `clock:` option, as in step 6. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `{:watchdog, {:task, task, ms, watchdog}}` or `{:watchdog, {:round, task, ms, watchdog, steps}}` in a normal run | A run or a round took more than its watchdog. `steps` gives the time of each task. | Make the run shorter, or give a larger watchdog. A large [array](../reference/glossary.md#array) makes a run long. On 1 machine, an array of 65,536 counters took 487 ms, and 542 ms in a run that tripped at 500 ms. Keep a plant to about 32,768 [elements](../reference/glossary.md#element) of arrays. |
+| `{:watchdog, {:round, :none, ms, 500, steps}}` | A program has no `with`, and no line declares a continuous task. The runner times its rounds against 500 ms. | To change it, add a continuous task line. Then stop the runner and start it with the new configuration. |
+| `{:watchdog, {:idle, ms, work}}` | The work of the runner, `work`, took more than `idle:`. | Give `idle:` a larger number. |
+| `{:watchdog, {:device, device, ms}}` | The device got no message from the runner for the watchdog of the step and 1 poll period. It wrote 0 to its output points by itself. A run did not end, or the machine did not run the runner. | Read [Find why a plant tripped](find-why-a-plant-tripped.md). |
+| `{:watchdog, {:late, ms}}` | The runner was late. It did not look at its devices for more than 4 times `idle:` and 1 poll period. | Give `idle:` more, or reduce the load of the machine. |
+| `overlaps` is more than 0 | A run was longer than the interval of its task, and the task missed periods. | Make the run shorter, or give the task a larger interval. |
+| `runs` gives a task at `{0, ...}` | Each run took less than 1 ms. Or, for the continuous task, each `program` line has `with` and another task. Then its watchdog times nothing. | Nothing. The figure is correct in these 2 cases. |
+| `runs` gives `{0, ...}` on the manual clock | No time passes in a run on the manual clock. | Start the runner with no `clock:` option, as in step 6. |
 
 ## See also
 

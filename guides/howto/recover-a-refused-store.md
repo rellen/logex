@@ -199,17 +199,17 @@ of the numbered copy. The numbered copy does not hold the changes after the cold
 
 ## If it does not work
 
-| What you see | Cause and what to do |
-|---|---|
-| A new problem after a mend | Some problems show only when other lines are correct, for example a removed `resource` line. Mend the new line, then start again. |
-| `and 6 more problems, not listed` | The message shows the first 50 problems only. Mend them, then start again to see the others. |
-| A mend that is not correct | Put the backup back: `cp tally.retain.bak tally.retain`. Then start from step 3 again. |
-| `the store is empty` | The store has no lines. Put an earlier store of the same files in place of the store, or go to step 7. |
-| `the store cannot be read: illegal operation on a directory` | The path names a directory. Give the path of a file. With `start: :cold`, `start_link/1` raises nothing and returns `{:error, {:retain, :eisdir}}`. |
-| `the store cannot be read: the disk did not answer within the write limit` | The disk is slow, or the path names a FIFO. Repair the disk, or give a longer `write_limit:`, as in [Keep retained values on disk](keep-values-on-disk.md). If the path names a FIFO, give the path of a file. With `start: :cold`, `start_link/1` returns `{:error, {:retain, :timeout}}`. |
-| `is a symbolic link` | Give the path of the file that the link names. The start refuses `start: :cold` also. |
-| `names the store of another runner of this VM` | A different runner has the store. Stop that runner, or give a different path. The start refuses `start: :cold` also. |
-| Each value is 0 after a later start, and `copy` is `nil` | The options still give `start: :cold`. Remove it, as in step 7. |
+| What you see | Cause | What to do |
+|---|---|---|
+| A new problem after a mend | Some problems show only when other lines are correct, for example a removed `resource` line. | Mend the new line, then start again. |
+| `and 6 more problems, not listed` | The message shows the first 50 problems only. | Mend them, then start again to see the others. |
+| A mend that is not correct | The start refuses the store again, or reads a value that you did not expect. | Put the backup back: `cp tally.retain.bak tally.retain`. Then start from step 3 again. |
+| `the store is empty` | The store has no lines. | Put an earlier store of the same files in place of the store, or go to step 7. |
+| `the store cannot be read: illegal operation on a directory` | The path names a directory. | Give the path of a file. With `start: :cold`, `start_link/1` raises nothing and returns `{:error, {:retain, :eisdir}}`. |
+| `the store cannot be read: the disk did not answer within the write limit` | The disk is slow, or the path names a FIFO. | Repair the disk, or give a longer `write_limit:`, as in [Keep retained values on disk](keep-values-on-disk.md). If the path names a FIFO, give the path of a file. With `start: :cold`, `start_link/1` returns `{:error, {:retain, :timeout}}`. |
+| `is a symbolic link` | The path of the store is a link. The start refuses it, also with `start: :cold`. | Give the path of the file that the link names. |
+| `names the store of another runner of this VM` | A different runner has the store. | Stop that runner, or give a different path. The start refuses `start: :cold` also. |
+| Each value is 0 after a later start, and `copy` is `nil` | The options still give `start: :cold`. | Remove it, as in step 7. |
 
 ## An example: a comment and a store cut short
 

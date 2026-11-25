@@ -274,11 +274,12 @@ of the interval.
 - In IEC 61131-3, a task with `SINGLE` and `INTERVAL` does not run periodically while
   `SINGLE` is 1. logex does the same.
 - A [Logix](../reference/glossary.md#logix) controller has a fixed list of triggers for
-  an event task, for example a change at an input module. logex has 1 kind of trigger:
+  an event task, for example a change at an input module. The source is 1756-PM005M,
+  pages 37 to 46. logex has 1 kind of trigger:
   the rise of a `bool` global. A device that reports a change has the same result.
 - In IEC 61131-3, a task can interrupt a task of a lower priority. In a Logix
   controller, an event task can interrupt the [continuous
-  task](../reference/glossary.md#continuous-task). In logex, an event task interrupts no
+  task](../reference/glossary.md#continuous-task) (1756-PM005M, page 13). In logex, an event task interrupts no
   scan. It runs in its cycle, in the sequence of the priorities.
 
 ## Why logex does it this way

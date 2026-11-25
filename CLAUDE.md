@@ -83,7 +83,8 @@ own documentation holds:
   publishes the site from `main`.
 - `elixir scripts/prose.exs [--review] [page...]` — the writing rules a script can
   measure, on the pages of `docs/pages.exs` under the rules or on those named, each
-  failure `<file>:<line>: [rule] ... Write: <fix>`; `--kind <kind> <file>` reads a draft.
+  failure `<file>:<line>: [rule] ... Write: <fix>`, a page not a reference over 2,000
+  words among them; `--kind <kind> <file>` reads a draft.
 - `mix run scripts/draw.exs [--check] [page...]` — draws the pictures the pages' marks
   name, with `scripts/pictures.exs`: a ladder drawing from a `.ld` file's text and a timing
   diagram from a run, each an SVG under `guides/assets/`. These three and the examples'
@@ -323,7 +324,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   and on a page under the writing rules every block held, marked as not, or of a
   language the suite compares with nothing (`CONTRIBUTING.md`, "Landing work stales the
   plan"); `--only reading:<page>` reads one page's blocks and marks with no script run,
-  `--only page:<page>` runs its examples too.
+  `--only page:<page>` runs its examples too; and the member tables of
+  `guides/reference/function-blocks.md` held to `Logex.FbType.builtins/0`, the uses of
+  logex on README and `guides/explanation/what-logex-is.md` to each other.
 - `test/logex/page_test.exs` — `scripts/page.exs`: a page cut into prose and blocks as
   GitHub cuts it, what it cannot take given as a problem with its line and never raised,
   a page's name in the site, a mark and an example's run.
@@ -340,16 +343,17 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   each page's kind to its directory and group, the legacy documents to the ten it names,
   no page a stub; `mix.exs`'s site read from it, the host contract's modules first; each
   refusal of `scripts/site.exs`, a page's name in the site and each link's anchor made
-  ExDoc's; `scripts/docs.sh` over a stand-in `mix`; and `.github/workflows/docs.yml`, its
+  ExDoc's, a link to Hex refused and `mix.exs` giving no package; `scripts/docs.sh` over a
+  stand-in `mix`; and `.github/workflows/docs.yml`, its
   keys, toolchain and permissions, its question to GitHub run as written.
 - `test/logex/prose_test.exs` — `scripts/prose.exs`: `test/fixtures/prose/every_rule.md`
-  refused once by each rule, each word and form the style guide replaces, what is not
-  prose, the limits, a page's kind, the glossary's terms, what it counts for a reviewer,
-  and every page under the rules passing.
+  refused once by each rule of a part of a page, each word and form the style guide
+  replaces, what is not prose, the limits, a page's length, a page's kind, the glossary's
+  terms, what it counts for a reviewer, and every page under the rules passing.
 - `test/logex/pictures_test.exs` — `scripts/pictures.exs`: every `.ld` file under
-  `examples/` drawn, a drawing's elements its program's, a timing diagram's values a
-  run's, each picture a page shows held to what its script gives today, one file one
-  picture, and `scripts/draw.exs` run as a writer runs it.
+  `examples/` drawn, a drawing's elements its program's and refused from another's, a
+  timing diagram's values a run's, each picture a page shows held to what its script
+  gives today, one file one picture, and `scripts/draw.exs` run as a writer runs it.
 - `test/logex/quoted_test.exs` — every refusal of the host contract that quotes a host's
   value, reached with a long number and pinned whole, the cut in it; a hostile value at
   every argument and checked field, each refusal short text; a sample's cost against a

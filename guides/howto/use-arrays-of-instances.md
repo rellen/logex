@@ -42,22 +42,15 @@ brackets.
 Obey these rules:
 
 - Declare an array of instances with the [section](../reference/glossary.md#section) `var`
-  only. It cannot be an [input](../reference/glossary.md#input), an
-  [output](../reference/glossary.md#output), a `var_external` tag or a
-  [global](../reference/glossary.md#global). No
-  [connection](../reference/glossary.md#connection) names it, and it is not at a
-  [point](../reference/glossary.md#point).
-- Do not give an initial list. The [instruction](../reference/glossary.md#instruction) that
-  runs an element gives its preset.
+  only, and with no initial list. The [instruction](../reference/glossary.md#instruction)
+  that runs an element gives its preset.
 - Put the file of the function block beside the program. For `var belts belt[3]`,
   `Logex.compile_file/1` reads `belt.ld` from the directory of the program.
-- 1 declaration holds 65,536 elements at most. A timer or a counter counts 1, so
-  `var jam ton[65536]` is correct. An element of `belts` counts 5: the instance and its
-  4 tags.
 - Run an element of a `ctud` type, such as `stock[0,0]`, with 1 `ctu` and 1 `ctd`. Give
   both the same literal subscript and the same preset.
 
-[Function blocks](../reference/function-blocks.md) gives each rule.
+[Arrays of instances](../reference/function-blocks.md#arrays-of-instances) gives each rule,
+for example the limit of 65,536 elements and the sections that an array cannot have.
 
 ## Run 1 timer, 1 counter and 1 function block for each conveyor
 
@@ -108,8 +101,7 @@ var_output run   bool
 3. Declare the outputs `motor bool[3]`, `view_ok bool`, `count dint` and `jammed bool`
    with `var_output`.
 4. Declare the arrays of instances: `var jam ton[3]`, `var boxes ctu[3]` and
-   `var belts belt[3]`. An empty line after the declarations makes the file easier to
-   read.
+   `var belts belt[3]`.
 5. Run 1 timer for each conveyor: `xic eye[0] ton jam[0] 2000`. Write the same
    [rung](../reference/glossary.md#rung) for `[1]` and `[2]`. Each rung names its element
    with a [literal](../reference/glossary.md#literal) subscript.
@@ -123,22 +115,15 @@ var_output run   bool
 
 > #### Caution {: .error}
 >
-> Keep a subscript in a tag in the range of the array. A rung can read or write an
-> element or a member through a subscript that is out of the range. Then the
+> Keep a subscript in a tag in the range of the array. Out of the range, the
 > [scan](../reference/glossary.md#scan) gets a
-> [major fault](../reference/glossary.md#major-fault). The instruction does nothing. A
-> [runner](../reference/glossary.md#runner) then causes a
-> [trip](../reference/glossary.md#trip), and the [plant](../reference/glossary.md#plant)
-> stops.
->
-> Put a [contact](../reference/glossary.md#contact) of a `bool` tag first on each such rung.
-> Make the tag true only while the subscript is in the range. Step 8 makes this tag,
-> `view_ok`, and steps 9 and 10 use it.
->
-> An `ote` writes on a [false rung](../reference/glossary.md#false-rung) also. Thus a
-> contact of `view_ok` before an `ote` does not stop the fault. For example,
-> `xic view_ok ote boxes[view].r` faults when `view` is 3. To write a member that a tag
-> selects, use `otl` and `otu` on 2 rungs, or `move`.
+> [major fault](../reference/glossary.md#major-fault), and a
+> [runner](../reference/glossary.md#runner) [trips](../reference/glossary.md#trip).
+> Steps 8 to 10 put the contact `view_ok` first on each rung that reads through `view`.
+> An `ote` writes on a [false rung](../reference/glossary.md#false-rung) also, thus
+> `xic view_ok ote boxes[view].r` faults when `view` is 3. Use `otl` and `otu`, or
+> `move`. [Select an array element with a tag](select-an-array-element-with-a-tag.md)
+> gives the rules.
 
 8. Make `view_ok` true only while `view` is 0 to 2: `ge view 0 lt view 3 ote view_ok`.
 9. Show the count of the selected conveyor: `xic view_ok move boxes[view].cv count`.
@@ -355,29 +340,9 @@ column **What you see** is a part of its message.
 
 ### When you run the scans
 
-If rungs 11 and 12 do not start with `view_ok`, a `view` of 3 gives 2
-[faults](../reference/glossary.md#fault). The field `faults` of the
-[state](../reference/glossary.md#state) holds them. This is the first. Line 23 of the
-file is rung 11.
-
-<!-- unchecked: a fault that a run printed, from conveyors.ld with the contact view_ok taken out of rungs 11 and 12 -->
-```text
-%Logex.Fault{
-  severity: :major,
-  kind: :index_out_of_range,
-  instruction: :move,
-  path: nil,
-  file: "use-arrays-of-instances/conveyors.ld",
-  line: 23,
-  read: {3}
-}
-```
-
-The second fault is the same, with `instruction: :xic` and `line: 24`.
-
 | What you see | Cause | What to do |
 |---|---|---|
-| A fault in the field `faults` | A subscript in a tag is out of the range. The field `read` holds the subscripts. | Put the contact `view_ok` first on the rung, as in steps 9 and 10. |
+| A fault of the kind `:index_out_of_range` in the field `faults` of the [state](../reference/glossary.md#state) | A subscript in a tag is out of the range. The field `read` holds the subscripts. | Put the contact `view_ok` first on the rung, as in steps 9 and 10. [Select an array element with a tag](select-an-array-element-with-a-tag.md#if-it-does-not-work) shows such a fault. |
 | The counter does not count a box that is at the eye on the [first scan](../reference/glossary.md#first-scan) | A counter counts a [rising edge](../reference/glossary.md#rising-edge). The first scan has none. | Start with the eye at 0, as scan 1 of the script does. |
 
 ## See also

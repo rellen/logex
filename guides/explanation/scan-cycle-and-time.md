@@ -224,12 +224,13 @@ A runner has 3 rules for the time:
   from the first to the last, as logex does. The standard does not say where a timer
   gets its time.
 - A timer of a [Logix](../reference/glossary.md#logix) controller adds the time since
-  the last scan of its instruction, as a timer of logex does.
+  the last scan of its instruction, as a timer of logex does. The source is
+  1756-RM018A, pages 112 and 113.
 - A controller reads its own clock and starts its own scans. In logex, the host does
   these 2 things.
-- IEC 61131-3 and Logix let a program jump back. logex does not.
+- logex does not let a program jump back.
 - A Logix controller does a prescan, a step that prepares each instruction, before its
-  first scan. logex has no prescan. The first scan runs each rung. Only the instructions
+  first scan (1756-RM094N, page 47). logex has no prescan. The first scan runs each rung. Only the instructions
   that look for an edge are different in it.
 
 ## Why logex does it this way
@@ -237,10 +238,10 @@ A runner has 3 rules for the time:
 - **A scan is a function of its arguments.** The same state, inputs and time always give
   the same outputs. A host that records the time and the inputs of each cycle can run
   the same cycles again and get the same outputs.
-- **An ExUnit test does not wait.** A test of a 10 s timer gives 10,000 ms to its scans
-  as a number. It gets the same result on a fast machine and on a slow machine.
-- **Only 1 part of logex reads a clock.** That part is the runner. A test gives the
-  runner a manual clock and moves the time.
+- **An ExUnit test does not wait.** For a 10 s timer, it gives 10,000 ms to the scans as
+  a number. It gets the same result on a fast machine and on a slow machine.
+- **Only 1 part of logex reads a clock.** That part is the runner. An ExUnit test gives
+  the runner a manual clock and moves the time.
 
 The decision record is
 [The host gives the time](../../docs/adr/0007-the-host-gives-the-time.md).
@@ -256,6 +257,6 @@ The decision record is
 - [Execution model](../reference/execution-model.md): the exact rules of a scan, a cycle
   and the time.
 - [Write ExUnit tests on the manual clock](../howto/test-on-the-manual-clock.md): how
-  a test moves the time of a runner.
+  an ExUnit test moves the time of a runner.
 - [Timing and capacity](timing-and-capacity.md): how late a round can be.
 - [Glossary](../reference/glossary.md): the technical words of logex.
