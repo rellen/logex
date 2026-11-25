@@ -20,6 +20,7 @@ A fresh start reads the store raw, and checks its text before it uses a value:
 | The `configuration` line names the configuration of the start | The start refuses the store |
 | A store of `logex retain 3` has a `resource` line and a `program` line ([The versions](#the-versions)) | The start refuses the store |
 | Each digest is the digest of the program of the start | The start continues, and warns |
+
 The internal module [`retain.ex`](../../lib/logex/retain.ex) holds the reader, and
 [`refusal.ex`](../../lib/logex/refusal.ex) the bounds of a refusal.
 

@@ -15,10 +15,10 @@ runs. It reads 3 things:
 |---|---|---|
 | A plan | `plans/3`, at the accept | The facts of the 2 programs. It never reads the state |
 | The record | Each switch, from the record before it | What occurs between 2 steps of the edit |
-| The state | The host | The values of the instance |
+| The state | The host gives it to each step | The values of the instance |
 
-The switch gives a new state, a new record and a report. All 3 functions are in the
-internal file [`plan.ex`](../../lib/logex/edit/plan.ex).
+The switch gives a new state, a new record and a report. `plans/3`, `switch/5` and
+`prune/3` are in the internal file [`plan.ex`](../../lib/logex/edit/plan.ex).
 
 ## How it is built
 
