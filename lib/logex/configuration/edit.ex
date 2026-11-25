@@ -553,7 +553,7 @@ defmodule Logex.Configuration.Edit do
   end
 
   defp unedited!([]), do: :ok
-  defp unedited!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp unedited!(lines), do: raise(ArgumentError, Logex.Declarations.told(lines))
 
   # Decision 139: the step's time, `elapsed_ms` after the resource's last cycle, counted as
   # Logex.Runtime.cycle/3 counts it, in its words; 0, the resource's own time, by default.

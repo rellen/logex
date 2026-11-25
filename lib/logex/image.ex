@@ -370,7 +370,7 @@ defmodule Logex.Image do
   end
 
   defp raised([]), do: :ok
-  defp raised(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp raised(lines), do: raise(ArgumentError, Declarations.told(lines))
 
   defp configuration_line(name, name), do: []
 

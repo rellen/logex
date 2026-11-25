@@ -564,7 +564,7 @@ defmodule Logex.Edit do
       )
 
   defp computable!([]), do: :ok
-  defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
+  defp computable!(lines), do: raise(ArgumentError, Declarations.told(lines))
 
   defp named!(%Program{name: name}, %Program{name: name}), do: :ok
 

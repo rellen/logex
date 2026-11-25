@@ -607,10 +607,12 @@ defmodule Logex.Program do
   rungs and of each body once: a body in the program's one table of block types (decision
   53), and one a tag of a routine walked holds as its type itself, which only a program
   built by hand does. Every entry point that takes a program first checks it so, where it
-  is first handed in (decision 190).
+  is first handed in (decision 190). Since decision 616 a struct where a map is due, a
+  `Date` or a `Time` as a routine's tags, as the program's blocks, or as its units, reals
+  or arrays, is a line of its own, where the walk took it for a map and raised.
   """
   def edited_by_hand(%__MODULE__{name: name, blocks: blocks} = program)
-      when is_map(blocks) or blocks == nil do
+      when (is_map(blocks) and not is_struct(blocks)) or blocks == nil do
     {lines, _seen} =
       routine(program, {name, nil}, {[], MapSet.new()}, held_in(table(program.blocks)))
 
@@ -618,12 +620,27 @@ defmodule Logex.Program do
   end
 
   # The review after Milestone 6 (b6-configuration-11): a program whose table of block
-  # types is no map is one line, where its walk raised Protocol.UndefinedError.
+  # types is no map is one line, where its walk raised Protocol.UndefinedError; since
+  # decision 616 (RV-33) a struct there is none, a `Date` among them, which the walk took
+  # for a map and raised Protocol.UndefinedError on, Elixir's message, 100 KB with a long
+  # year.
   def edited_by_hand(%__MODULE__{name: name, blocks: blocks}),
     do: [
       "#{owner({name, nil})} block types are no map of the types it holds by name, got: " <>
         "#{Logex.Lexer.inspected(blocks)}: #{named(name)} was edited by hand after it compiled"
     ]
+
+  # Decision 616 (RV-33): a routine whose tag table is a struct, a `Date` or a `Time`, is
+  # one line, where the walk took it for a map of tags and raised
+  # Protocol.UndefinedError.
+  defp routine(%__MODULE__{tags: tags}, {program, _block} = where, {lines, seen}, _table)
+       when is_struct(tags),
+       do:
+         {[
+            "#{owner(where)} tags are no map of its tags by name, got: " <>
+              "#{Logex.Lexer.inspected(tags)}: #{named(program)} was edited by hand after it compiled"
+            | lines
+          ], seen}
 
   defp routine(
          %__MODULE__{
@@ -786,7 +803,8 @@ defmodule Logex.Program do
   # Decision 197: a routine's units against the ones its tags give, by name in order.
   defp unit_lines(nil, {_tags, nil}, _where), do: []
 
-  defp unit_lines(units, {tags, wanted}, where) when is_map(units) or units == nil do
+  defp unit_lines(units, {tags, wanted}, where)
+       when (is_map(units) and not is_struct(units)) or units == nil do
     given = table(units)
     wanted = table(wanted)
 
@@ -834,7 +852,8 @@ defmodule Logex.Program do
   # M5-10: a routine's reals against the ones its tags give, by name in order, as its units.
   defp real_lines(nil, {_tags, nil}, _where), do: []
 
-  defp real_lines(reals, {tags, wanted}, where) when is_map(reals) or reals == nil do
+  defp real_lines(reals, {tags, wanted}, where)
+       when (is_map(reals) and not is_struct(reals)) or reals == nil do
     given = table(reals)
     wanted = table(wanted)
 
@@ -855,7 +874,8 @@ defmodule Logex.Program do
   # M5-11: a routine's arrays against the ones its tags give, by name in order, as its reals.
   defp array_lines(nil, {_tags, nil}, _where), do: []
 
-  defp array_lines(arrays, {tags, wanted}, where) when is_map(arrays) or arrays == nil do
+  defp array_lines(arrays, {tags, wanted}, where)
+       when (is_map(arrays) and not is_struct(arrays)) or arrays == nil do
     given = table(arrays)
     wanted = table(wanted)
 

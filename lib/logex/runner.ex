@@ -5872,16 +5872,20 @@ defmodule Logex.Runner do
   # The image a store holds judged as `Logex.Runtime.start/2` judges any, each of its
   # refusals a line naming the store.
   # Since RV-5 bounded as the store's own refusal is, its first 50 lines and then their
-  # count, each at most 1,000 bytes (b3-store-image-11).
+  # count, each at most 1,000 bytes (b3-store-image-11); since decision 610 the count
+  # takes in the lines `Logex.Runtime.start/2` counted past its own hundred and did not
+  # list (`Logex.Declarations.untold/1`).
   defp started!(configuration, image, path) do
     Runtime.start(configuration, image)
   rescue
     error in ArgumentError ->
-      reraise ArgumentError,
-              error.message
-              |> String.split("\n")
-              |> Logex.Refusal.told(path),
-              __STACKTRACE__
+      {lines, more} = untold(Enum.map(String.split(error.message, "\n"), &Declarations.untold/1))
+      reraise ArgumentError, Logex.Refusal.told(lines, path, more), __STACKTRACE__
+  end
+
+  defp untold(told) do
+    {lines, counts} = Enum.split_with(told, &match?({:line, _line}, &1))
+    {for({:line, line} <- lines, do: line), Enum.sum(for {:more, count} <- counts, do: count)}
   end
 
   # `status/1`'s `retain` (decisions 275 and 277): the store's path, the time its last

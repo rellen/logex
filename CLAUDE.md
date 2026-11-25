@@ -354,7 +354,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   value, reached with a long number and pinned whole, the cut in it; a hostile value at
   every argument and checked field, each refusal short text; a sample's cost against a
   small value's; a configuration's checks building no refusal's text where they pass;
-  and `inspect/1` in `lib/` the cut's alone.
+  `inspect/1` in `lib/` the cut's alone; a refusal of many mistakes, its first hundred
+  and a count, pinned at 100 and 101, its growth; a name past 4,096 bytes cut; and
+  `instance/1` refusing a struct where a map is due.
 - `test/logex/scratch_test.exs` — every name a test file makes in the machine's temporary
   directory holds the VM's OS pid, read from each test file's syntax tree, and none names
   that directory another way, so that two suites on one machine share no scratch

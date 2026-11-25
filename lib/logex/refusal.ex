@@ -50,9 +50,10 @@ defmodule Logex.Refusal do
   # Lines of a refusal, each named by the file's path as path/1 shows it, `<path>: ...`:
   # the first 50, each cut at 1,000 bytes after its path, and one counting the rest,
   # joined.
-  def told(lines, path) do
+  # `more` counts the lines a refusal it relays counted and did not list (decision 610).
+  def told(lines, path, more \\ 0) do
     {shown, rest} = Enum.split(lines, @shown_problems)
-    joined(shown, length(rest), path(path))
+    joined(shown, length(rest) + more, path(path))
   end
 
   defp joined(lines, more, at),

@@ -76,10 +76,13 @@ defmodule Logex do
   a few milliseconds, where it quoted a hundred thousand digits. So does every refusal of
   the host contract, `Logex.Runtime`'s, `Logex.Runner`'s, the edits', `Logex.IO`'s and
   `Logex.Configuration`'s among them. A name or a location that is text is quoted whole,
-  in backquotes; one that is no UTF-8 text, or no text at all, is quoted as `inspect/1`
-  shows it, `<<97, 98, 255, 99>>`, so that a refusal's message is always text; and a
-  struct that shows itself, a `Date` or a `Version`, is shown field by field where it
-  holds a long number, which its own `inspect/1` would write out whole (RV-32's review).
+  in backquotes, up to 4,096 bytes, and past them cut and told how long it was,
+  `` `aaaa…` (1000000 bytes) `` (decision 613); one that is no UTF-8 text, or no text at
+  all, is quoted as `inspect/1` shows it, `<<97, 98, 255, 99>>`, so that a refusal's
+  message is always text; and a struct that shows itself, a `Date` or a `Version`, is
+  shown field by field where it holds a long number, which its own `inspect/1` would write
+  out whole (RV-32's review). A refusal that tells a line a mistake tells the first
+  hundred and then how many more there are (decision 610).
   """
 
   # Decision 515 (c), RV-24: what a compile hands back, the host contract's types.

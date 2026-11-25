@@ -14,6 +14,13 @@ defmodule Logex.QuotedTest do
   sample across the modules, a refusal of `10 ** 1_000_000` and of a list of a million
   elements against one of a small value in the same run; and `lib/`'s syntax trees, in
   which `inspect/1` is called by the cut alone.
+
+  Since RV-33 (decisions 610, 613 and 616): a refusal of many mistakes, a line each,
+  tells the first hundred and how many more, each pinned whole at 100 mistakes and at
+  101, its cost and text at 100,000 held to its own at 1,000; a name or a location past
+  4,096 bytes cut where a refusal quotes it, pinned at 4,096 bytes and 4,097, its cost at
+  a megabyte held to a short one's; and `instance/1` refusing a struct where a map is
+  due, which escaped as Protocol.UndefinedError.
   """
   use ExUnit.Case, async: true
 
@@ -971,25 +978,617 @@ defmodule Logex.QuotedTest do
     ]
   end
 
+  describe "a refusal of many mistakes tells the first hundred and a count (decision 610)" do
+    # Decision 610 (RV-33; the maintainer, 2026-11-24, RV-32's question 1): a refusal of the
+    # host contract that tells a line a mistake tells the first hundred, in the order it
+    # tells them, and one line that counts the rest, where `put_inputs/3` told 100,000 keys
+    # a bridge sent by mistake in 9.6 MB. Each such refusal at 100 mistakes and at 101, its
+    # message pinned whole: `lines.(n)` is the n lines it tells, written out here, in its
+    # order.
+    defp pad(i), do: String.pad_leading(Integer.to_string(i), 3, "0")
+
+    defp hundred(rows) do
+      for {label, refuse, lines} <- rows, n <- [100, 101] do
+        error = assert_raise ArgumentError, fn -> refuse.(n) end
+        assert {label, n, error.message} == {label, n, at_most(n, lines.(n))}
+      end
+    end
+
+    defp at_most(100, lines), do: Enum.join(lines, "\n")
+
+    defp at_most(101, lines),
+      do: Enum.join(Enum.take(lines, 100) ++ ["and 1 more mistake, not listed"], "\n")
+
+    defp each(n, line), do: Enum.map(1..n, line)
+
+    defp unknown(i, takes),
+      do: "unknown option :k#{pad(i)} for `g`: #{takes}"
+
+    defp unknowns(n), do: for(i <- 1..n, do: {:"k#{pad(i)}", true})
+
+    @tag_takes "Logex.Tag.new!/5 takes `retain:` and `non_retain:`"
+    @global_takes "Logex.Configuration.Global.new!/3 takes `initial:`, `at:`, `retain:` and " <>
+                    "`non_retain:`"
+
+    # A program of `n` dint tags, each added to on a rung of its own.
+    defp adding(n, name) do
+      source =
+        Enum.map_join(1..n, "\n", &"var t#{pad(&1)} dint") <>
+          "\nvar_input start bool\n\n" <>
+          Enum.map_join(1..n, "\n", &"xic start add t#{pad(&1)} 1 t#{pad(&1)}") <> "\n"
+
+      {:ok, p} = Logex.compile(source, name: name)
+      p
+    end
+
+    # The same program edited by hand after it compiled, every `t` tag made a bool.
+    defp unaddable(p),
+      do: %{
+        p
+        | tags: Map.new(p.tags, &boolean/1)
+      }
+
+    defp boolean({"t" <> _ = name, tag}), do: {name, %{tag | type: :bool}}
+    defp boolean(entry), do: entry
+
+    defp computes(n, name),
+      do:
+        each(
+          n,
+          &("`#{name}`'s `add` on line #{n + 2 + &1} computes in the type of `t#{pad(&1)}`, a " <>
+              "bool, which is no integer type: `#{name}` was edited by hand after it compiled")
+        )
+
+    defp twice(n),
+      do: %Configuration{
+        name: "c",
+        globals: List.duplicate(%Global{name: "g", type: :bool}, n)
+      }
+
+    defp declared_twice(n),
+      do:
+        List.duplicate("`g` is declared twice: the first is a global", n - 1) ++
+          ["this configuration declares no `program`: it would run nothing"]
+
+    defp plant(globals) do
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+
+      {:ok, c} =
+        Configuration.compile(
+          "plant",
+          "var_global eye_1 bool at panel.i.0\nvar_global case_full bool\n" <>
+            "var_global count dint 0\n#{globals}\n\nprogram t1 tally\n  t1.eye eye_1\n" <>
+            "  t1.full case_full\n",
+          %{"tally" => tally}
+        )
+
+      c
+    end
+
+    # A resource whose instance reads `n` globals, each through a connection, and the
+    # global `count` its var_external names, every one of them made `:x` by hand.
+    defp misread(n) do
+      source =
+        Enum.map_join(1..n, "\n", &"var_input v#{pad(&1)} dint") <>
+          "\nvar_input start bool\nvar_external count dint\nvar_output lamp bool\n\n" <>
+          "xic start ote lamp\n"
+
+      {:ok, reader} = Logex.compile(source, name: "reader")
+
+      text =
+        Enum.map_join(1..n, "\n", &"var_global g#{pad(&1)} dint") <>
+          "\nvar_global count dint 0\n\nprogram i1 reader\n" <>
+          Enum.map_join(1..n, "\n", &"  i1.v#{pad(&1)} g#{pad(&1)}") <> "\n  i1.start 0\n"
+
+      {:ok, c} = Configuration.compile("plant", text, %{"reader" => reader})
+      rt = Runtime.start(c)
+      %{rt | globals: Map.new(rt.globals, fn {name, _value} -> {name, :x} end)}
+    end
+
+    defp held_outside(name),
+      do:
+        "runtime.globals holds `#{name}` outside its type: it is a dint, and its value must " <>
+          "be an integer, found :x"
+
+    test "Logex.Tag's and Logex.Configuration's" do
+      hundred([
+        {"Tag.new!/5's options", &Logex.Tag.new!("g", :bool, :var, nil, unknowns(&1)),
+         &each(&1, fn i -> unknown(i, @tag_takes) end)},
+        {"Tag.new!/5's options, both qualifiers among them",
+         &Logex.Tag.new!(
+           "g",
+           :bool,
+           :var,
+           nil,
+           unknowns(&1 - 1) ++ [retain: true, non_retain: true]
+         ),
+         &(each(&1 - 1, fn i -> unknown(i, @tag_takes) end) ++
+             [
+               "`g` takes `retain: true` or `non_retain: true`, not both, as a declaration " <>
+                 "takes `retain` or `non_retain`, not both"
+             ])},
+        {"Global.new!/3's options", &Global.new!("g", :bool, unknowns(&1)),
+         &each(&1, fn i -> unknown(i, @global_takes) end)},
+        {"Global.new!/3's options, both qualifiers among them",
+         &Global.new!("g", :bool, unknowns(&1 - 1) ++ [retain: true, non_retain: true]),
+         &(each(&1 - 1, fn i -> unknown(i, @global_takes) end) ++
+             [
+               "`g` takes `retain: true` or `non_retain: true`, not both, as a `var_global` " <>
+                 "line takes `retain` or `non_retain`, not both"
+             ])},
+        {"Configuration.new!/1",
+         fn n ->
+           Configuration.new!(
+             name: "c",
+             globals: for(i <- 1..(n - 1), do: %Global{name: "g#{pad(i)}", type: :bool, line: 1})
+           )
+         end,
+         &(each(&1 - 1, fn i -> "global `g#{pad(i)}` from Elixir has no line, got: 1" end) ++
+             ["this configuration declares no `program`: it would run nothing"])},
+        {"Configuration.check/1",
+         fn n ->
+           Configuration.check(%Configuration{
+             name: "c",
+             globals: for(i <- 1..n, do: %Global{name: "g#{pad(i)}", type: :bool, retain: 3})
+           })
+         end,
+         &each(&1, fn i ->
+           "unknown qualifier 3 on global `g#{pad(i)}`: logex has :retain and :non_retain, " <>
+             "or nil for none"
+         end)},
+        {"Runtime.start/1, a configuration's diagnostics", &Runtime.start(twice(&1)),
+         &declared_twice/1},
+        {"IO.bind!/2, a configuration's diagnostics", &Logex.IO.bind!(twice(&1), %{}),
+         &declared_twice/1}
+      ])
+    end
+
+    test "Logex.IO.bind!/2's", %{c: c} do
+      hundred([
+        {"devices keyed by number",
+         &Logex.IO.bind!(
+           c,
+           Map.put(Map.new(1..&1, fn i -> {i, Sim} end), "panel", {Adapter, checked: []})
+         ), &each(&1, fn i -> "io names each device by a string, got: #{i}" end)},
+        {"devices bound that no point is at",
+         &Logex.IO.bind!(
+           c,
+           Map.put(
+             Map.new(1..&1, fn i -> {"d#{pad(i)}", Sim} end),
+             "panel",
+             {Adapter, checked: []}
+           )
+         ), &each(&1, fn i -> "the device `d#{pad(i)}` is bound, but no point is at it" end)}
+      ])
+    end
+
+    test "Logex.Runtime's of a lone instance", %{p: p, s: s, scan: scan} do
+      {:ok, wide} =
+        Logex.compile(
+          "var_input big dint[101]\nvar_input start bool\nvar_output lamp bool\n\n" <>
+            "xic start ote lamp\n",
+          name: "wide"
+        )
+
+      hundred([
+        {"put_inputs/3, keys that are no text",
+         &Runtime.put_inputs(p, s, Map.new(1..&1, fn i -> {i, 1} end)),
+         &each(&1, fn i ->
+           "input #{i} is not a tag name: inputs are keyed by tag name, as a string, as in " <>
+             ~s|%{"start" => 1}|
+         end)},
+        {"put_inputs/3, names no tag has",
+         &Runtime.put_inputs(p, s, Map.new(1..&1, fn i -> {"k#{pad(i)}", 1} end)),
+         &[
+           "input `k001` is not declared: the var_inputs are `rate`, `speed`, `start`, `steps`"
+           | each(&1 - 1, fn i -> "input `k#{pad(i + 1)}` is not declared" end)
+         ]},
+        {"put_inputs/3, elements each set twice",
+         fn n ->
+           keys = for i <- 0..(n - 1), key <- ["big[#{i}]", "big[0#{i}]"], into: %{}, do: {key, 1}
+           Runtime.put_inputs(wide, Runtime.instance(wide), keys)
+         end,
+         &each(&1, fn i ->
+           "inputs `big[0#{i - 1}]` and `big[#{i - 1}]` each set `big[#{i - 1}]`, an element " <>
+             "of `big`, an array of 101 dints (declared on line 1): a call sets each element once"
+         end)},
+        {"call/4, a state's values outside their types",
+         fn n ->
+           p = adding(n, "p")
+           state = Runtime.instance(p)
+           state = %{state | env: Map.new(state.env, &unvalued/1)}
+           Runtime.call(p, state, %{}, scan)
+         end,
+         &each(&1, fn i ->
+           "state.env holds `t#{pad(i)}` outside its type: it is a dint, and its value must " <>
+             "be an integer, found :x"
+         end)},
+        {"instance/1, a program edited by hand", &Runtime.instance(unaddable(adding(&1, "e"))),
+         &computes(&1, "e")},
+        {"instance/2, an image's paths",
+         fn n ->
+           Runtime.instance(p, %{
+             Runtime.retained(p, s)
+             | values: Map.new(1..n, fn i -> {"1x#{pad(i)}", 1} end)
+           })
+         end, &each(&1, fn i -> ~s|`values` holds "1x#{pad(i)}", which is no path| end)},
+        {"Edit.accept/3, a candidate edited by hand",
+         fn n ->
+           e = adding(n, "e")
+           Logex.Edit.accept(e, unaddable(e), Runtime.instance(e))
+         end, &computes(&1, "e")}
+      ])
+    end
+
+    defp unvalued({"t" <> _ = name, _value}), do: {name, :x}
+    defp unvalued(entry), do: entry
+
+    test "Logex.Runtime's of a resource", %{rt: rt, c: c} do
+      hundred([
+        {"cycle/3, keys that are no text",
+         &Runtime.cycle(rt, 0, Map.new(1..&1, fn i -> {i, 1} end)),
+         &each(&1, fn i ->
+           "input #{i} is not a point name: inputs are keyed by input-point name, as a " <>
+             ~s|string, as in %{"pb_start_1" => 1}|
+         end)},
+        {"cycle/3, names no point has",
+         &Runtime.cycle(rt, 0, Map.new(1..&1, fn i -> {"k#{pad(i)}", 1} end)),
+         &[
+           "input `k001` is not an input point: the input points are `eye_1` and `temps[0]` " <>
+             "to `temps[1]`"
+           | each(&1 - 1, fn i -> "input `k#{pad(i + 1)}` is not an input point" end)
+         ]},
+        {
+          "cycle/3, points each set twice",
+          fn n ->
+            wide = Runtime.start(plant("var_global temps dint[101] at panel.i.1"))
+
+            keys =
+              for i <- 0..(n - 1), key <- ["temps[#{i}]", "temps[0#{i}]"], into: %{}, do: {key, 1}
+
+            Runtime.cycle(wide, 0, keys)
+          end,
+          # In the order of the points' names, `temps[10]` before `temps[1]`'s `]`.
+          &for(
+            i <- Enum.sort_by(0..(&1 - 1), fn i -> "temps[#{i}]" end),
+            do:
+              "inputs `temps[0#{i}]` and `temps[#{i}]` each set `temps[#{i}]`, an input point " <>
+                "of `temps`, an array of 101 dints (line 4): a call sets each point once"
+          )
+        },
+        {"cycle/3, arrays set whole and by their elements",
+         fn n ->
+           arrays = Enum.map_join(1..n, "\n", &"var_global a#{pad(&1)} dint[1] at panel.i.#{&1}")
+           keys = for i <- 1..n, into: %{}, do: {"a#{pad(i)}", [1]}
+           keys = Map.merge(keys, for(i <- 1..n, into: %{}, do: {"a#{pad(i)}[0]", 1}))
+           Runtime.cycle(Runtime.start(plant(arrays)), 0, keys)
+         end,
+         &each(&1, fn i ->
+           "inputs `a#{pad(i)}` and `a#{pad(i)}[0]` each set `a#{pad(i)}`, an array of 1 dint " <>
+             "(line #{3 + i}): a call sets an array whole or by its elements, not both"
+         end)},
+        {"cycle/3, globals a connection reads outside their types",
+         &Runtime.cycle(misread(&1 - 1), 0, %{}),
+         &[held_outside("count") | each(&1 - 1, fn i -> held_outside("g#{pad(i)}") end)]},
+        {"start/2, an image's globals",
+         fn n ->
+           image = Runtime.retained(rt)
+           Runtime.start(c, %{image | globals: Map.new(1..n, &{"1x#{pad(&1)}", {:dint, 0}})})
+         end, &each(&1, fn i -> ~s|`globals` holds "1x#{pad(i)}", which names no global| end)},
+        {"Configuration.Edit.accept/2, a program type edited by hand",
+         fn n ->
+           e = adding(n, "e")
+           {:ok, ce} = Configuration.compile("plant", "program i1 e\n  i1.start 0\n", %{"e" => e})
+           running = Runtime.start(ce)
+           edited = %{running | config: %{running.config | programs: %{"e" => unaddable(e)}}}
+           Configuration.Edit.accept(edited, ce)
+         end, &computes(&1, "e")}
+      ])
+    end
+
+    # A step's refusal tells a copy-in's lines among its var_externals', so it counts the
+    # copy-in's past its own hundred too: 101 globals a connection reads and `count`,
+    # which a var_external names, told as the first hundred of 102 and a count of 2, where
+    # the copy-in's count line was dropped and its one past the hundred lost.
+    test "a step's refusal counts what a copy-in's did not list" do
+      lines = [held_outside("count") | each(99, fn i -> held_outside("g#{pad(i)}") end)]
+
+      assert_raise ArgumentError,
+                   Enum.join(lines ++ ["and 2 more mistakes, not listed"], "\n"),
+                   fn -> Runtime.cycle(misread(101), 0, %{}) end
+    end
+  end
+
+  describe "a refusal of many mistakes costs near its count, its text the hundred's (decision 610)" do
+    # Each refusal of 100,000 mistakes against the same of 1,000, in the same run, in
+    # reductions, the least of three: its message the first hundred lines and a count,
+    # pinned whole, two bytes longer than the 1,000's; its cost no more than 120 times the
+    # 1,000's, its count's; and each mistake past the hundred costing less than three
+    # quarters of one among them, so that its line, its quoted value and its did-you-mean
+    # are never made (RV-32 measured `put_inputs/3` of 100,000 keys at 0.4 s and 9.6 MB).
+    defp spent(fun) do
+      parent = self()
+
+      Enum.min(
+        for _ <- 1..3 do
+          spawn(fn ->
+            {:reductions, before} = Process.info(self(), :reductions)
+            message = refusal(fun)
+            {:reductions, later} = Process.info(self(), :reductions)
+            send(parent, {:spent, later - before, message})
+          end)
+
+          receive do
+            {:spent, count, message} -> {count, message}
+          end
+        end
+      )
+    end
+
+    defp refusal(fun) do
+      fun.()
+      :taken
+    rescue
+      error in ArgumentError -> error.message
+    end
+
+    test "put_inputs/3, cycle/3 and IO.bind!/2", %{p: p, s: s, rt: rt, c: c} do
+      rows = [
+        {"put_inputs/3, keys that are no text", &Runtime.put_inputs(p, s, &1),
+         &Map.new(1..&1, fn i -> {i, 1} end),
+         fn i ->
+           "input #{i} is not a tag name: inputs are keyed by tag name, as a string, as in " <>
+             ~s|%{"start" => 1}|
+         end},
+        {"put_inputs/3, names no tag has", &Runtime.put_inputs(p, s, &1),
+         &Map.new(1..&1, fn i -> {"k#{String.pad_leading("#{i}", 6, "0")}", 1} end),
+         &named_line(
+           &1,
+           "is not declared",
+           ": the var_inputs are `rate`, `speed`, `start`, `steps`"
+         )},
+        {"put_inputs/3, elements of no array", &Runtime.put_inputs(p, s, &1),
+         &Map.new(1..&1, fn i -> {"k#{String.pad_leading("#{i}", 6, "0")}[0]", 1} end),
+         &element_line/1},
+        {"cycle/3, keys that are no text", &Runtime.cycle(rt, 0, &1),
+         &Map.new(1..&1, fn i -> {i, 1} end),
+         fn i ->
+           "input #{i} is not a point name: inputs are keyed by input-point name, as a " <>
+             ~s|string, as in %{"pb_start_1" => 1}|
+         end},
+        {"cycle/3, names no point has", &Runtime.cycle(rt, 0, &1),
+         &Map.new(1..&1, fn i -> {"k#{String.pad_leading("#{i}", 6, "0")}", 1} end),
+         &named_line(
+           &1,
+           "is not an input point",
+           ": the input points are `eye_1` and `temps[0]` to `temps[1]`"
+         )},
+        {"IO.bind!/2, devices keyed by number", &Logex.IO.bind!(c, &1),
+         &Map.put(Map.new(1..&1, fn i -> {i, Sim} end), "panel", {Adapter, checked: []}),
+         &"io names each device by a string, got: #{&1}"},
+        {"IO.bind!/2, devices bound that no point is at", &Logex.IO.bind!(c, &1),
+         &Map.put(
+           Map.new(1..&1, fn i -> {"d#{String.pad_leading("#{i}", 6, "0")}", Sim} end),
+           "panel",
+           {Adapter, checked: []}
+         ),
+         &"the device `d#{String.pad_leading("#{&1}", 6, "0")}` is bound, but no point is at it"}
+      ]
+
+      for {label, refuse, mistakes, line} <- rows do
+        {one, _} = spent(fn -> refuse.(mistakes.(1)) end)
+        {hundred, _} = spent(fn -> refuse.(mistakes.(100)) end)
+        {thousand, few} = spent(fn -> refuse.(mistakes.(1_000)) end)
+        {many, told} = spent(fn -> refuse.(mistakes.(100_000)) end)
+
+        assert {label, told} ==
+                 {label,
+                  Enum.join(
+                    Enum.map(1..100, line) ++ ["and 99900 more mistakes, not listed"],
+                    "\n"
+                  )}
+
+        assert {label, byte_size(told)} == {label, byte_size(few) + 2}
+        assert many <= 120 * thousand, "#{label}: #{many} reductions, against #{thousand}"
+
+        assert (many - thousand) / 99_000 < 0.75 * (hundred - one) / 99,
+               "#{label}: #{(many - thousand) / 99_000} a mistake past the hundred, " <>
+                 "against #{(hundred - one) / 99} among them"
+      end
+    end
+
+    defp named_line(1, told, listed), do: "input `k000001` #{told}#{listed}"
+
+    defp named_line(i, told, _listed),
+      do: "input `k#{String.pad_leading("#{i}", 6, "0")}` #{told}"
+
+    defp element_line(1),
+      do:
+        ~s|input "k000001[0]" is not declared: the var_inputs are `rate`, `speed`, `start`, `steps`|
+
+    defp element_line(i),
+      do: ~s|input "k#{String.pad_leading("#{i}", 6, "0")}[0]" is not declared|
+  end
+
+  describe "a text past 4,096 bytes is cut where a refusal quotes it (decision 613)" do
+    # Decision 613 (RV-33; the maintainer, 2026-11-24, RV-32's question 4): a name or a
+    # location a refusal quotes past 4,096 bytes, `inspect/1`'s `printable_limit`, is cut
+    # there, at a character's boundary, and told it was cut and how long it was, where a
+    # bridge's megabyte of a key was quoted whole, a megabyte in the operator's log after
+    # some 2 s; a text of 4,096 bytes is whole. A text a refusal shows as a value, a type's
+    # text among them, is cut as `inspect/1` cuts it (decision 585).
+    @types "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, " <>
+             ":real, :lreal, :byte, :word, :dword, :lword, Logex.FbType.ctd(), " <>
+             "Logex.FbType.ctd_int(), Logex.FbType.ctd_lint(), Logex.FbType.ctd_udint(), " <>
+             "Logex.FbType.ctd_ulint(), Logex.FbType.ctu(), Logex.FbType.ctu_int(), " <>
+             "Logex.FbType.ctu_lint(), Logex.FbType.ctu_udint(), Logex.FbType.ctu_ulint(), " <>
+             "Logex.FbType.ctud(), Logex.FbType.ctud_int(), Logex.FbType.ctud_lint(), " <>
+             "Logex.FbType.ctud_udint(), Logex.FbType.ctud_ulint(), Logex.FbType.rto(), " <>
+             "Logex.FbType.rto_ltime(), Logex.FbType.tof(), Logex.FbType.tof_ltime(), " <>
+             "Logex.FbType.ton(), Logex.FbType.ton_ltime(), Logex.FbType.tp() and " <>
+             "Logex.FbType.tp_ltime()"
+
+    @var_inputs "the var_inputs are `rate`, `speed`, `start`, `steps`"
+
+    defp a(n), do: String.duplicate("a", n)
+
+    defp texts(%{p: p, s: s, rt: rt, c: c}),
+      do: [
+        {"put_inputs/3, a key", &Runtime.put_inputs(p, s, %{&1 => 1}),
+         &"input #{&1} is not declared: #{@var_inputs}"},
+        {"get!/2, a path", &Runtime.get!(rt, &1),
+         &"#{&1} is neither a global nor a program instance"},
+        {"IO.bind!/2, a device's name",
+         &Logex.IO.bind!(c, %{&1 => Sim, "panel" => {Adapter, checked: []}}),
+         &"the device #{&1} is bound, but no point is at it"}
+      ]
+
+    test "a name of 4,096 bytes whole, and of 4,097 cut and told how long", ctx do
+      whole = "`#{a(4_096)}`"
+      cut = "`#{a(4_096)}…` (4097 bytes)"
+
+      for {label, refuse, message} <- texts(ctx),
+          {text, quoted} <- [{a(4_096), whole}, {a(4_097), cut}] do
+        error = assert_raise ArgumentError, fn -> refuse.(opaque(text)) end
+        assert {label, error.message} == {label, message.(quoted)}
+      end
+
+      # A type's text is a value: whole at 4,096 bytes, and past them cut as `inspect/1`
+      # cuts it, as it was (decision 585), now without its did-you-mean's 13 s.
+      assert_raise ArgumentError, ~s|unknown type "#{a(4_096)}": #{@types}|, fn ->
+        Logex.Tag.new!("x", opaque(a(4_096)))
+      end
+
+      assert_raise ArgumentError, ~s|unknown type "#{a(4_096)}" <> ...: #{@types}|, fn ->
+        Logex.Tag.new!("x", opaque(a(4_097)))
+      end
+    end
+
+    test "cut at a character's boundary, and a binary that is no text shown as one", %{c: c} do
+      # 4,095 bytes and a two-byte character: the cut's 4,096th byte is the character's
+      # first, which it drops.
+      assert_raise ArgumentError,
+                   "the device `#{a(4_095)}…` (4097 bytes) is bound, but no point is at it",
+                   fn ->
+                     Logex.IO.bind!(c, %{
+                       opaque(a(4_095) <> "é") => Sim,
+                       "panel" => {Adapter, checked: []}
+                     })
+                   end
+
+      bytes = <<255>> <> a(5_000)
+
+      assert_raise ArgumentError,
+                   "the device #{inspect(bytes)} is bound, but no point is at it",
+                   fn ->
+                     Logex.IO.bind!(c, %{opaque(bytes) => Sim, "panel" => {Adapter, checked: []}})
+                   end
+
+      assert Logex.Lexer.quoted_text(a(4_096)) == "`#{a(4_096)}`"
+      assert Logex.Lexer.quoted_text(a(1_000_000)) == "`#{a(4_096)}…` (1000000 bytes)"
+    end
+
+    # A megabyte's refusal against a short one's, in reductions, the least of three, in the
+    # same run: no more than the short one's and twice what the call reads of the text, the
+    # cut's own look at its first 4,096 bytes and what the call does with any text it is
+    # given, a split at `.` and, for an access path, its lexing; its message the 4,097
+    # bytes' but for the count. RV-32 measured 0.85 to 13 s at a megabyte, each a
+    # did-you-mean's Jaro distance or the name lexed for its quoting.
+    test "a megabyte's refusal costs what a short one's does and the cut's", ctx do
+      huge = a(1_000_000)
+      short = a(10)
+      {cut, _} = spent(fn -> Logex.Lexer.quoted_text(huge) end)
+      {shown, _} = spent(fn -> Logex.Lexer.inspected(huge) end)
+      {split, _} = spent(fn -> String.split(huge, ".") end)
+      {lexed, _} = spent(fn -> Logex.Lexer.tokenize(huge) end)
+
+      rows =
+        Enum.zip(texts(ctx), [cut + split, cut + split + lexed, cut]) ++
+          [
+            {{"Tag.new!/5, a type's text", &Logex.Tag.new!("x", &1),
+              &"unknown type #{&1}: #{@types}"}, shown}
+          ]
+
+      for {{label, refuse, _message}, own} <- rows do
+        {small, _} = spent(fn -> refuse.(opaque(short)) end)
+        {many, told} = spent(fn -> refuse.(opaque(huge)) end)
+        {_, cut_short} = spent(fn -> refuse.(opaque(a(4_097))) end)
+
+        assert {label, told} ==
+                 {label, String.replace(cut_short, "(4097 bytes)", "(1000000 bytes)")}
+
+        assert many <= small + 2 * own,
+               "#{label}: #{many} reductions, against #{small} and #{own}"
+      end
+    end
+  end
+
+  describe "instance/1 refuses a struct where a map is due (decision 616)" do
+    # Decision 616 (RV-33; the maintainer, 2026-11-24, RV-32's question 7): a program edited
+    # by hand that holds a struct where a map is due, its tag table, its blocks, its
+    # arrays, units or reals, is refused where it is handed in, a pinned ArgumentError,
+    # where a `Date` or a `Time` in its tags or blocks raised Protocol.UndefinedError,
+    # Elixir's message, 100 KB with a long year; a field logex's own check took for a map
+    # of names is a line of its own. `put_inputs/3` and `call/4` take the program's shape
+    # alone, as before: a program edited after `instance/1` is trusted.
+    test "a Date or a Time in a program's tags, blocks, arrays, units or reals", %{p: p, big: big} do
+      date = ~D[2026-11-24]
+      long = opaque(%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO})
+
+      time =
+        opaque(%{
+          __struct__: Time,
+          hour: big,
+          minute: 0,
+          second: 0,
+          microsecond: {0, 0},
+          calendar: Calendar.ISO
+        })
+
+      by_hand = ": `p` was edited by hand after it compiled"
+      shown = "%Date{year: #{@cut}, month: 1, day: 1, calendar: Calendar.ISO}"
+
+      told([
+        {"tags, a Date", fn -> Runtime.instance(%{p | tags: opaque(date)}) end,
+         "`p`'s tags are no map of its tags by name, got: ~D[2026-11-24]" <> by_hand},
+        {"tags, a long year", fn -> Runtime.instance(%{p | tags: long}) end,
+         "`p`'s tags are no map of its tags by name, got: #{shown}" <> by_hand},
+        {"tags, a Time", fn -> Runtime.instance(%{p | tags: time}) end,
+         "`p`'s tags are no map of its tags by name, got: %Time{hour: #{@cut}, minute: 0, " <>
+           "second: 0, microsecond: {0, 0}, calendar: Calendar.ISO}" <> by_hand},
+        {"blocks, a long year", fn -> Runtime.instance(%{p | blocks: long}) end,
+         "`p`'s block types are no map of the types it holds by name, got: #{shown}" <> by_hand},
+        {"blocks, a Date", fn -> Runtime.instance(%{p | blocks: opaque(date)}) end,
+         "`p`'s block types are no map of the types it holds by name, got: ~D[2026-11-24]" <>
+           by_hand},
+        {"arrays, a Date", fn -> Runtime.instance(%{p | arrays: opaque(date)}) end,
+         "`p`'s arrays are neither nil nor a map of tag names to array types, got: " <>
+           "~D[2026-11-24]" <> by_hand},
+        {"units, a Date", fn -> Runtime.instance(%{p | units: opaque(date)}) end,
+         "`p`'s units are neither nil nor a map of timer names to units, got: ~D[2026-11-24]" <>
+           by_hand},
+        {"reals, a MapSet",
+         fn -> Runtime.instance(%{p | reals: opaque(MapSet.new(["rate"]))}) end,
+         "`p`'s reals are neither nil nor a map of tag names to real types, got: " <>
+           ~s|MapSet.new(["rate"])| <> by_hand}
+      ])
+    end
+  end
+
   describe "a hostile value wherever the host contract takes one (RV-32's review, F7)" do
     # A walk over the host contract's arguments and the fields of the structs it checks,
     # each given in turn a long number, a tuple, a list and a struct that hold one, a
-    # `Date` and a `Time` that write one out themselves, and a name that is no UTF-8
-    # text: every refusal an ArgumentError, its message text and under 5,000 bytes, so
+    # `Date` and a `Time` that write one out themselves, a name that is no UTF-8 text, and
+    # since decision 613 a text of 100,000 bytes: every refusal an ArgumentError, its message text and under 5,000 bytes, so
     # that an integer or a name a refusal writes out itself, `"#{n}"`, which no walk of
     # the syntax trees can tell from a word, is found here wherever a host can reach it.
     # A program built or edited by hand is outside the contract but where a check names it
     # (`Logex.Runtime`'s moduledoc), so its fields are walked at `instance/1` alone, and
-    # what escapes there is listed in `@outside` with its reason (`PLAN.md`'s RV-32,
-    # question 7).
-    @outside %{
-      # A field a program edited by hand holds that the shape check takes for a map,
-      # a struct, which the program's own check then walks as a map.
-      {"instance/1 program.blocks", :date} => Protocol.UndefinedError,
-      {"instance/1 program.tags", :date} => Protocol.UndefinedError,
-      {"instance/1 program.blocks", :time} => Protocol.UndefinedError,
-      {"instance/1 program.tags", :time} => Protocol.UndefinedError
-    }
+    # what escapes there is listed in `@outside` with its reason. None does: since
+    # decision 616 (RV-33) `instance/1`'s shape check refuses a struct where a map is due,
+    # a `Date` or a `Time` in a program's tag table or its blocks, which it took for a map
+    # and its check then walked as one (Protocol.UndefinedError), each pinned below.
+    @outside %{}
 
     # The fields the walk gives a value that nothing reads where it is walked: a
     # program's name is the instance's type, taken as it is; its file, source and warnings
@@ -1018,7 +1617,9 @@ defmodule Logex.QuotedTest do
           microsecond: {0, 0},
           calendar: Calendar.ISO
         },
-        in_list: [%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO}]
+        in_list: [%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO}],
+        # Decision 613: a text past 4,096 bytes, a name or a location among them, cut.
+        long_text: String.duplicate("a", 100_000)
       ]
     end
 
@@ -1130,6 +1731,12 @@ defmodule Logex.QuotedTest do
       error -> {error.__struct__, Exception.message(error)}
     end
 
+    # A refusal's bound, 5,000 bytes, and one of a text of 100,000 bytes twice that: a value
+    # that holds the text shows its first 4,096 bytes, as `inspect/1` does, beside the rest
+    # of the value, `compile/2`'s map of types among them (decisions 585 and 613).
+    defp longest(:long_text), do: 10_000
+    defp longest(_kind), do: 5_000
+
     test "every refusal an ArgumentError whose message is short text", ctx do
       outcomes =
         for {label, call} <- callers(ctx), {kind, value} <- hostile(ctx.big) do
@@ -1141,7 +1748,7 @@ defmodule Logex.QuotedTest do
 
       for {label, kind, message} <- refused do
         assert {label, kind, String.valid?(message)} == {label, kind, true}
-        assert {label, kind, byte_size(message) < 5_000} == {label, kind, true}
+        assert {label, kind, byte_size(message) < longest(kind)} == {label, kind, true}
       end
 
       escaped =

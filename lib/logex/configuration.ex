@@ -18,7 +18,8 @@ defmodule Logex.Configuration do
     is likely a slip. They stop nothing, and `new!/1` and `compile/3` give them.
 
   Every way of writing a configuration ends in `check/1`, the one validator: `new!/1`,
-  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each;
+  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each, the
+  first hundred and then how many more there are (decision 610);
   `compile/3`, from a configuration file's text, returns them, and `compile_file/1` from
   the file on disk, its program types loaded from beside it (M2-2); and
   `Logex.Runtime.start/1` checks again. A global built with
@@ -158,7 +159,8 @@ defmodule Logex.Configuration do
   line, `%Global{line: 10 ** 1_000_000}` told in 152 bytes and some 37,000 reductions
   where it took a megabyte and 32 million, `compile/3`'s and `compile_file/1`'s of an
   argument that is no text, and `initial/1`'s and `watchdog/1`'s. A name or a location
-  that is text is quoted whole, in backquotes; one that is no UTF-8 text, as `inspect/1`
+  that is text is quoted whole, in backquotes, up to 4,096 bytes and past them cut and
+  told how long it was (decision 613); one that is no UTF-8 text, as `inspect/1`
   shows it, `<<97, 98, 255, 99>>`; and a struct that writes itself out, a `Date` among
   them, field by field where it holds a long number (RV-32's review).
 
@@ -406,18 +408,17 @@ defmodule Logex.Configuration do
       do:
         raise(
           ArgumentError,
-          Enum.join(
+          Declarations.told(
             problems ++
               [
                 "#{label(global.name)} takes `retain: true` or `non_retain: true`, not both, " <>
                   "as a `var_global` line takes `retain` or `non_retain`, not both"
-              ],
-            "\n"
+              ]
           )
         )
 
     defp chosen(_seen, _global, [_ | _] = problems),
-      do: raise(ArgumentError, Enum.join(problems, "\n"))
+      do: raise(ArgumentError, Declarations.told(problems))
 
     defp chosen(seen, global, []),
       do:
@@ -616,16 +617,16 @@ defmodule Logex.Configuration do
     defp refusal(true, _reserved, name, kind)
          when binary_part(name, byte_size(name) - 1, 1) == "]",
          do:
-           "`#{name}` cannot name #{a(kind)}: brackets are kept for an element's subscripts, " <>
+           "#{label(name)} cannot name #{a(kind)}: brackets are kept for an element's subscripts, " <>
              "as in `m1.temps[3]`"
 
     defp refusal(true, _reserved, name, kind),
       do:
-        "`#{name}` cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
+        "#{label(name)} cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
           "location, as in `panel.i.0`"
 
     defp refusal(false, true, name, kind),
-      do: "`#{name}` is a keyword and cannot name #{a(kind)}"
+      do: "#{label(name)} is a keyword and cannot name #{a(kind)}"
 
     defp refusal(false, false, _name, _kind), do: nil
 
@@ -785,7 +786,7 @@ defmodule Logex.Configuration do
       do: listed_located(array(%{global | initial: nil}), location, global)
 
     defp listed_located([], location, %Global{name: name} = global),
-      do: ["`#{name}` is #{a_point(location, global)}: " <> no_list(location)]
+      do: ["#{label(name)} is #{a_point(location, global)}: " <> no_list(location)]
 
     defp listed_located(misfits, _location, _global), do: misfits
 
@@ -826,7 +827,7 @@ defmodule Logex.Configuration do
 
     defp retained_point(location, %Global{name: name} = global),
       do: [
-        "`#{name}` is #{a_point(location, global)}, and a located global takes no `retain`: " <>
+        "#{label(name)} is #{a_point(location, global)}, and a located global takes no `retain`: " <>
           "an input point is read again at every start, and an output point starts at 0 " <>
           "until logic writes it"
       ]
@@ -846,13 +847,13 @@ defmodule Logex.Configuration do
 
     defp initial(%Global{name: name}, {:ok, {_device, "i", _address}}),
       do: [
-        "`#{name}` is an input point: its value comes from the input image, so it takes no " <>
+        "#{label(name)} is an input point: its value comes from the input image, so it takes no " <>
           "initial value"
       ]
 
     defp initial(%Global{name: name}, {:ok, {_device, "q", _address}}),
       do: [
-        "`#{name}` is an output point: it takes no initial value, and is 0 until its " <>
+        "#{label(name)} is an output point: it takes no initial value, and is 0 until its " <>
           "driver writes it"
       ]
 
@@ -922,13 +923,13 @@ defmodule Logex.Configuration do
     defp place(:error, at),
       do:
         {:refused,
-         "`#{at}` is not a location: a location is a device, `i` or `q`, and an address, " <>
+         "#{label(at)} is not a location: a location is a device, `i` or `q`, and an address, " <>
            "as in `panel.i.0`"}
 
     defp place({:respell, address}, at),
       do:
         {:refused,
-         "`#{at}` is not a location as written: a location's `i` or `q` is lowercase and " <>
+         "#{label(at)} is not a location as written: a location's `i` or `q` is lowercase and " <>
            "its address has no leading zero, so it is written `#{spelling(address)}`"}
 
     defp place({:ok, {device, _io, _fields}} = spelled, _at)
@@ -939,7 +940,7 @@ defmodule Logex.Configuration do
     defp place(spelled, _at), do: spelled
 
     defp device_word(true, {:ok, {device, _io, _fields}}),
-      do: {:refused, "`#{device}` is a keyword and cannot name a device"}
+      do: {:refused, "#{label(device)} is a keyword and cannot name a device"}
 
     defp device_word(false, spelled), do: spelled
 
@@ -1066,7 +1067,7 @@ defmodule Logex.Configuration do
   defp unline_whole(_whole, item, {items, lined}), do: {[item | items], lined}
 
   defp raised([], config), do: config
-  defp raised(problems, _config), do: raise(ArgumentError, Enum.join(problems, "\n"))
+  defp raised(problems, _config), do: raise(ArgumentError, Declarations.told(problems))
 
   # Each field once, and none but the six.
   defp fields(fields) do
@@ -1593,7 +1594,7 @@ defmodule Logex.Configuration do
     do: raise(ArgumentError, "expected a %Logex.Configuration{}, got: #{shown(other)}")
 
   defp checked([], diagnostics), do: diagnostics
-  defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Enum.join(mistakes, "\n"))
+  defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Declarations.told(mistakes))
 
   # Every problem with a configuration, of two kinds, and its warnings: the host's
   # mistakes, which no configuration text can make, each a line of an ArgumentError's

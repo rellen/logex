@@ -346,14 +346,25 @@ defmodule Logex.Declarations do
       name?(word) and reserved(word) == nil and
         String.downcase(word) not in kinds()
 
+  # Decision 613: the longest text a refusal quotes whole, `Logex.Lexer.quoted_text/1`'s.
+  @longest_text Logex.Lexer.longest_text()
+
   @doc """
   A did-you-mean for `name` among `names`, as a suffix for a message, or "". A name
   differing only in case is always the suggestion; otherwise the nearest by Jaro distance,
-  if it is near enough. A `name` that is not valid UTF-8 gets none. `shown` renders the
+  if it is near enough. A `name` that is not valid UTF-8 gets none, and since decision 613
+  neither does one past 4,096 bytes. `shown` renders the
   name chosen, so a member is matched on its own name and shown whole, as `t1.dn`, and
   `kind` says what is case-sensitive: `"tags"`, or `"members"`.
   """
-  def suggest(name, names, shown \\ & &1, kind \\ "tags"),
+  def suggest(name, names, shown \\ & &1, kind \\ "tags")
+
+  # Decision 613 (RV-33): a name past 4,096 bytes, which a refusal cuts, is offered none,
+  # looked for among nothing, so that a megabyte a host sends as a name costs no Jaro
+  # distance to every name (a type's text in `Logex.Tag.new!/5`, 13 s at a megabyte).
+  def suggest(name, _names, _shown, _kind) when byte_size(name) > @longest_text, do: ""
+
+  def suggest(name, names, shown, kind),
     do: suggested(String.valid?(name), name, names, {shown, kind})
 
   defp suggested(false, _name, _names, _how), do: ""
@@ -448,6 +459,42 @@ defmodule Logex.Declarations do
 
   defp listed_once(false, d, {message, key, list}, {count, listed}),
     do: {%{d | message: message <> list.()}, {count, MapSet.put(listed, key)}}
+
+  # Decision 610 (RV-33): a refusal of the host contract that tells a line a mistake tells
+  # the first hundred, decision 520's bound, `@offered`, in the order it tells them, and one
+  # line that counts the rest, `and 99900 more mistakes, not listed`, none of them made, so
+  # that 100,000 keys a bridge sends by mistake are told in a few kilobytes, where
+  # `Logex.Runtime.put_inputs/3` told 9.6 MB. A mistake is its line, or a function that
+  # makes it, called only among the hundred, so that a line past them never looks for its
+  # did-you-mean or quotes its value, as a name past decision 520's hundred is looked for
+  # among nothing. `made` takes the hundred lines made, where a refusal gives a list of
+  # names once, on the first line that needs it (Logex.Runtime's once/1), and `more` counts
+  # what a refusal told in an earlier message holds past its own hundred (`untold/1`).
+  @doc false
+  def told(mistakes, made \\ & &1, more \\ 0) do
+    {shown, rest} = Enum.split(mistakes, @offered)
+    Enum.join(made.(Enum.map(shown, &made_line/1)) ++ more_told(length(rest) + more), "\n")
+  end
+
+  defp made_line(line) when is_function(line, 0), do: line.()
+  defp made_line(line), do: line
+
+  defp more_told(0), do: []
+  defp more_told(1), do: ["and 1 more mistake, not listed"]
+  defp more_told(count), do: ["and #{count} more mistakes, not listed"]
+
+  @doc false
+  # A line of a message `told/3` made: the count of the mistakes it did not list, or the
+  # line itself, so that a refusal that tells another's lines among its own counts them.
+  def untold("and 1 more mistake, not listed"), do: {:more, 1}
+
+  def untold("and " <> rest = line),
+    do: untold_count(Integer.parse(rest), line)
+
+  def untold(line), do: {:line, line}
+
+  defp untold_count({count, " more mistakes, not listed"}, _line), do: {:more, count}
+  defp untold_count(_other, line), do: {:line, line}
 
   @doc """
   The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
@@ -1739,6 +1786,8 @@ defmodule Logex.Declarations do
 
   # A word that is one of logex's type words, in any case, is told of it outright, as a
   # declaration line reads it; any other, of the nearest, as suggest/4 finds it.
+  defp spelled(word) when byte_size(word) > @longest_text, do: ""
+
   defp spelled(word) do
     folded = String.downcase(word)
     word_of(Enum.find(own_type_words(), &(&1 == folded)), word)

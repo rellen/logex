@@ -52,8 +52,8 @@ These are the rules for a wrong argument:
 - 1 call raises 1 `ArgumentError`.
 - Some checks look at a list of values: the inputs, the values in `env`, the problems of
   a configuration and the bindings of the devices. For each of these lists, the message
-  has 1 line for each problem. [The form of a message](#the-form-of-a-message) gives the
-  sequence of the lines.
+  has 1 line for each problem, up to 100 lines.
+  [The form of a message](#the-form-of-a-message) gives the sequence of the lines.
 - Each other check stops at the first problem. For example, a state with `now: -1` and
   `first: :x` gives only the line for `now`.
 - A value that a check refuses does not get to a scan.
@@ -626,8 +626,11 @@ These rules give the form of each message of an `ArgumentError`:
   does a diagnostic of `Logex.Configuration.check/1`. For example, `Global.new!("trim",
   :sint, initial: 10 ** 10000)` raises
   `` `trim` is an sint: `100000000000000000000000…` (10001 characters) is outside -128 to 127 ``.
-- A check of a list gives 1 line for each problem. Each other check stops at the first
-  problem. [Example: wrong calls on 1 instance](#example-wrong-calls-on-1-instance)
+- A name or a location of more than 4,096 bytes shows as its first 4,096 bytes and its
+  length, for example `` `aaaa…` (100000 bytes) ``.
+- A check of a list gives 1 line for each problem. After 100 lines, 1 line gives the
+  number of the other problems, for example `and 99900 more mistakes, not listed`. Each
+  other check stops at the first problem. [Example: wrong calls on 1 instance](#example-wrong-calls-on-1-instance)
   shows both.
 - The lines of the inputs and of a state are in the sorted order of the names, for
   example `fault`, `start`, `stop`.

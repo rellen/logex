@@ -47,7 +47,10 @@ defmodule Logex.Lexer do
   them too. Since decision 583 a host's refusal quotes a long number it is given the same
   way, by its first 24 characters and how many it has, `` `100000000000000000000000…`
   (100001 characters) ``: `Logex.Tag.new!/5`'s, `Logex.Configuration.Global.new!/3`'s
-  and `Logex.Configuration.check/1`'s.
+  and `Logex.Configuration.check/1`'s, and since decision 586 every refusal of the host
+  contract. Since decision 613 a name or a location a refusal quotes past 4,096 bytes is
+  cut there, at a character's boundary, and told it was cut and how long it was, `` `aaaa…`
+  (1000000 bytes) ``; a value that is a text, as `inspect/1` cuts it.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
@@ -193,17 +196,50 @@ defmodule Logex.Lexer do
 
   defp long_within?([_term | terms], left), do: long_within?(terms, left - 1)
 
-  @doc false
   # A name or a location as a message quotes it: text whole, in backquotes, as decision
   # 585 has it, and a binary that is no text, not UTF-8, or any other value, as
   # `inspected/2` shows it, so that a refusal is text however a host's name is made
-  # (RV-32's review, F1 and F4). A long name that is text is whole however long
-  # (`PLAN.md`'s RV-32, question 4).
+  # (RV-32's review, F1 and F4). Since decision 613 (RV-33) a text past 4,096 bytes,
+  # `inspect/1`'s `printable_limit`, is cut there, at a character's boundary, and told it
+  # was cut and how long it was, `` `aaaa…` (1000000 bytes) ``, as a long number is told
+  # its count (decision 583): its first 4,096 bytes are all the cut reads, so a megabyte
+  # of a name costs what 4,096 bytes do, where it was told whole, a megabyte in some 2 s.
+  # A text of 4,096 bytes or fewer is whole; one whose first 4,096 bytes are no text but
+  # for a character the cut split is shown as `inspected/2` shows a binary that is none.
+  @longest_text 4_096
+
+  @doc false
+  def longest_text, do: @longest_text
+
+  @doc false
+  def quoted_text(text) when is_binary(text) and byte_size(text) > @longest_text do
+    start = binary_part(text, 0, @longest_text)
+    cut_text(text_start(String.valid?(start), start, 3), text)
+  end
+
   def quoted_text(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
   def quoted_text(other), do: inspected(other)
 
   defp quoted_text(true, text), do: "`" <> text <> "`"
   defp quoted_text(false, bytes), do: inspected(bytes)
+
+  @doc false
+  # Whether a text is past `longest_text/0` bytes, and so cut where a message quotes it.
+  def long_text?(text) when is_binary(text), do: byte_size(text) > @longest_text
+  def long_text?(_other), do: false
+
+  # A cut text's start, its last character whole: a byte of a character the cut split
+  # dropped, at most three, or `:none` where the start is no text however cut.
+  defp text_start(true, start, _left), do: start
+  defp text_start(false, _start, 0), do: :none
+
+  defp text_start(false, start, left) do
+    start = binary_part(start, 0, byte_size(start) - 1)
+    text_start(String.valid?(start), start, left - 1)
+  end
+
+  defp cut_text(:none, bytes), do: inspected(bytes)
+  defp cut_text(start, text), do: "`#{start}…` (#{byte_size(text)} bytes)"
 
   defp cut_shown({start, count}), do: "#{start} (#{count} characters)"
   defp cut_quoted({start, count}), do: "`#{start}` (#{count} characters)"
