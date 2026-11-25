@@ -239,7 +239,8 @@ API".
   `Logex.Tag.new!/5`'s name with `.` parts or a subscript, `get!/2`'s tag an instance does
   not declare, a task's or an instance's name in a path, and every diagnostic of a
   configuration, which `check/1` gives and `new!/1` and `Logex.Runtime.start/1` raise, a
-  task declared twice among them, where one was 5 MB; a line to copy that would hold such
+  task declared twice among them, where one was 5 MB, and of an online edit's, which
+  `Logex.Edit.accept/3` and `Logex.Configuration.Edit.accept/2` give; a line to copy that would hold such
   a name holds its cut start, or none is given. A name past 4,096 bytes is offered no
   did-you-mean, and never is one, where `Logex.Tag.new!/5` of a megabyte's type text took
   13 s to look for one and `new!/1` 0.9 s to look past a megabyte's program type. A text

@@ -16603,7 +16603,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      keys are told in 9 KB where they were 9.6 MB, and 100,000 devices in 4 KB where they
      were 4.5 MB. A step's refusal and the runner's start count what the refusal they relay
      counted (`untold/1`). `quoted_test.exs` pins each at 100 and 101, and its growth at
-     100,000 against 1,000. Provisional: `PLAN.md`'s "RV-33 as built", questions 1 and 3.)*
+     100,000 against 1,000. Provisional: `PLAN.md`'s "RV-33 as built", questions 1 and 3.
+     Mended by RV-33's review, `cd66b6a`: a step's refusal tells a copy-in's misfits and its
+     var_externals' as one list, each global once, where it read the copy-in's count back
+     from its text and counted a global both read twice; the hundred and the count are of
+     mistakes, an array input's value one in up to eleven lines, provisional: `PLAN.md`'s
+     RV-33 review, questions 3 and 4.)*
 
 611. **Where the cut is used (RV-32),** RV-32's question 2: a test harness hands
      `Logex.Parser.parse/1`, outside the host contract, a list that holds a long number.
@@ -16643,7 +16648,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      cut as `inspect/1` cuts it, as decision 585 has it. `quoted_test.exs` pins
      `put_inputs/3`, `get!/2`, `IO.bind!/2`'s device name and `Tag.new!/5`'s type text at
      4,096 bytes and 4,097, and the hostile walk gives every argument a text of 100,000
-     bytes. Provisional: `PLAN.md`'s "RV-33 as built", questions 2 and 5.)*
+     bytes. Provisional: `PLAN.md`'s "RV-33 as built", questions 2 and 5. Mended by RV-33's
+     review, `cd66b6a`: every name a refusal writes in backquotes itself goes through the
+     cut (`Logex.Lexer.quoted/1`), `Tag.new!/5`'s name with `.` parts, `get!/2`'s tag an
+     instance lacks and every diagnostic of a configuration among them, a line to copy
+     holding the cut start or none; a name past 4,096 bytes is never the did-you-mean
+     looked at; the cut drops only a split character's start; a name with a control
+     character is quoted as `inspect/1` shows it; and a compile's diagnostics quote a name
+     whole, as before, provisional: `PLAN.md`'s RV-33 review, questions 1 and 2.)*
 
 614. **Two long numbers that cut alike (RV-32),** RV-32's question 5: a fan's timer `last`
      and the instance's `now`, both past 10,000 digits, differ by 5, and their two cuts
@@ -16683,7 +16695,11 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      blocks, arrays, units or reals, a line each, where `Protocol.UndefinedError` and
      `FunctionClauseError` escaped; `put_inputs/3` and `call/4` unchanged.
      `quoted_test.exs`'s `@outside` is empty. Found beside it: a tag table whose value is a
-     struct, `PLAN.md`'s "RV-33 as built", question 4.)*
+     struct, `PLAN.md`'s "RV-33 as built", question 4. Mended by RV-33's review, `cd66b6a`:
+     `check/1`, `new!/1`, `start/1` and a configuration's edit refuse it too, where a sort of
+     the tags for the ports raised first; and so is a held body's table that is a struct
+     or no map, its tags no map, its rungs no list, a block type's members no list of
+     members, and an entry of the rungs that is no rung, each a line.)*
 
 ---
 

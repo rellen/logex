@@ -1103,6 +1103,25 @@ defmodule Logex.QuotedTest do
       %{rt | globals: Map.new(rt.globals, fn {name, _value} -> {name, :x} end)}
     end
 
+    # The same, its instance on a periodic task.
+    defp misread_timed(n) do
+      source =
+        Enum.map_join(1..n, "\n", &"var_input v#{pad(&1)} dint") <>
+          "\nvar_input start bool\nvar_external count dint\nvar_output lamp bool\n\n" <>
+          "xic start ote lamp\n"
+
+      {:ok, reader} = Logex.compile(source, name: "reader")
+
+      text =
+        Enum.map_join(1..n, "\n", &"var_global g#{pad(&1)} dint") <>
+          "\nvar_global count dint 0\ntask t interval 10 priority 1\n\nprogram i1 reader with t\n" <>
+          Enum.map_join(1..n, "\n", &"  i1.v#{pad(&1)} g#{pad(&1)}") <> "\n  i1.start 0\n"
+
+      {:ok, c} = Configuration.compile("plant", text, %{"reader" => reader})
+      rt = Runtime.start(c)
+      %{rt | globals: Map.new(rt.globals, fn {name, _value} -> {name, :x} end)}
+    end
+
     # RV-33's review (F4): the same, its var_external one of the globals a connection reads.
     defp misread_through(n, external) do
       source =
@@ -1365,6 +1384,16 @@ defmodule Logex.QuotedTest do
       assert_raise ArgumentError,
                    Enum.join(lines ++ ["and 2 more mistakes, not listed"], "\n"),
                    fn -> Runtime.cycle(misread(101), 0, %{}) end
+    end
+
+    # RV-33's review's mutation table: so does a step of a periodic task, whose instance a
+    # `with` puts on it, the timed step's refusal as the continuous one's.
+    test "a periodic task's step counts what a copy-in's did not list" do
+      lines = [held_outside("count") | each(99, fn i -> held_outside("g#{pad(i)}") end)]
+
+      assert_raise ArgumentError,
+                   Enum.join(lines ++ ["and 2 more mistakes, not listed"], "\n"),
+                   fn -> Runtime.cycle(misread_timed(101), 0, %{}) end
     end
 
     # RV-33's review (F4): a global a connection reads and a var_external names, past the
@@ -1792,6 +1821,26 @@ defmodule Logex.QuotedTest do
            "elements, not both"}
       ])
 
+      # A location's own spelling, which the judge writes itself: a device's name of 4,097
+      # bytes, cut where the location is quoted and where its spelling is.
+      assert_raise ArgumentError,
+                   "`#{a(4_096)}…` (4101 bytes) is not a location as written: a location's " <>
+                     "`i` or `q` is lowercase and its address has no leading zero, so it is " <>
+                     "written `#{a(4_096)}…` (4101 bytes)",
+                   fn -> Global.new!("g", :bool, at: opaque(long <> ".I.0")) end
+
+      # A configuration's edit, its refusal of a task added by a name of 4,097 bytes.
+      edited =
+        Configuration.Edit.accept(
+          Runtime.start(new!.([])),
+          new!.(tasks: [%Task{name: opaque("t" <> a(4_096)), interval: 10, priority: 1}])
+        )
+
+      assert {:error, [%Logex.Diagnostic{message: message}]} = edited
+
+      assert message ==
+               "task `t#{a(4_095)}…` (4097 bytes) is added: a task is added only with a restart"
+
       # A line to copy holds the name's cut start, the message twice the cut's.
       message =
         "#{cut} is a ton: its preset is the number on its `ton` instruction, as in " <>
@@ -1821,6 +1870,8 @@ defmodule Logex.QuotedTest do
             {a(5_000) <> <<255>>, cut.(4_096, 5_001)},
             {a(4_095) <> <<0x80>> <> "bbb", inspect(a(4_095) <> <<0x80>> <> "bbb")},
             {a(4_093) <> <<0xFF>> <> "bbbb", inspect(a(4_093) <> <<0xFF>> <> "bbbb")},
+            {"a" <> <<0xFF>> <> a(4_093) <> "é" <> a(10),
+             inspect("a" <> <<0xFF>> <> a(4_093) <> "é" <> a(10))},
             {"a\tb", ~s("a\\tb")},
             {"x\n" <> a(5_000), inspect("x\n" <> a(5_000))}
           ] do
@@ -1896,6 +1947,168 @@ defmodule Logex.QuotedTest do
                      "`A#{a(4_095)}`",
                    fn -> Runtime.put_inputs(p, s, %{opaque(a(4_097)) => 1}) end
     end
+
+    # RV-33's review's mutation table: the runner's force and the sim's check, each a word
+    # it writes itself through the cut.
+    test "the runner's force and the sim's check of a name of 4,097 bytes", %{dir: dir} do
+      {runner, _panel} = runner(forces(dir, "forces"))
+
+      assert_raise ArgumentError,
+                   "`#{a(4_096)}…` (4097 bytes) is no input point of `plant`",
+                   fn ->
+                     Runner.force(runner, opaque(a(4_097)), 1)
+                   end
+
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+      {:ok, sim} = Sim.start_link(inputs: 2)
+      name = "g" <> a(4_096)
+
+      config =
+        Configuration.new!(
+          name: "c",
+          programs: [tally],
+          globals: [Global.new!(name, :bool, at: "panel.i.5"), Global.new!("count", :dint)],
+          instances: [%Configuration.Instance{name: "t1", type: "tally"}],
+          connections: [%Configuration.Connection{instance: "t1", member: "eye", to: name}]
+        )
+
+      assert_raise ArgumentError,
+                   "the device `panel`'s adapter options: `g#{a(4_095)}…` (4097 bytes) is at " <>
+                     "`panel.i.5`, past the sim's 2 inputs, `panel.i.0` to `panel.i.1`",
+                   fn -> Logex.IO.bind!(config, %{"panel" => {Sim, sim: sim}}) end
+
+      # The device no adapter is bound to, the point at it named through the cut.
+      assert_raise ArgumentError,
+                   "no adapter is bound to the device `panel`, which `g#{a(4_095)}…` (4097 " <>
+                     "bytes) (panel.i.5) is at",
+                   fn -> Logex.IO.bind!(config, %{}) end
+    end
+
+    # RV-33's review's mutation table: a program edited by hand, its destination a member of
+    # an instance of a name of 4,097 bytes it does not declare, the path and the instance
+    # each through the cut.
+    test "a hand-edited destination's member path of 4,097 bytes", %{p: p} do
+      instance = "t" <> a(4_096)
+      edited = %{p | rungs: Enum.map(p.rungs, &redestined(&1, instance))}
+
+      assert_raise ArgumentError,
+                   "`p`'s `add` on line 13 computes in the type of `t#{a(4_095)}…` (4101 " <>
+                     "bytes), and `p` declares no `t#{a(4_095)}…` (4097 bytes): `p` was edited " <>
+                     "by hand after it compiled",
+                   fn -> Runtime.instance(edited) end
+    end
+
+    # RV-33's review's mutation table: a configuration's task named by 4,097 bytes is given
+    # no line to copy that holds it, the line's example `t`; and a program type named by a
+    # megabyte, among the types given, is never the did-you-mean looked at, its refusal
+    # costing no more than a short name's and the cut's, the least of three in the same
+    # run (16 M reductions, 0.9 s, where the names given were each looked at).
+    test "a task's line to copy and the types given past 4,096 bytes" do
+      {:ok, m} =
+        Logex.compile("var_input start bool\nvar_output lamp bool\n\nxic start ote lamp\n",
+          name: "m"
+        )
+
+      new! =
+        &Configuration.new!(
+          Keyword.merge(
+            [
+              name: "c",
+              programs: [m],
+              instances: [%Configuration.Instance{name: "i1", type: "m"}],
+              connections: [%Configuration.Connection{instance: "i1", member: "start", to: 0}]
+            ],
+            &1
+          )
+        )
+
+      assert_raise ArgumentError,
+                   "task `#{a(4_096)}…` (4097 bytes) needs a priority, as in `task t interval " <>
+                     "10 priority 1`: 0 is the highest",
+                   fn ->
+                     new!.(tasks: [%Task{name: opaque(a(4_097)), interval: 10, priority: nil}])
+                   end
+
+      # A constant connected to an array input: the element's line to copy holds the
+      # instance's name cut, its start and `…`.
+      {:ok, k} =
+        Logex.compile(
+          "var_input t dint[2]\nvar_input start bool\nvar_output lamp bool\n\nxic start ote lamp\n",
+          name: "k"
+        )
+
+      instance = opaque("i" <> a(4_096))
+
+      assert_raise ArgumentError,
+                   "`i#{a(4_095)}…` (4099 bytes) is an array of 2 dints, and the constant `5` is " <>
+                     "one value: connect it to a global array of its sizes, or each element to a " <>
+                     "constant, as in `i#{a(4_095)}… 5`",
+                   fn ->
+                     Configuration.new!(
+                       name: "c",
+                       programs: [k],
+                       instances: [%Configuration.Instance{name: instance, type: "k"}],
+                       connections: [
+                         %Configuration.Connection{instance: instance, member: "t", to: 5},
+                         %Configuration.Connection{instance: instance, member: "start", to: 0}
+                       ]
+                     )
+                   end
+
+      huge = a(1_000_000)
+      {cut, _} = spent(fn -> Logex.Lexer.quoted_text(huge) end)
+      {small, _} = spent(fn -> new!.(programs: [%{m | name: opaque(a(10))}]) end)
+      {many, told} = spent(fn -> new!.(programs: [%{m | name: opaque(huge)}]) end)
+
+      assert told ==
+               "unknown program type `m`: the types given are `#{a(4_096)}…` (1000000 bytes)"
+
+      assert many <= small + 2 * cut, "#{many} reductions, against #{small} and #{cut}"
+    end
+
+    # RV-33's review's mutation table: an online edit's refusal of a type changed, its tag
+    # of 4,097 bytes cited through the cut.
+    test "an online edit's type change of a tag of 4,097 bytes" do
+      name = "t" <> a(4_096)
+
+      source =
+        &"var_input x bool\nvar #{name} #{&1}\nvar_output y bool\n\nxic x ote y\nxic x add #{name} 1 #{name}\n"
+
+      {:ok, running} = Logex.compile(source.("dint"), name: "p")
+      {:ok, candidate} = Logex.compile(source.("int"), name: "p")
+
+      assert {:error, [%Logex.Diagnostic{message: message}]} =
+               Logex.Edit.accept(running, candidate, Runtime.instance(running))
+
+      assert message ==
+               "`t#{a(4_095)}…` (4097 bytes) is a dint in the running program and an int in " <>
+                 "the candidate: a tag's type changes only with a restart"
+    end
+
+    # RV-33's review's mutation table: an online edit's refusal of a function block type
+    # handed in as the running program, its name of 4,097 bytes through the cut.
+    test "an online edit of a function block type named by 4,097 bytes", %{p: p, s: s} do
+      name = "s" <> a(4_096)
+
+      {:ok, type} =
+        Logex.compile(
+          "function_block #{name}\nvar_input start bool\nvar_output run bool\n\nxic start ote run\n",
+          name: name
+        )
+
+      assert_raise ArgumentError,
+                   "`s#{a(4_095)}…` (4097 bytes) is a function block type, which runs inside a " <>
+                     "program through `cal`: an instance is of a %Logex.Program{}",
+                   fn -> Logex.Edit.accept(type, p, s) end
+    end
+
+    defp redestined({:rung, elements}, instance),
+      do: {:rung, Enum.map(elements, &redestined(&1, instance))}
+
+    defp redestined({:add, line, [one, other, _total]}, instance),
+      do: {:add, line, [one, other, {:member, line, [instance, "acc"]}]}
+
+    defp redestined(other, _instance), do: other
 
     test "a compile's diagnostic quotes a name whole however long (F3)" do
       # A compile's diagnostic is no refusal of the host contract: a name of 5,000 bytes is

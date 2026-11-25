@@ -577,8 +577,8 @@ defmodule Logex.Edit do
       )
 
   # A program's name is the host's, a program edited by hand may hold anything there, so
-  # it is quoted through the cut: text whole, anything else as `inspect/1` shows it, a
-  # long number cut (RV-32's review, F1).
+  # it is quoted through the cut: text whole up to 4,096 bytes and cut past them (decision
+  # 613), anything else as `inspect/1` shows it, a long number cut (RV-32's review, F1).
   defp named(nil), do: "an unnamed program"
   defp named(name), do: Logex.Lexer.quoted_text(name)
 
