@@ -6,9 +6,9 @@ text does not come from a file, for example from a database. It shows how to
 [function block](../reference/glossary.md#function-block) and the text of a program that
 runs it, with `Logex.compile/2`.
 
-Use this way if the text of your program does not come from a file, for example from a
-database. `Logex.compile/2` does not read files. Give it the
-[function block type](../reference/glossary.md#function-block-type) in its option `types:`.
+`Logex.compile/2` does not read files. Compile the text of the function block first. Then
+give its [function block type](../reference/glossary.md#function-block-type) to the
+compile of the program, in the option `types:`.
 
 ## Before you start
 
