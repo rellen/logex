@@ -15,63 +15,26 @@ can hold.
 ## Status
 
 Accepted. No later record replaces this record.
-
 ## Date
 
-2026-09-28, the date of the tag table. Each part of the record has its date:
-
-- 2026-09-27: the mnemonics are reserved (`PLAN.md` M1-2).
-- 2026-09-28: the tag table (M1-3), decisions 2 and 10.
-- 2026-10-01: decision 24.
-- 2026-10-24: decision 247.
-- 2026-10-27: decisions 294, 295, 296 and 298.
-- 2026-10-29: decision 300.
+2026-09-28, the date of the tag table (`PLAN.md` M1-3) and of decisions 2 and 10. The
+mnemonics are reserved since 2026-09-27 (M1-2). The later decisions are of 2026-10-01
+(24), 2026-10-24 (247), 2026-10-27 (294, 295, 296 and 298) and 2026-10-29 (300).
 
 ## Context
 
 Until 2026-09-28, logex checked no name against a declaration. Each name in a
 [rung](../../guides/reference/glossary.md#rung) was a tag, and a name with no value read
-as 0. Thus a typing error in a name gave a rung that did nothing, with no message. Commit
-`5b63a9f` shows this. It reads declaration lines into a table, but it does not use the
-table to check a rung. The [contact](../../guides/reference/glossary.md#contact)
-`xic strat` is the error:
-
-<!-- unchecked: a program that logex at commit 5b63a9f compiled with no diagnostic -->
-```text
-var_input start bool
-var_input stop bool
-var_output motor bool
-
-( xic strat | xic motor ) xio stop ote motor
-```
-
-A run on a copy of that commit [compiles](../../guides/reference/glossary.md#compile) the program and
-does 1 [scan](../../guides/reference/glossary.md#scan) with `start` at 1. The motor
-stays off:
-
-<!-- unchecked: the output of a run on a copy of commit 5b63a9f, 2026-11-21 -->
-```text
-instructionize: :ok
-after a scan with start = 1: %{"motor" => 0, "start" => 1, "stop" => 0}
-```
+as 0. Thus a typing error in a name, such as the
+[contact](../../guides/reference/glossary.md#contact) `xic strat` for `start`, gave a rung
+that did nothing, with no message.
 
 A second defect came from the operand list. Before M1-2, logex knew only the number of
 [operands](../../guides/reference/glossary.md#operand) of each mnemonic. It took that
-number of words after the mnemonic, also when a word was a mnemonic. On a copy of commit
-`5360eb9`, the rung `xic aa mov src ote` writes 9 to a tag with the name `ote`, with no
-error. `mov` was the name of `move` at that commit:
-
-<!-- unchecked: the output of a run on a copy of commit 5360eb9, 2026-11-21 -->
-```text
-ir: {:routine,
- {:rungs,
-  [rung: [xic: [{:name, 1, "aa"}], mov: [{:name, 1, "src"}, {:name, 1, "ote"}]]]}}
-env: %{"aa" => 1, "ote" => 9, "src" => 9}
-```
-
-The mnemonic of a [coil](../../guides/reference/glossary.md#coil), `ote`, became the name
-of a tag. A table of operand
-signatures alone cannot find this error, because `ote` is a legal name.
+number of words after the mnemonic, also when a word was a mnemonic. The rung
+`xic aa mov src ote` wrote 9 to a tag with the name `ote`, with no error. A table of
+operand signatures alone cannot find this error, because `ote` is a legal name.
+[Runs and tables of the records: the language](../implementation/record-runs-language.md#0005-every-tag-is-declared) gives a run of each defect on its commit.
 
 [IEC 61131-3](../../guides/reference/glossary.md#iec-61131-3) declares variables in
 blocks, such as `VAR_INPUT start : BOOL; END_VAR`. It also reserves its keywords.
@@ -88,8 +51,8 @@ words.
 
 ## Decision
 
-[The rules in a run](#the-rules-in-a-run) shows each rule of this section as a numbered
-result.
+[Runs and tables of the records: the language](../implementation/record-runs-language.md#0005-every-tag-is-declared) shows each rule of this section as a numbered result. A number in brackets
+is a result of that run.
 
 ### A declaration line for each tag
 
@@ -234,162 +197,6 @@ These 4 functions hold the words:
 `test/logex/naming_test.exs` compares the 2 keyword lists with copies that it holds. It
 fails for a word of any of the 4 functions that has no stanza in `docs/naming.md`.
 
-### The rules in a run
-
-This script compiles 14 programs of the motor, 2 files with `function_block`, 4
-configuration files of the fan and 4 tags from Elixir. The script is
-`examples/0005-every-tag-is-declared.exs`. Run it from `examples/`.
-
-```elixir
-# Print "compiles", or each diagnostic of the compile.
-report = fn
-  {:ok, _program_or_type} -> IO.puts("  compiles")
-  {:error, diagnostics} -> Enum.each(diagnostics, &IO.puts("  " <> Logex.Diagnostic.format(&1)))
-end
-
-# The declarations of the motor: lines 1 to 4 of each program.
-motor = """
-var_input start bool
-var_input stop bool
-var_output motor bool
-var_output speed_sp dint 1200
-"""
-
-programs = [
-  {"1. A typing error in a name", motor <> "( xic strat | xic motor ) xio stop ote motor\n"},
-  {"2. A program that declares nothing", "xic start ote motor\n"},
-  {"3. A dint read as a bool", motor <> "xic speed_sp ote motor\n"},
-  {"4. A rung that writes a var_input", motor <> "xic stop ote start\n"},
-  {"5. A move with 1 operand", motor <> "var src dint\nmove src ote motor\n"},
-  {"6. A mnemonic as the name of a tag", motor <> "var Ote bool\nxic start ote motor\n"},
-  {"7. A timer that is not declared", motor <> "xic start ton t1 3000\n"},
-  {"8. A preset on the declaration of a timer",
-   motor <> "var t1 ton 3000\nxic start ton t1 3000\n"},
-  {"9. An initial value that does not fit", motor <> "var r int 40000\nxic r ote motor\n"},
-  {"10. A qualifier after the name", motor <> "var count retain dint\nxic start move 1 count\n"},
-  {"11. A declaration after the first rung",
-   motor <> "xic start ote motor\nvar late dint\nxic late ote motor\n"},
-  {"12. A word after the initial value", motor <> "var r int 5 7\nxic r ote motor\n"},
-  {"13. A configuration word as a tag", motor <> "var task bool\nxic start xio task ote motor\n"},
-  {"14. A configuration word as a var_external",
-   motor <> "var_external task bool\nxic start xio task ote motor\n"}
-]
-
-Enum.each(programs, fn {title, text} ->
-  IO.puts(title)
-  report.(Logex.compile(text, name: "motor"))
-end)
-
-# The same word in a program and in the file of a function block.
-seal = "function_block seal\nvar_input start bool\nvar_input stop bool\nvar_output run bool\n"
-IO.puts("15. function_block as a tag, in a program, then in a block")
-
-report.(
-  Logex.compile(motor <> "var function_block bool\nxic start xio function_block ote motor\n",
-    name: "motor"
-  )
-)
-
-report.(
-  Logex.compile(seal <> "var function_block bool\n( xic start | xic run ) xio stop ote run\n",
-    name: "seal"
-  )
-)
-
-# The words in a configuration file: a global, a device and an instance.
-{:ok, fan} =
-  Logex.compile("var_input hot bool\nvar_output fan bool\nxic hot ote fan\n", name: "fan")
-
-plant = fn global, device, instance ->
-  """
-  task fast interval 10 priority 1
-  var_global #{global} bool at #{device}.i.0
-  var_global fan_q bool at panel.q.0
-  program #{instance} fan with fast
-  #{instance}.hot #{global}
-  #{instance}.fan fan_q
-  """
-end
-
-IO.puts("16. A mnemonic, then 3 configuration words, in a configuration file")
-report.(Logex.Configuration.compile("plant", plant.("xic", "panel", "f1"), %{"fan" => fan}))
-report.(Logex.Configuration.compile("plant", plant.("task", "panel", "f1"), %{"fan" => fan}))
-report.(Logex.Configuration.compile("plant", plant.("hot_i", "program", "f1"), %{"fan" => fan}))
-report.(Logex.Configuration.compile("plant", plant.("hot_i", "panel", "retain"), %{"fan" => fan}))
-
-# A tag declared from Elixir gets the checks of a declaration line.
-declare = fn call ->
-  try do
-    tag = call.()
-    IO.puts("  `#{tag.name}` is declared, qualifier: #{inspect(tag.retain)}")
-  rescue
-    error in ArgumentError -> IO.puts("  ArgumentError: " <> Exception.message(error))
-  end
-end
-
-IO.puts("17. Tags declared from Elixir")
-declare.(fn -> Logex.Tag.new!("count", :dint, :var, nil, retain: true) end)
-declare.(fn -> Logex.Tag.new!("count", :dint, :var, nil, :retain) end)
-declare.(fn -> Logex.Tag.new!("t1", Logex.FbType.ton(), :var, %{"pre" => 3000}) end)
-declare.(fn -> Logex.Tag.new!("Ote", :bool) end)
-```
-
-```console
-$ mix run 0005-every-tag-is-declared.exs
-1. A typing error in a name
-  line 5: `strat` is not declared — did you mean `start`?
-2. A program that declares nothing
-  line 1: `start` is not declared (this program declares no tags: each is now declared before the first rung, as in `var start bool` or `var start dint`)
-  line 1: `motor` is not declared
-3. A dint read as a bool
-  line 5: `xic` reads a bool, but `speed_sp` is a dint (declared on line 4)
-4. A rung that writes a var_input
-  line 5: `ote` writes `start`, a var_input (declared on line 1): logic must not write an input
-5. A move with 1 operand
-  line 6: `move` expects 2 operands (a value, then a tag), found 1 before the instruction `ote`
-6. A mnemonic as the name of a tag
-  line 5: `Ote` is an instruction and cannot name a tag
-7. A timer that is not declared
-  line 5: `t1` is not declared
-8. A preset on the declaration of a timer
-  line 5: `t1` is a ton: its preset is the number on its `ton` instruction, as in `ton t1 5000`, not an initial value on its declaration
-9. An initial value that does not fit
-  line 5: `r` is an int: `40000` is outside -32768 to 32767
-  line 6: `xic` reads a bool, but `r` is an int (declared on line 5)
-10. A qualifier after the name
-  line 5: `retain` comes straight after the section word, as in `var retain count dint`
-11. A declaration after the first rung
-  line 6: `var` after the first rung (line 5): declarations come first
-  line 7: `xic` reads a bool, but `late` is a dint (declared on line 6)
-12. A word after the initial value
-  line 5: unexpected `7` after the declaration of `r`
-  line 6: `r` is not declared
-13. A configuration word as a tag
-  compiles
-14. A configuration word as a var_external
-  line 5: `task` is a keyword of a configuration file, where a var_external's global is declared, so it cannot name a var_external
-  line 6: `task` is not declared
-15. function_block as a tag, in a program, then in a block
-  compiles
-  line 5: `function_block` heads a function block's file and cannot name a tag in one
-16. A mnemonic, then 3 configuration words, in a configuration file
-  compiles
-  line 2: `task` is a keyword and cannot name a global
-  line 2: `program` is a keyword and cannot name a device
-  line 4: `retain` is a keyword and cannot name an instance
-17. Tags declared from Elixir
-  `count` is declared, qualifier: :retain
-  ArgumentError: the options of `count` are a keyword list, `retain: true` or `non_retain: true`, found :retain
-  ArgumentError: `t1` is a ton: its preset is the number on its `ton` instruction, as in `ton t1 5000`, not an initial value on its declaration
-  ArgumentError: `Ote` is an instruction and cannot name a tag
-```
-
-Result 1 is the program of the Context, with its typing error. Result 5 is the defect of
-`5360eb9`: `move` stops at `ote`, and `ote motor` is a correct instruction. In results 9, 10
-and 11, the line declares its tag. Thus the second diagnostic of results 9 and 11 is
-about the type of the tag, and `move 1 count` in result 10 gets no diagnostic. In results
-12 and 14, the line declares nothing.
-
 ## Consequences
 
 The good results:
@@ -435,28 +242,17 @@ row, the stanza in `docs/naming.md` and the lists that `naming_test.exs` compare
 - **Blocks of IEC 61131-3, `VAR_INPUT ... END_VAR`.** They need diagnostics for a block
   with no end, for nested blocks and for a stray block, and a way to recover from
   each. They also reserve `end_var`.
-- **No reserved mnemonics, and the tag table finds an undeclared `ote`.** The tag table
-  came 1 plan item later, in M1-3. With this option, `mov src ote` writes a tag with no
-  message until then.
 - **The keywords of Annex C reserved in each kind of file, as IEC 61131-3 does.** logex
   reserves a word to give a line only 1 reading. No line of a program uses `task` or
   `with`, so that reservation only breaks programs with a tag of that name (decision 10).
 - **A preset map from Elixir, `%{"pre" => 3000}`.** If a `ton` instruction runs the
-  timer, its preset replaces the value of the map, with no message. If no `ton` runs the
-  timer, no `.ld` text can give the same preset (decision 24).
+  timer, its preset replaces the value of the map, with no message (decision 24).
 - **A refused line that declares nothing.** Each use of its tag gets 1 more
   `is not declared` (decisions 247 and 294).
-- **A qualifier in either place, such as `var count retain dint`.** Decision 295 kept the
-  refusal, with a message that names the correct place.
-- **A positional qualifier, `new!("c", :dint, :var, nil, :retain)`, or `qualifier:
-  :retain`.** The option `retain: true` reads as the line `var retain c dint`, word for
-  word (decision 296).
 - **No `.ld` word reserved in a configuration file.** `var_global retain bool` was then a
-  global with the name `retain`. With the reservation, `var_global retain total_boxes dint
-  0` has only 1 reading (decision 298).
-- **Only `retain` and `non_retain` refused as the name of a device.** Then the same word
-  can name a device and not a global in 1 file: logex takes `at task.i.0` but refuses
-  `var_global task bool` (decision 300).
+  global with the name `retain` (decisions 298 and 300).
+
+Decisions 295 and 296 give the other options for the place and the form of a qualifier.
 
 ## The decisions that this record sums up
 
