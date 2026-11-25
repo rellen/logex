@@ -111,6 +111,22 @@ by its number.
 | [The checks of a change](implementation/testing-checks.md) | The mutation tables, the examples of the pages, the tests that read the source and the gate |
 | [Add an instruction](implementation/adding-an-instruction.md) | The survey of the name, then the steps in the code and in the suite |
 | [The naming survey](implementation/naming-survey.md) | The rules of a name, the stanza of `docs/naming.md` for each word and the test that reads the stanzas |
+| [Runs and tables of the records: the language](implementation/record-runs-language.md) | The runs, measurements and long tables of records 0001, 0002, 0003, 0005 and 0006 |
+| [Runs and tables of the records: the core](implementation/record-runs-core.md) | The runs, measurements and long tables of records 0004, 0007 and 0008 |
+| [Runs and tables of the records: faults](implementation/record-runs-faults.md) | The runs, measurements and long tables of record 0010 |
+| [Runs and tables of the records: tasks and edits](implementation/record-runs-tasks-and-edits.md) | The runs, measurements and long tables of records 0011 and 0012 |
+| [Runs and tables of the records: the runner](implementation/record-runs-runner.md) | The runs, measurements and long tables of records 0013 and 0014 |
+| [Runs and tables of the records: forcing](implementation/record-runs-forcing.md) | The runs, measurements and long tables of record 0015 |
+| [Runs and tables of the records: retained values](implementation/record-runs-retained.md) | The runs, measurements and long tables of record 0016 |
+| [Runs and tables of the records: the store](implementation/record-runs-store.md) | The runs, measurements and long tables of record 0017 |
+| [Runs and tables of the records: the copies of the store](implementation/record-runs-store-copies.md) | The runs, measurements and long tables of record 0017 |
+| [Runs and tables of the records: file work](implementation/record-runs-file-work.md) | The runs, measurements and long tables of record 0018 |
+| [Runs and tables of the records: cost](implementation/record-runs-cost.md) | The runs, measurements and long tables of record 0019 |
+| [Runs and tables of the records: verification](implementation/record-runs-verify.md) | The runs, measurements and long tables of record 0020 |
+| [Runs and tables of the records: the toolchain](implementation/record-runs-toolchain.md) | The runs and long tables of record 0021 |
+| [Runs and tables of the records: typespecs](implementation/record-runs-typespecs.md) | The runs, measurements and long tables of record 0022 |
+| [Runs and tables of the records: the documentation](implementation/record-runs-documentation.md) | The runs and long tables of record 0023 |
+| [Runs and tables of the records: the practice](implementation/record-runs-practice.md) | The runs, measurements and long tables of record 0009 |
 
 ### Decision records
 

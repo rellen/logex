@@ -1,8 +1,7 @@
 # Decision records
 
-This page is for a contributor who wants to know the reasons for the design of logex,
-before a change to it. It says what a decision record is, and how the records stand beside
-section 7 of [`docs/organisation.md`](../organisation.md#7-decisions). It has 2 lists:
+This page is for a contributor who wants the reasons for the design of logex. It says
+what a decision record is, and how the records stand beside section 7 of [`docs/organisation.md`](../organisation.md#7-decisions). It has 2 lists:
 
 - [The records](#the-records): each record, with 1 line.
 - [Read a record before you change a part](#read-a-record-before-you-change-a-part): the
@@ -18,7 +17,8 @@ On this page, these words have these meanings:
 | Record | 1 page under `docs/adr/` that sums up the decisions about 1 large choice |
 | Section 7 | The section "Decisions" of `docs/organisation.md` |
 | Section | 1 part of a document, with a heading. This page does not use the word for a declaration section |
-| Test | An ExUnit test of the suite. This page does not use the word for the step of an online edit |
+| ExUnit test | A test of the suite. The records say "ExUnit test" for it (decision 590) |
+| Test | The step of an [online edit](../../guides/reference/glossary.md#online-edit) that starts the new program, `Logex.Edit.test/2` |
 
 A record gives the problem, the choice, the options that logex did not take and the
 results. A record has the 7 sections of the [template of a record](../templates/adr.md):
@@ -35,6 +35,12 @@ results. A record has the 7 sections of the [template of a record](../templates/
 
 No record replaces a different record, and no record has the status Withdrawn.
 
+A record has 2,000 words at most, and about 1,500 is the aim (decision 589). A record
+holds no run, no measurement and no long table. They are on a page
+`docs/implementation/record-runs-<part>.md`, such as
+[Runs and tables of the records: the runner](../implementation/record-runs-runner.md),
+which has a section for each record. The record links to its section.
+
 A record follows the [style guide](../style-guide.md) as a contributor page does. It can
 cite a decision by its number. It can quote text between double quotation marks, and the
 checker does not apply its word rules to a quotation.
@@ -47,18 +53,12 @@ entries give the question and the options. Then they give the option that the ma
 took, with its date. Many entries end with a note in italics that tells what the code
 does.
 
-A record does not replace section 7. It is a short way in. It sums up a group of
-decisions about 1 subject, explains the reasons and names each number. Many decisions are
-small and have no record. Section 7 alone gives them.
+A record does not replace section 7. It is a short way in to a group of decisions about 1
+subject. Many decisions are small and have no record.
 
-Other files cite the numbers of section 7:
-
-- `lib/` and `test/` cite a decision by its number, as `decision 352`.
-- `CHANGELOG.md` gives the numbers of the decisions of each release.
-- `test/logex/release_test.exs` runs `scripts/changelog.exs` at each run of the suite.
-  That script makes sure that `CHANGELOG.md` names each decision 1 time.
-
-So a number never changes its meaning.
+`lib/`, `test/` and `CHANGELOG.md` cite the numbers of section 7, and
+`scripts/changelog.exs` makes sure that `CHANGELOG.md` names each decision 1 time. So a
+number never changes its meaning.
 
 ```mermaid
 flowchart TB
@@ -70,28 +70,17 @@ flowchart TB
 ```
 
 Figure: a reader goes from a question to this index, then to a record, then to section 7.
-The code, the tests and `CHANGELOG.md` cite the numbers of section 7. For a reader who
+The code, the ExUnit tests and `CHANGELOG.md` cite the numbers of section 7. For a reader who
 cannot see the figure: each path ends at section 7, which holds each number.
 
-This table compares the 2 documents.
+Section 7 keeps the style of the older documents, and a reader reads it on GitHub. A
+record follows the style guide, and the site shows it.
 
-| | Section 7 | A record |
-|---|---|---|
-| Holds | Each decision, large or small | 1 large choice |
-| Form | The question, the options, the choice, the date and a note | The 7 sections of the template |
-| Words | The style of the older documents ([house manner](../house-manner.md)) | The rules of the style guide |
-| In the site | No. A reader reads it on GitHub | Yes, in the group Decision records |
-| Cited by | The code, the tests and `CHANGELOG.md` | The contributor pages and the explanation pages |
-
-If a record and section 7 give different rules, read the code in `lib/` and its test.
+If a record and section 7 give different rules, read the code in `lib/` and its ExUnit test.
 The code is correct. Then correct the document that is wrong.
 
 Decision 547 chose this approach: a small set of records, 1 for each large choice. It did
-not take 2 other options:
-
-- Split section 7 into 1 file for each decision. Then each citation in the code, the
-  tests and the changelog must change to name the new file.
-- Write no records. Then a new contributor enters through all the lines of section 7.
+not split section 7 into 1 file for each decision, because each citation then must change.
 
 ## The records
 
@@ -103,7 +92,7 @@ not take 2 other options:
   export format of a vendor. A survey in `docs/naming.md` selects each word before its
   code.
 - **[0003. No dependencies and no generated code](0003-no-dependencies-no-generated-code.md)**:
-  logex has no dependency to build, run or test it. A person wrote its lexer and its
+  logex needs no dependency for its build, its run or its ExUnit tests. A person wrote its lexer and its
   parser. ExDoc is a dependency of the `docs` environment only.
 - **[0004. The software model of IEC 61131-3](0004-iec-software-model.md)**: a file is a
   [program type](../../guides/reference/glossary.md#program-type) or a
@@ -169,17 +158,17 @@ not take 2 other options:
 - **[0018. File work with a limit](0018-file-work-with-a-limit.md)**: each file call of the
   runner runs in a separate process with a limit of real time. A disk that stalls does not
   stop the runner.
-- **[0019. Cost in reductions](0019-cost-in-reductions.md)**: a test of cost counts
+- **[0019. Cost in reductions](0019-cost-in-reductions.md)**: an ExUnit test of cost counts
   [reductions](../../guides/reference/glossary.md#reduction), never time.
 - **[0020. Verify by a run](0020-verify-by-executing.md)**: each claim and each change
-  needs a run that shows it. A fix needs a test that fails when you revert the fix.
+  needs a run that shows it. A fix needs an ExUnit test that fails when you revert the fix.
 - **[0021. A pinned toolchain and the gates](0021-pinned-toolchain-and-gates.md)**: logex
   pins Elixir 1.20.4 on Erlang/OTP 28 and keeps no other toolchain working. `mix.exs`
   refuses an Elixir older than 1.20. A commit passes the gates of `scripts/gate.sh`, and a
   script judges each gate by its exit code.
 - **[0022. Typespecs and Dialyzer](0022-typespecs-and-dialyzer.md)**: each public function
   of the [host contract](../../guides/reference/glossary.md#host-contract) has a spec.
-  Dialyzer and 2 test files compare the specs with the code.
+  Dialyzer and 2 files of ExUnit tests compare the specs with the code.
 - **[0023. The shape of the documentation](0023-documentation-shape.md)**: the
   documentation has 3 layers, and each page has 1 kind and 1 reader. The suite runs each
   example of a page, and CI publishes the site.
@@ -198,7 +187,7 @@ This table gives the records to read before you change a part of logex.
 | The runner, a trip or a device | [0013](0013-watchdogs-and-the-trip.md), [0014](0014-devices-are-processes.md), [0015](0015-input-forcing.md), [0018](0018-file-work-with-a-limit.md) |
 | A retained value or the store | [0016](0016-retained-values-and-starts.md), [0017](0017-the-store-on-disk.md), [0018](0018-file-work-with-a-limit.md) |
 | A public function | [0008](0008-source-mistakes-and-host-mistakes.md), [0022](0022-typespecs-and-dialyzer.md) |
-| A test, a script or the toolchain | [0009](0009-clauses-not-conditionals.md), [0019](0019-cost-in-reductions.md), [0020](0020-verify-by-executing.md), [0021](0021-pinned-toolchain-and-gates.md) |
+| An ExUnit test, a script or the toolchain | [0009](0009-clauses-not-conditionals.md), [0019](0019-cost-in-reductions.md), [0020](0020-verify-by-executing.md), [0021](0021-pinned-toolchain-and-gates.md) |
 | A page of the documentation | [0023](0023-documentation-shape.md) |
 
 ## Add a record
@@ -208,23 +197,25 @@ Add a record for a large choice only. A small decision stays in section 7 alone.
 1. Make sure that section 7 has each decision of the choice, with its number.
 2. Copy `docs/templates/adr.md` to `docs/adr/NNNN-short-title.md`. NNNN is 1 more than
    the highest number under `docs/adr/`, with 4 digits, for example `0024`.
-3. Write the 7 sections. The title is the number, a full stop and the decision in a few
-   words, for example `# 0024. A new decision`.
-4. Add 1 line for the record to `docs/pages.exs`, after the line of the last record:
+3. Write the 7 sections, in 2,000 words at most. The title is the number, a full stop
+   and the decision in a few words, for example `# 0024. A new decision`.
+4. Put each run, measurement and long table in a section of a page
+   `docs/implementation/record-runs-<part>.md`, and link the record to it.
+5. Add 1 line for the record to `docs/pages.exs`, after the line of the last record:
    `{"docs/adr/0024-a-new-decision.md", :adr, "Decision records"}`.
-5. Run `mix test test/logex/docs_test.exs`. It passes. If it fails, see
-   [If the test of the pages fails](#if-the-test-of-the-pages-fails).
-6. Add 1 item for the record to [The records](#the-records). Add its number to
+6. Run `mix test test/logex/docs_test.exs`. It passes. If it fails, see
+   [If the ExUnit test of the pages fails](#if-the-exunit-test-of-the-pages-fails).
+7. Add 1 item for the record to [The records](#the-records). Add its number to
    [Read a record before you change a part](#read-a-record-before-you-change-a-part). No
-   test checks these lists. Check them yourself.
-7. Do the checks of [Add and check a page](../check-a-page.md#check-a-page).
+   ExUnit test checks these lists. Check them yourself.
+8. Do the checks of [Add and check a page](../check-a-page.md#check-a-page).
 
-### If the test of the pages fails
+### If the ExUnit test of the pages fails
 
 Each message in this section comes from a run of `mix test test/logex/docs_test.exs`
 with a record `0024`.
 
-If you did not do step 4, the test that fails has a name that ends with this text:
+If you did not do step 5, the ExUnit test that fails has a name that ends with this text:
 
 <!-- unchecked: the end of the name of the test of test/logex/docs_test.exs that fails, copied from a run -->
 ```text
@@ -233,8 +224,8 @@ it lists every Markdown file of the repository, each once, and no file that is n
 
 Your file is in the list `right:` only. Add its line to `docs/pages.exs`.
 
-If the line gives a different kind, for example `:contributor`, the test fails with this
-message, and with a second message about the group:
+If the line gives a different kind, for example `:contributor`, the ExUnit test fails with
+this message, and with a second message about the group:
 
 <!-- unchecked: the first message of test/logex/docs_test.exs for a record of the kind :contributor, copied from a run -->
 ```text
@@ -243,7 +234,7 @@ docs/adr/0024-a-new-decision.md: a page under docs/adr/ is an :adr
 
 Give the kind `:adr`.
 
-If the line gives a different group, for example `"Project"`, the test fails with this
+If the line gives a different group, for example `"Project"`, the ExUnit test fails with this
 message:
 
 <!-- unchecked: the message of test/logex/docs_test.exs for a record in the group "Project", copied from a run -->
@@ -255,16 +246,24 @@ Give the group `"Decision records"`.
 
 ## Change a record
 
-A later decision can change a part of a record. Then change the record:
+A later decision can change a part of a record. The rule depends on the choice of the
+record (decision 595):
 
-1. Add the number of the new decision to the section "The decisions that this record sums up".
-2. Add the date of the new decision to the section "Date".
-3. In the section "Status", say which earlier decision the new decision changes.
-4. Correct the sections "Decision" and "Consequences" so that they say what the code does.
+- **The choice holds.** Edit the record in place, so that it states the rule of the new
+  decision. In the section "Status", name the new decision and the earlier decision that
+  it changes. Add its number to the section "The decisions that this record sums up", and
+  its date to the section "Date".
+- **The choice changes.** Write a new record for the new choice. Give the earlier record
+  the status Replaced, with a link to the new record, and do not change its other
+  sections.
+- **Section 7 drops the choice, and no new choice replaces it.** Give the record the
+  status Withdrawn, with the number of the decision that drops it.
 
-If a later record replaces a record, give the earlier record the status Replaced, with a
-link to the later record. If section 7 takes a decision back and no record replaces it,
-give the record the status Withdrawn, with the number of that decision.
+An example of the first case is record
+[0014. Devices are processes](0014-devices-are-processes.md). Decision 135 wrote the 0 of
+a trip 1 time. Decision 262 writes it again at each poll, where an adapter refuses it.
+The choice of the record, a separate process for each device, holds. So the record states
+the rule of decision 262, and its section "Status" names decision 262 and decision 135.
 
 ## See also
 

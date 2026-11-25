@@ -31,21 +31,10 @@ There were 2 possible forms for a program type:
   into BEAM code.
 - A value of plain data, with text as its saved form. An interpreter runs it.
 
-On 2026-10-01, a measurement on Elixir 1.20.4 compared the 2 forms for 2 programs, of 4
-and 200 [tags](../../guides/reference/glossary.md#tag). It compiled a Spark module again with `Code.compile_string/2`.
-It compiled the same program with `Logex.compile/2`. 2 runs on 2026-11-21 measured
-`Logex.compile/2` again, against a plain module, because Spark is not in the repository.
-
-| The compile, and its date | 4 tags | 200 tags |
-|---|---|---|
-| `Logex.compile/2`, 2026-10-01 | 22 µs | 1.7 ms |
-| A Spark module, `Code.compile_string/2`, 2026-10-01 | 74 to 95 ms | 0.5 to 0.7 s |
-| `Logex.compile/2`, 2026-11-21 | 79 to 82 µs | 1.8 to 2.9 ms |
-| A plain module of 1 function a tag, `Code.compile_string/2`, 2026-11-21 | 5.3 ms | 52 to 66 ms |
-
-Each run was on 1 machine. Compare the times of 1 run with each other, not with the
-times of the other run. In each run, `Logex.compile/2` took less than 0.06 of the time of
-the module.
+A measurement on 2026-10-01 compared the 2 forms for 2 programs, of 4 and 200
+[tags](../../guides/reference/glossary.md#tag). In each run, `Logex.compile/2` took less
+than 0.06 of the time of a compile of a module.
+[Runs and tables of the records: the language](../implementation/record-runs-language.md#0001-a-program-is-data) gives the times.
 
 The 2026-10-01 measurement found 2 more problems with a module:
 
@@ -58,21 +47,8 @@ A third problem follows from how Spark names an entity. The name is usually an a
 each new name in an edit adds an atom. The BEAM never frees an atom, and it stops when its
 table of 1,048,576 atoms is full.
 
-A run on Elixir 1.20.4 on 2026-11-21 confirms the first 2 problems for a plain module.
-Each case compiles a new version of a module that runs:
-
-- The new version raises an exception in its body. The BEAM unloads the old version, and
-  a call raises `UndefinedFunctionError`.
-- The new version calls a local function that the module does not define. The compile
-  raises `CompileError`, and the BEAM unloads the old version.
-- The new version calls a function of a module that does not exist. The compile prints a
-  message and goes on. The new version replaces the old one, and a call raises
-  `UndefinedFunctionError`.
-- The new version has a syntax error. The compile raises `SyntaxError`, and the old
-  version stays.
-- The body of the new version writes a file. The compile writes the file.
-
-Thus 3 of 4 failed edits leave the controller with no program that works.
+A run on 2026-11-21 confirms the first 2 problems for a plain module. 3 of 4 failed
+edits leave the controller with no program that works. The same page gives each case.
 
 An earlier study, [`docs/defladder.md`](../defladder.md), made a back end that generated
 1 Elixir function for each [rung](../../guides/reference/glossary.md#rung). The generated code and the interpreter
@@ -145,8 +121,8 @@ ArgumentError: `t1` is a ton: its preset is the number on its `ton` instruction,
 The good results:
 
 - A compile, a scan and an online edit make no call into a compiler. They add no module
-  and no atom to the BEAM. The script at the end of this section counts it, and prints
-  `calls into a compiler: 0`, `new modules: 0` and `new atoms: 0`.
+  and no atom to the BEAM. A run counts the calls, the modules and the atoms, and finds
+  0 of each. [Runs and tables of the records: the language](../implementation/record-runs-language.md#0001-a-program-is-data) gives the script.
 - A program type is a value. 2 compiles of 1 file give equal values, and a value is the
   same after `:erlang.term_to_binary/1` and back. A host can keep it, send it and
   compare it.
@@ -155,13 +131,12 @@ The good results:
 - Each instruction has 1 definition. A new instruction is a row of `@instructions` and 2
   clauses of `evaluate/3`, and the paths do not change.
   [Add an instruction](../implementation/adding-an-instruction.md) gives the steps.
-- A compile of a program costs much less than a compile of a module. The table under
-  Context gives the times.
+- A compile of a program costs much less than a compile of a module.
 
 The costs:
 
 - An interpreter does more work for each scan than generated code. A scan of `motor.ld`
-  took a median of 2.4 µs in a run on 2026-11-21. This is less than 0.003 of 1 ms.
+  took a median of 2.4 µs in a run on 2026-11-21, less than 0.003 of 1 ms.
 - A host can change a program type by hand, and `Logex.Runtime` checks only a part of
   it. In a run, a rung added by hand wrote 1 to `nowhere`, a tag that the program does
   not declare. `Logex.Runtime.instance/1` and `Logex.Runtime.scan/3` accepted the
@@ -172,87 +147,6 @@ The costs:
   with `well_formed!/1`.
 - logex has no DSL. A host that builds a program in Elixir writes by hand the parse tree
   that `Logex.Parser.parse/1` gives, and calls `Logex.Compiler.instructionize/3` with it.
-
-To count the calls again, run this script beside
-[`motor.ld`](../../guides/tutorials/first-program.md). It compiles `motor.ld`, changes 1
-value in rung 5, and makes an online edit of an instance.
-
-```elixir
-# The modules of the Elixir compiler and of the Erlang compiler.
-compilers = [:elixir, :elixir_compiler, :elixir_module, :elixir_expand, :elixir_erl, :compile]
-Enum.each(compilers, &Code.ensure_loaded!/1)
-Enum.each(compilers, &:erlang.trace_pattern({&1, :_, :_}, true, [:global]))
-
-# An online edit of motor.ld: compile, scan, accept, test, assemble.
-edit = fn ->
-  text = File.read!("motor.ld")
-  {:ok, motor} = Logex.compile(text, name: "motor")
-  changed = String.replace(text, "move 0 speed_sp", "move 600 speed_sp")
-  {:ok, candidate} = Logex.compile(changed, name: "motor")
-  state = Logex.Runtime.instance(motor)
-  {_outputs, state} = Logex.Runtime.scan(motor, state, 10)
-  {:ok, change, _report} = Logex.Edit.accept(motor, candidate, state)
-  {change, state, _report} = Logex.Edit.test(change, state)
-  {_program, _state, _report} = Logex.Edit.assemble(change, state)
-end
-
-# Count the calls into a compiler that a function makes, in each process it starts.
-calls = fn function ->
-  counter =
-    spawn(fn ->
-      count = fn count, n ->
-        receive do
-          {:trace, _pid, :call, _mfa} -> count.(count, n + 1)
-          {:total, from} -> send(from, {:total, n})
-        end
-      end
-
-      count.(count, 0)
-    end)
-
-  :erlang.trace(:new_processes, true, [:call, {:tracer, counter}])
-  :erlang.trace(self(), true, [:call, {:tracer, counter}])
-  function.()
-  :erlang.trace(:all, false, [:call])
-  ref = :erlang.trace_delivered(:all)
-
-  receive do
-    {:trace_delivered, :all, ^ref} -> send(counter, {:total, self()})
-  end
-
-  receive do
-    {:total, n} -> n
-  end
-end
-
-# The first edit loads the modules of logex.
-edit.()
-
-modules = length(:code.all_loaded())
-atoms = :erlang.system_info(:atom_count)
-edit_calls = calls.(edit)
-new_modules = length(:code.all_loaded()) - modules
-new_atoms = :erlang.system_info(:atom_count) - atoms
-
-IO.puts("calls into a compiler: #{edit_calls}")
-IO.puts("new modules: #{new_modules}")
-IO.puts("new atoms: #{new_atoms}")
-
-# The same count for 1 small Elixir module.
-module = fn -> Code.compile_string("defmodule Lamp do def on, do: 1 end") end
-IO.puts("1 Elixir module calls a compiler: #{calls.(module) > 0}")
-```
-
-```console
-$ mix run 0001-a-program-is-data.exs
-calls into a compiler: 0
-new modules: 0
-new atoms: 0
-1 Elixir module calls a compiler: true
-```
-
-The last line is a control. 1 small Elixir module makes calls into the compiler, so the
-count can see a call.
 
 ## Alternatives considered
 

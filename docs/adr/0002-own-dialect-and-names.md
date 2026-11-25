@@ -34,12 +34,14 @@ The current controllers of the [conventional set](../../guides/reference/glossar
 text puts each [operand](../../guides/reference/glossary.md#operand) between parentheses, as in `XIC(start)`, ends a rung with a
 semicolon and writes a [branch](../../guides/reference/glossary.md#branch) with brackets and commas. Earlier controllers write a
 branch with the 3 words `BST`, `NXB` and `BND`. The software of the current controllers
-still takes these 3 words in its text area for 1 rung.
+still takes these 3 words in its text area for 1 rung. The source of this fact is the
+maintainer, who uses that software. No manual states it, and `docs/naming.md` records it
+so, in its row for the parallel branch.
 
 A dialect still needs a rule for its words. Without a rule, a writer names a thing by
 reflex: a new readable word such as `on_delay`, or the word of 1 vendor. In 2024 the
 toolchain of the conventional set renamed 16 mnemonics "to conform to IEC 61131-3 and
-PLCopen standards". For example, `EQU` became `EQ` and `MOV` became `MOVE`. It kept
+PLCopen standards", in the words that `docs/naming.md` quotes. For example, `EQU` became `EQ` and `MOV` became `MOVE`. It kept
 `XIC`, `XIO`, `OTE`, `OTL` and `OTU`, because IEC 61131-3 gives those only a drawing.
 
 ## Decision
@@ -83,7 +85,7 @@ check. [Add an instruction](../implementation/adding-an-instruction.md) gives th
 | `Logex.Configuration.Text` | Words of a [configuration file](../../guides/reference/glossary.md#configuration-file) |
 
 The name of a user [function block](../../guides/reference/glossary.md#function-block) needs no stanza.
-This is the start of the message of the test after a change to the heading of the stanza
+This is the start of the message of the ExUnit test after a change to the heading of the stanza
 of `osr`:
 
 <!-- unchecked: the start of the failure of naming_test.exs, copied from a run on a copy of the repository with the heading of the stanza of osr changed -->
@@ -137,7 +139,7 @@ a new readable word (rule 3).
 
 ### What the dialect settles
 
-The results are those of the script in [The rules in a run](#the-rules-in-a-run).
+[Runs and tables of the records: the language](../implementation/record-runs-language.md#0002-a-dialect-for-logex-and-a-survey-for-each-word) compiles a text for each of these rules. A number in brackets is a result of that run.
 
 - **A branch is punctuation.** `(` opens a branch, `|` separates 2 [legs](../../guides/reference/glossary.md#leg) and `)`
   closes it (result 7).
@@ -182,77 +184,6 @@ parentheses, a `[` in logex has 2 meanings: a branch and a [subscript](../../gui
 
 Thus `( | )` departs from a vendor spelling that is still in use, not only from an old
 one. It is a deliberate exception to rule 2.
-
-### The rules in a run
-
-This script [compiles](../../guides/reference/glossary.md#compile) 9 texts of a motor and of a counter of boxes. Each text has a word
-or a form that this record decides. The last line compares a program in lowercase with
-the same program in uppercase. The script is `examples/0002-own-dialect-and-names.exs`.
-Run it from `examples/`.
-
-```elixir
-# Print "compiles", or each diagnostic of the compile.
-report = fn
-  {:ok, _program} -> IO.puts("  compiles")
-  {:error, diagnostics} -> Enum.each(diagnostics, &IO.puts("  " <> Logex.Diagnostic.format(&1)))
-end
-
-# The declarations of the motor, and of the box counter.
-motor = "var_input start bool\nvar_input stop bool\nvar_output motor bool\n"
-boxes = "var_input eye bool\n"
-
-texts = [
-  {"1. A mnemonic in uppercase", motor <> "XIC start XIO stop OTE motor\n"},
-  {"2. A mnemonic as the name of a tag", motor <> "var Ote bool\nxic start ote motor\n"},
-  {"3. A tag in the wrong case", motor <> "xic Start xio stop ote motor\n"},
-  {"4. The old name of move", motor <> "var speed dint\nmov 600 speed\n"},
-  {"5. A new word for ton", motor <> "var t1 ton\nxic start on_delay t1 3000\n"},
-  {"6. A master control zone", motor <> "xic start mcr\n"},
-  {"7. A branch in words", motor <> "bst xic start nxb xic motor bnd xio stop ote motor\n"},
-  {"8. A rung on 2 lines", motor <> "xic start xio stop\note motor\n"},
-  {"9. ctu_dint, and a ctd on it", boxes <> "var boxes ctu_dint\nxic eye ctd boxes 3\n"}
-]
-
-Enum.each(texts, fn {title, text} ->
-  IO.puts(title)
-  report.(Logex.compile(text, name: "dialect"))
-end)
-
-# The case of a mnemonic, a section and a type word changes nothing in the program.
-{:ok, lower} = Logex.compile(motor <> "xic start xio stop ote motor\n", name: "motor")
-declarations = "VAR_INPUT start BOOL\nVAR_INPUT stop BOOL\nVAR_OUTPUT motor BOOL\n"
-{:ok, upper} = Logex.compile(declarations <> "XIC start XIO stop OTE motor\n", name: "motor")
-same = {lower.rungs, lower.tags} == {upper.rungs, upper.tags}
-IO.puts("The same rungs and tags in uppercase: #{same}")
-```
-
-```console
-$ mix run 0002-own-dialect-and-names.exs
-1. A mnemonic in uppercase
-  compiles
-2. A mnemonic as the name of a tag
-  line 4: `Ote` is an instruction and cannot name a tag
-3. A tag in the wrong case
-  line 4: `Start` is not declared — did you mean `start`? (tags are case-sensitive)
-4. The old name of move
-  line 5: unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)
-5. A new word for ton
-  line 5: unknown instruction `on_delay`
-6. A master control zone
-  line 4: unknown instruction `mcr`
-7. A branch in words
-  line 4: `bst` is no longer a keyword — branches are written `( … | … )`
-  line 4: `nxb` is no longer a keyword — branches are written `( … | … )`
-  line 4: `bnd` is no longer a keyword — branches are written `( … | … )`
-8. A rung on 2 lines
-  line 4: this rung writes nothing and jumps nowhere: none of its instructions writes a tag, a member or a bit, runs an instance or keeps a one-shot's storage bit. A newline ends a rung, so a rung's conditions and its outputs go on one line, as in `xic start xio stop ote motor`
-9. ctu_dint, and a ctd on it
-  line 3: `ctd` runs a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint, but `boxes` is a ctu (declared on line 2): a ctu only counts up; declare it `var boxes ctud` to count both ways
-The same rungs and tags in uppercase: true
-```
-
-The message of result 8 ends with the rule: "A newline ends a rung". Result 9 names
-`ctu` for `boxes`, which `ctu_dint` declares: "`boxes` is a ctu".
 
 ## Consequences
 

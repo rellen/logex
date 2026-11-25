@@ -76,7 +76,7 @@ compiler of the project that stopped the build on a conflict of yecc. 3 adversar
 reviews made it stronger. It cost this:
 
 - 221 lines of guard, coupled to about 8 behaviours of Mix.
-- An 87-second test suite.
+- A suite that took 87 seconds.
 - A gap that the last review found. The build lock of Mix makes 2 builds of 1 project run
   one after the other. Mix 1.20.4 puts this lock under `System.tmp_dir!()`, in lines 132
   to 134 of `mix/sync/lock.ex`. Thus 2 runs of `mix compile` with different values of
@@ -102,7 +102,7 @@ repository at build time.
 |---|---|
 | The golden record, `test/fixtures/frontend_golden.txt`: for each of 1,590 source texts, the tree or the line of the error. `frontend_golden_test.exs` reads it | 1 source text gives a different tree or a different line |
 | The printer's check, in `printer_test.exs`: `Logex.Printer.print/1` prints a tree, and the front end reads that text again | The 2 trees differ in a part other than the line numbers, or the generator of the test does not make each shape of `@required_shapes` |
-| The other tests of the suite: the [rungs](../../guides/reference/glossary.md#rung) of each test, run | A rung does a different thing |
+| The other ExUnit tests of the suite: the [rungs](../../guides/reference/glossary.md#rung) of each ExUnit test, run | A rung does a different thing |
 
 ```mermaid
 flowchart TB
@@ -113,7 +113,7 @@ flowchart TB
   tree --> compiler["Logex.Compiler"]
   golden["Golden<br>record"] -.->|"compares"| tree
   printer["Logex.Printer"] -.->|"prints, reads<br>again"| tree
-  suite["Other<br>tests"] -.->|"run rungs"| compiler
+  suite["Other<br>ExUnit tests"] -.->|"run rungs"| compiler
 ```
 
 Figure: the front end and the 3 checks of the suite. Each check reads what the front end
@@ -165,66 +165,21 @@ The good results:
 - The lexer gives each token its column, and each error its line and column. leex gave
   only the line. For a text that is not UTF-8, the error gives the line and the column of
   the first byte that is not UTF-8.
-- If an overlap changes a result that a test reads, the checks find it. A run on
+- If an overlap changes a result that an ExUnit test reads, the checks find it. A run on
   2026-11-21 put 2 overlaps into a copy of `Logex.Parser`, 1 at a time. The first reads a
   [branch](../../guides/reference/glossary.md#branch) of 1 leg as
   [instructions](../../guides/reference/glossary.md#instruction) in series. It changed 159
-  of the 1,590 source texts of the golden record, and 16 other tests failed. The second
-  drops an empty leg before another leg. It changed 106, and 7 other tests failed.
-
-This script shows 2 good results: logex needs only Erlang/OTP and Elixir, and a tree that
-the printer prints reads back as the same tree. Run it from `examples/`, a Mix project that
-has logex as its dependency. The first run also prints the compile lines of logex.
-
-```elixir
-# Load the description of logex if no Mix project loaded it.
-_ = Application.load(:logex)
-IO.puts("logex needs: #{inspect(Application.spec(:logex, :applications))}")
-
-# The file that each module of logex comes from.
-modules = Application.spec(:logex, :modules)
-files = Enum.map(modules, &to_string(&1.module_info(:compile)[:source]))
-
-from_lib =
-  Enum.all?(files, &(String.contains?(&1, "/lib/logex") and String.ends_with?(&1, ".ex")))
-
-IO.puts("each module comes from a .ex file under lib/: #{from_lib}")
-
-# Text to tokens, tokens to a tree, the tree to text, and that text to a tree again.
-text = """
-( xic start | xic motor ) xio stop ote motor
-xic motor ( xio overtemp | ) ote run_lamp
-"""
-
-{:ok, tokens, _end_line} = Logex.Lexer.tokenize(text)
-{:ok, tree} = Logex.Parser.parse(tokens)
-{:routine, {:rungs, [_rung_1, {:rung, [_xic, _motor, group | _]}]}} = tree
-IO.puts("the branch of rung 2: #{inspect(group)}")
-
-printed = Logex.Printer.print(tree)
-IO.puts(printed)
-{:ok, tokens, _end_line} = Logex.Lexer.tokenize(printed)
-same = Logex.Parser.parse(tokens) == {:ok, tree}
-IO.puts("the printed text reads back as the same tree: #{same}")
-```
-
-```console
-$ mix run 0003-no-dependencies-no-generated-code.exs
-logex needs: [:kernel, :stdlib, :elixir]
-each module comes from a .ex file under lib/: true
-the branch of rung 2: {:branches, [[{:name, 2, "xio"}, {:name, 2, "overtemp"}], []]}
-( xic start | xic motor ) xio stop ote motor
-xic motor ( xio overtemp | ) ote run_lamp
-the printed text reads back as the same tree: true
-```
-
-The branch of rung 2 has 2 [legs](../../guides/reference/glossary.md#leg). The second leg
-is the empty list `[]`. An empty leg passes the power that it receives.
+  of the 1,590 source texts of the golden record, and 16 other ExUnit tests failed. The second
+  drops an empty leg before another leg. It changed 106, and 7 other ExUnit tests failed.
+- A run shows that logex needs only Erlang/OTP and Elixir. It also shows that a tree
+  that the printer prints reads back as the same tree.
+  [Runs and tables of the records: the language](../implementation/record-runs-language.md#0003-no-dependencies-and-no-generated-code)
+  gives it.
 
 The costs:
 
-- Nothing finds an overlap in `Logex.Parser` that no test reads. The caution after this
-  list gives an example.
+- Nothing finds an overlap in `Logex.Parser` that no ExUnit test reads. The caution
+  after this list says what to do.
 - The lexer and the parser are code that a contributor keeps. `lib/logex/lexer.ex` has
   816 lines and `lib/logex/parser.ex` has 455.
 - The `docs` environment needs Hex and the network. `scripts/docs.sh` gets ExDoc from
@@ -234,32 +189,18 @@ The costs:
 > #### Caution {: .error}
 >
 > Do not trust the suite to find an overlap in `Logex.Parser`. Nothing checks the grammar
-> for ambiguity, and an overlap that no test reads passes each check. When you change
+> for ambiguity, and an overlap that no ExUnit test reads passes each check. When you change
 > `Logex.Parser`, add a source text for each form that the change touches to the curated
 > list of `test/fixtures/generate_frontend_golden.exs`. For a new rule of the grammar, add
 > a shape to `@required_shapes` in `printer_test.exs`.
 
-A run on 2026-11-21 shows this cost. The diff adds 1 clause to `legs/3` in
-`lib/logex/parser.ex`. `acc` holds the legs that the parser read before. The new clause
-drops an empty leg when 3 legs or more come before it and another leg follows it:
-
-```diff
-     case branch(tokens, []) do
-+      {:ok, [], [{:nxb, _} | rest]} when length(acc) >= 3 -> legs(rest, open, acc)
-       {:ok, leg, [{:nxb, _} | rest]} -> legs(rest, open, [leg | acc])
-```
-
-The full suite passed with this overlap. But it changes a rung. Declare `aa`, `bb`, `cc`
-and `ee` as `var_input`, each at 0. Then the rung
-`( xic aa | xic bb | xic cc | | xic ee ) ote lamp` sets `lamp` to 1 with the correct
-parser, because the empty leg passes power. With the overlap, the parser drops the empty
-leg, and `lamp` is 0. The overlap does not change rung 2 of the script, because its empty
-leg has only 1 leg before it.
+The same page gives a run of this cost. An overlap that drops an empty leg passed the
+full suite, and it changed the result of a rung.
 
 ## Alternatives considered
 
 - **Keep leex and yecc, with the conflict check as a gate.** The best gate cost 221 lines
-  and an 87-second test suite, and 2 builds with different values of `TMPDIR` still passed
+  and a suite of 87 seconds, and 2 builds with different values of `TMPDIR` still passed
   a conflict.
 - **A hand-written lexer with yecc.** It has the same gap. It also keeps `parsetools` and
   the generated `src/*.erl`.
