@@ -4,7 +4,9 @@ This page is for a contributor. Read it before your first build of logex. It giv
 things:
 
 - the versions of Erlang/OTP and Elixir that logex builds on, and how to install them
-- the gates that each commit must pass, and the 2 workflows of CI
+- the gates that each commit must pass
+
+[Dialyzer and CI](dialyzer-and-ci.md) gives the fifth gate and the 2 workflows of CI.
 
 [The changelog and the release step](releasing.md) gives the changelog that the suite
 checks at each commit. It also gives the script that makes the Git tag of a release.
@@ -17,17 +19,8 @@ checks at each commit. It also gives the script that makes the Git tag of a rele
 
 ## What the toolchain and the gates do
 
-This page uses these words:
-
-| Word | Meaning |
-|---|---|
-| Toolchain | Erlang/OTP and Elixir, which build and run logex |
-| Pin | A version that a file of the repository names |
-| Gate | 1 command that must exit with 0 before you commit |
-| Test | An ExUnit test in a file under `test/` |
-| CI | The 2 workflows, `ci.yml` and `docs.yml`, that GitHub Actions runs on each push and each pull request |
-| Failures manifest | The file of ExUnit that names the tests that failed: `_build/test/lib/logex/.mix/.mix_test_failures` |
-| PLT | The file of Dialyzer that holds the types of the functions of the applications that logex calls |
+[The words of the contributor pages](words.md) gives the words of this page: toolchain,
+pin, gate, test, CI, failures manifest and PLT.
 
 A change goes through the same checks on your computer and in CI. This diagram shows the
 path of a commit from your computer to the site of the documentation.
@@ -147,7 +140,7 @@ A commit must pass 5 gates, in this order:
 | 2 | `mix compile --force --warnings-as-errors` | A warning in any module of `lib/`, also in a file that you did not change |
 | 3 | `MIX_ENV=test mix compile --force --warnings-as-errors` | A warning in `lib/` when it compiles in the `test` environment |
 | 4 | `mix test --warnings-as-errors` | A test that fails and a warning in a test file. With `scripts/failed.exs`, also a suite that does not finish |
-| 5 | `scripts/dialyzer.sh` | A warning of Dialyzer, for example a spec that the code does not keep or an answer that the code drops ([Dialyzer](#dialyzer)) |
+| 5 | `scripts/dialyzer.sh` | A warning of Dialyzer, for example a spec that the code does not keep or an answer that the code drops ([Dialyzer and CI](dialyzer-and-ci.md)) |
 
 ### `scripts/gate.sh`
 
@@ -229,65 +222,6 @@ find that run red.
 ExUnit keeps a failure in the manifest until a run passes that test. Thus, after runs by
 hand, the manifest can name a failure of an earlier run.
 
-## Dialyzer
-
-`scripts/dialyzer.sh` runs `dialyzer`, the type checker of Erlang/OTP. It adds no
-dependency. It compiles logex in the `dev` environment. Then Dialyzer compares each
-module with its `@spec` declarations and with the PLT. The PLT holds `erts`, `kernel`,
-`stdlib` and `elixir`. Its file is under `_build/dialyzer/`, and its name holds the
-versions of the toolchain and the applications.
-
-- The script uses the default warnings of Dialyzer and 6 more: `-Wextra_return`,
-  `-Wmissing_return`, `-Wunderspecs`, `-Woverlapping_contract`, `-Wopaque_union` and
-  `-Wunmatched_returns`.
-- It prints `DIALYZER-OK`, or `DIALYZER-FAIL rc=<n>`. Code 2 means that Dialyzer found
-  a warning. Code 1 is a run of Dialyzer that failed for another cause. Code 127 means
-  that no `dialyzer` is on the path. If the compile fails, the script exits with the code
-  of Mix.
-- The first run builds the PLT and takes about 1 minute. A later run took 17 s to 27 s on
-  a computer of 4 cores.
-
-`scripts/gate.sh` runs it as its fifth step, after the suite passes (decision 549), and
-`ci.yml` runs it as its last step. A red fifth step prints `GATE-FAIL rc=<n>`, then a line
-that names the step and the log. With `-Wunmatched_returns`, Dialyzer refuses a call
-whose answer the code drops. Write `_ = ...` where the code drops an answer on purpose,
-and add its line to `test/logex/dropped_answers_test.exs` with the reason (decision 550).
-Correct a warning in the code.
-Do not hide it with an `@dialyzer` attribute, a wider `@spec` or `no_return()`.
-
-## CI
-
-GitHub Actions runs 2 workflows on each push and each pull request. Each workflow uses
-`ubuntu-latest`, Erlang/OTP 28 and Elixir 1.20.4.
-
-`ci.yml`, the workflow "CI":
-
-- Its steps are the 5 gates, 1 step each.
-- It is red when a step exits with a code that is not 0.
-- Its step of the suite does the same as `scripts/gate.sh`. It deletes the failures
-  manifest, runs `mix test --warnings-as-errors` and then `elixir scripts/failed.exs
-  --exit` with its code. Thus the log of a red run ends with each test that failed.
-- No step of `ci.yml` has `if:` or `continue-on-error:`.
-  `test/logex/scripts_test.exs` compares `ci.yml` with these rules and runs its step of
-  the suite.
-
-`docs.yml`, the workflow "Docs":
-
-- Its steps are `scripts/docs.sh`, then the publish of the site.
-- It is red when `scripts/docs.sh` fails. For example, the build gives a warning or a
-  dead link that `docs/site-warnings.txt` does not list. Or `docs/site-warnings.txt`
-  lists a warning that the build does not give.
-- It publishes the site only on a push to `main`. It first asks GitHub for the source of
-  Pages. If the source is not GitHub Actions, the run publishes nothing, shows a notice
-  and stays green.
-
-To publish the site from your fork, set Settings, Pages, Build and deployment, Source:
-GitHub Actions. [Add and check a page](../check-a-page.md) gives `scripts/docs.sh`.
-
-A push runs CI on its last commit only. Push each commit that you want CI to check, and
-read its run. If the run of `ci.yml` is red, the commit is red. This is true also when
-`scripts/gate.sh` was green on your computer.
-
 ## Why it is built this way
 
 - **1 toolchain** (decision 359). The repository checks 1 pair of versions, the pair that
@@ -298,22 +232,13 @@ read its run. If the run of `ci.yml` is red, the commit is red. This is true als
   Until September 2026 the bound was `~> 1.15`. OTP 26 left support on 2026-05-26, and
   Elixir 1.15 left the window of security fixes on 2026-06-03.
 - **Exit codes, not output** (decisions 337 and 515 (e)). Elixir 1.20 prints
-  `Result: 1/2 passed` for a run of 2 tests with 1 failure. The line names no test, and a
-  search for `[0-9]+ passed` reads it as a pass. Thus `scripts/gate.sh` and `ci.yml` read
-  the failures manifest and name each test that failed.
+  `Result: 1/2 passed` for a run with 1 failure, and a search for `[0-9]+ passed` reads
+  it as a pass. [Dialyzer and CI](dialyzer-and-ci.md) gives this reason and the others of
+  CI.
 - **`--force` and a second build for `test`.** `--force` compiles each module again, so
   a warning in a file that you did not change also fails. The suite compiles `lib/` in
   the `test` environment, into `_build/test`. The third gate checks that build for
   warnings.
-- **Dialyzer of Erlang/OTP** (decision 515 (c)). It checks the `@spec` of the
-  [host contract](../../guides/reference/glossary.md#host-contract) and adds no
-  dependency. Correct the code until Dialyzer gives no warning (decision 551). No mark
-  hides a warning.
-- **`if:` and `continue-on-error:` in `ci.yml`** (decision 515 (e)). An `if:` can skip a
-  step. With `continue-on-error: true`, a step that fails is green.
-- **ExDoc only in `docs`** (decisions 546 and 548). Mix needs Hex to read an entry of
-  Hex, in each environment. Thus an entry with `only: :docs` makes each build need Hex.
-  A function `deps/1` of `mix.exs` gives ExDoc to the `docs` environment only.
 
 ## How to change it
 
@@ -332,12 +257,11 @@ To change the pinned versions:
    `grep -rn '1\.20\|28\.5' --include=*.md .`.
 6. Run `scripts/gate.sh` and `scripts/dialyzer.sh` on the new toolchain.
 
-These tests fail on a wrong change:
+This test fails on a wrong change:
 
 | Change | Test that fails |
 |---|---|
 | `docs.yml` with versions that are not those of `ci.yml`, or not `28` and `1.20.4` | `docs_test.exs`: `its toolchain is the pair CI pins, set up as CI sets it up` |
-| A step of `ci.yml` removed, or with `if:` or `continue-on-error:` | `scripts_test.exs`: `CI's workflow (decision 515 (e))` |
 
 No test finds a stale version in the other files or in a page.
 
@@ -353,6 +277,7 @@ These problems can occur on a clone:
 
 - [0021. A pinned toolchain and the gates](../adr/0021-pinned-toolchain-and-gates.md)
   and [0022. Typespecs and Dialyzer](../adr/0022-typespecs-and-dialyzer.md).
+- [Dialyzer and CI](dialyzer-and-ci.md): the fifth gate and the 2 workflows.
 - [The checks of a change](../implementation/testing-checks.md): the mutation tables, the
   examples of the pages and the gate.
 - [The test strategy](../implementation/testing-strategy.md): the kinds of test.

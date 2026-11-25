@@ -2,11 +2,19 @@
 
 This record is for a contributor who wants to know why logex is built this way. Copy this
 file to `docs/adr/NNNN-short-title.md` and add its line to `docs/pages.exs`. Keep the
-record to 1 page of text.
+record to about 1,500 words, and 2,000 words at most. Put each run, each measurement and
+each long table on a contributor page under `docs/implementation/`, and link to it.
 
 ## Status
 
-Accepted, replaced or withdrawn. If a later record replaces this record, link to it.
+Accepted, Replaced or Withdrawn. A later decision can change the record:
+
+- If the choice of the record holds, edit the record in place. Name the new decision
+  here, and add it to the last section.
+- If the choice changes, write a new record. Give this record the status Replaced, with
+  a link to the new record.
+- If a decision drops the choice and gives no new one, give this record the status
+  Withdrawn, with the number of that decision.
 
 ## Date
 

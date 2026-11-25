@@ -161,7 +161,7 @@ IR what `Logex.Parser.well_formed!/1` is to the parse tree.
 | `blocks` | Each user block type of the program, at each depth, 1 time, by name |
 | `units` | For each timer that does not count in ms, what 1 ms adds to its `acc`: 1,000,000 for a long timer |
 | `reals` | The type of each real tag and each array of reals |
-| `arrays` | The type of each array: `{:array, type, sizes}` |
+| `arrays` | The type of each array of an elementary type: `{:array, type, sizes}`. An array of timers, counters or blocks is not in it: its tag holds its type |
 | `retained` | Each path that a [warm restart](../../guides/reference/glossary.md#warm-restart) keeps |
 | `warnings` | Each warning in line order, then the warnings of each block that the loader read |
 
@@ -173,8 +173,9 @@ instance of a user block names its type as `{:block, name}`, and `blocks` holds 
 
 ### The walk
 
-`Logex.Walk` is the only walk of the IR. The compiler, `Logex.Warnings`, `Logex.Edit` and
-`Logex.Configuration.check/1` read the IR through it. It gives the instructions, the uses
+`Logex.Walk` is the only walk of the IR. The compiler, `Logex.Warnings`, `Logex.Edit`,
+`Logex.Configuration.check/1` and `Logex.Runtime` read the facts of the IR through it. The
+evaluator runs the IR, and does not use it. It gives the instructions, the uses
 and the writes of a program, its
 [one-shots](../../guides/reference/glossary.md#one-shot), its timers and its
 [counters](../../guides/reference/glossary.md#counter). It goes into each block that a

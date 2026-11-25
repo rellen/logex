@@ -1,9 +1,10 @@
 # The test strategy
 
 This page is for a contributor. It tells how the tests of logex find a defect by a run of
-the code. Read it before you add a test or change a rule in `lib/`. 3 other pages
+the code. Read it before you add a test or change a rule in `lib/`. 4 other pages
 complete it:
 
+- [Oracles and walks](testing-walks.md) gives the oracles, the walks and their reach.
 - [The checks of a change](testing-checks.md) gives the mutation tables and the gate.
 - [The cost of a stage in reductions](testing-cost.md) gives the tests of cost.
 - [Tests of time](testing-time.md) gives the tests of the clock.
@@ -21,24 +22,8 @@ reasoning." A claim about logex is true only when a run shows it. The suite turn
 claim of the code and of the pages into a run. A change to `lib/` comes with a run that
 fails when the change is wrong.
 
-This page uses these words:
-
-| Word | Meaning |
-|---|---|
-| Test | A test of the suite. On this page it is not the [test](../../guides/reference/glossary.md#test) step of an online edit |
-| Stage | 1 part of the path from source text to a result: the lexer, the parser, the compiler or the runtime |
-| Seam | The place where 1 stage gives its result to the next stage |
-| IR | The instructions that the compiler gives and the runtime runs |
-| Oracle | A function that gives the expected result from the text of a program alone. It calls no module of logex |
-| Harness | The code of a test that runs logex and gives its results to an oracle |
-| Walk | A test that draws programs, inputs and host calls at random, and checks each result. It is a property test |
-| Seed | The start value of the random draws of a walk. The same seed gives the same walk |
-| Family of seeds | A set of seeds that differ in 1 element, for example `{n, 77, 7}` for each `n` from 1 to 100 |
-| Reach | The cases that a walk meets. A walk asserts its reach |
-| Mutant | A copy of `lib/` with 1 rule changed or removed |
-| Mutation table | 1 row for each mutant: the tests that fail on it, or `SURVIVED` |
-| Reduction | The unit of work of the BEAM. `Process.info(pid, :reductions)` gives the count of a process |
-| Twin | A second program that makes each call of the first program as often. [The cost of a stage](testing-cost.md) uses it |
+[The words of the contributor pages](../contributing/words.md) gives the words of this
+page: test, stage, seam, oracle, walk, seed, reach, mutant and the others.
 
 ### The kinds of test
 
@@ -139,99 +124,11 @@ changed: 130 differences in 200 scans
 
 ## How it is built
 
-### Oracles
+### Oracles and walks
 
-An oracle knows only the text of the [program](../../guides/reference/glossary.md#program)
-and the rules of the language. It does not read the IR, the
-[instance](../../guides/reference/glossary.md#instance) or the evaluator. A test of
-`end_to_end_test.exs` passes only when the lexer, the parser, the compiler and the
-runtime agree. Its assertions name no IR tag. The file has only 1 shape of the parse
-tree: the helper `rung_count/1` matches the wrapper `{:routine, {:rungs, _}}`.
-
-`PLAN.md` gives each milestone 1 sentence that says when the milestone is done. The tests
-of Milestones 5 and 6 run that sentence in `end_to_end_test.exs`. Each runs 1 plant from
-files on disk, for example `Milestone 6's done sentence in one plant`.
-
-A stage test types the input of 1 stage by hand. It does not see a change in the form
-that the stage before it gives.
-
-A walk has 2 kinds of check:
-
-| Check | What it does | What it cannot find |
-|---|---|---|
-| Restatement | It restates a rule of `docs/organisation.md` from the text of the programs, and compares | A misreading of the rule that the code shares |
-| Independent check | It checks a fact that is true for each correct rule | A rule that the fact does not touch |
-
-In an [online edit](../../guides/reference/glossary.md#online-edit), each step returns a
-[report](../architecture/online-edit.md#the-report). An output that the old program
-drives and the new program does not drive is a held output. The independent checks of
-the walk of the online edit are these:
-
-- Apply the writes that a report lists to the
-  [state](../../guides/reference/glossary.md#state) before the step. The result must be
-  the state after the step.
-- A held output has the value that the walk saw the host get last. If the new program
-  still has the output, the value is the value of its next scan.
-- A [one-shot](../../guides/reference/glossary.md#one-shot) pulses only if the scan
-  before ran the same `ons` rung with its condition 0.
-- A test and then an [untest](../../guides/reference/glossary.md#untest), with no scan
-  between them, give back the original state.
-- No scan lets a [timer](../../guides/reference/glossary.md#timer) gain more than the
-  time of that scan.
-
-A walk has both kinds of check. A rule that the independent checks cannot see has a
-separate test in `edit_test.exs`, with its values written by hand. An independent check
-uses no value from the code that it checks. It does not use the reports of an edit.
-
-The oracles follow the rule of `lib/`: clauses, not conditionals. In
-`api_contract_test.exs`, a function that draws a program, an input or a step at random
-can hold a conditional. Its module names the function in `@draws`.
-`end_to_end_test.exs`, `readme_test.exs` and the scripts under `examples/` hold no
-conditional. `clauses_test.exs` reads the syntax trees and refuses each other
-conditional.
-
-### Walks and their reach
-
-The contract walks are in `api_contract_test.exs`. They cover these parts:
-
-- the host contract, the online edit and the resource
-- the runner and the reach across types
-- the life of the [store](../../guides/reference/glossary.md#store)
-- the held points of the edit of a configuration
-
-Other files have seeded walks also, for example `end_to_end_test.exs`, `printer_test.exs`
-and the mutation walk of `compile_total_test.exs`.
-
-Each walk sets a fixed seed, for example `:rand.seed(:exsss, {2026, 10, 2})`. Thus a
-failure occurs again on the next run. Each contract walk checks the
-[host contract](../../guides/reference/glossary.md#host-contract) on each call:
-
-- An error in the source text is a returned
-  [diagnostic](../../guides/reference/glossary.md#diagnostic).
-- A wrong argument of the host is an `ArgumentError` with a documented message.
-- logex raises no other error.
-
-A walk tests only what its draws reach. Thus each walk asserts its reach: each stage of
-the compile, each kind of refusal, each kind of report and each oracle. In a copy of the
-repository, the compile walk drew 20 sources in place of 2,000. It failed with this
-message:
-
-<!-- unchecked: the message of the failed assertion, from a run of the compile walk with 20 sources, in a copy of the repository -->
-```text
-no source reached the message containing "a declaration takes `retain` or `non_retain`, not both"
-```
-
-Each condition of a restated rule has an atom of the reach for the case that it decides.
-Each walk draws enough cases that its rarest atom occurs 15 times or more in a run. The
-3 families of `api_contract_test.exs` are `{n, 77, 7}`, `{n, 1, 1}` and `{7, n, 2026}`.
-[How to change it](#how-to-change-it) gives the steps to size a walk.
-
-| Walk | Draws in a run |
-|---|---|
-| The compile walk | 2,000 sources |
-| The runtime walk | 150 programs |
-| The walk of the online edit | 400 edits |
-| The walk of the resource | 1,000 [configurations](../../guides/reference/glossary.md#configuration) |
+An oracle restates the rules of the language from the text of a program. A walk draws
+its cases from a fixed seed, and asserts its reach. [Oracles and walks](testing-walks.md)
+gives the 2 kinds of check of a walk, the contract walks and their sizes.
 
 ### Tests of time
 
@@ -276,21 +173,8 @@ the tests that read the source and the gate.
 
 ## How to change it
 
-To add a condition to a walk:
-
-1. Add an atom of the reach for the case that the condition decides.
-2. Measure the rate of the atom over 1 family of seeds.
-3. Size the draws so that the atom occurs 15 times or more in a run.
-4. Run the walk under 60 seeds or more, from families other than the one that you
-   measured the rate on. The reach assertion must pass at each seed.
-
-To add an oracle:
-
-1. Write the oracle from the text of the program and the rules of the language. Use no
-   module of logex.
-2. Write each rule as 1 clause. Give each clause an atom of the reach.
-3. Change 1 rule of `lib/` that the oracle covers. Run the test and see it fail. Then
-   put the rule back.
+To add an oracle, a walk or a condition of a walk, follow
+[Oracles and walks](testing-walks.md#how-to-change-it).
 
 For a fix, a new rule, a change of the language or a new pass, follow
 [The checks of a change](testing-checks.md). For a new real-clock or runner test, follow
@@ -298,6 +182,7 @@ For a fix, a new rule, a change of the language or a new pass, follow
 
 ## See also
 
+- [Oracles and walks](testing-walks.md): the oracles, the walks and their reach.
 - [The cost of a stage in reductions](testing-cost.md): growth tests, twins and ceilings.
 - [Tests of time](testing-time.md): the manual clock, the real clock and the load runs.
 - [The checks of a change](testing-checks.md): mutation tables, the examples of the
