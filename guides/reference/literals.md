@@ -99,7 +99,7 @@ Wrong texts 1 to 6 show the [diagnostics](#the-diagnostics) of these rules.
 > logex does not change the value of a based integer literal for a signed type. The
 > literal `16#ffff` is 65535, and the largest value of an `int` is 32767. Thus
 > `move 16#ffff trim` is an error if `trim` is an `int`. A Logix controller writes -1
-> for the same text. In logex, `move -1 trim` writes the same 16 bits into the `int`.
+> for the same text (1756-RM018A, page 869). In logex, `move -1 trim` writes the same 16 bits into the `int`.
 > `move 16#ffff count` is correct if `count` is a `uint`, and it writes 65535.
 
 [Use bit strings](../howto/use-bit-strings.md) shows how to write a pattern of bits to a
@@ -333,27 +333,11 @@ bit is a `bool`.
 
 ### Values of each type
 
-The first table gives the literals of an integer form that are correct for each
-[elementary type](glossary.md#elementary-type). The second table gives the other rules
-and the rules for a real literal.
-
-| Type | Literal of an integer form |
-|---|---|
-| `bool` | 0 or 1 |
-| `sint` | -128 to 127 |
-| `int` | -32768 to 32767 |
-| `dint` | -2147483648 to 2147483647 |
-| `lint` | -9223372036854775808 to 9223372036854775807 |
-| `usint` | 0 to 255 |
-| `uint` | 0 to 65535 |
-| `udint` | 0 to 4294967295 |
-| `ulint` | 0 to 18446744073709551615 |
-| `byte` | 0 to 255 |
-| `word` | 0 to 65535 |
-| `dword` | 0 to 4294967295 |
-| `lword` | 0 to 18446744073709551615 |
-| `real` | Each integer that a `real` holds exactly |
-| `lreal` | Each integer that an `lreal` holds exactly |
+A literal of an integer form is correct for an
+[elementary type](glossary.md#elementary-type) if the type holds its value.
+[Elementary types](declarations-and-types.md#elementary-types) gives the smallest and the
+largest value of each type. This table gives the other rules and the rules for a real
+literal.
 
 | Item | Rule |
 |---|---|
@@ -570,7 +554,6 @@ logex keeps the text of each literal. Each rule of this page uses only the value
 | Item | Rule |
 |---|---|
 | A diagnostic and a warning | The message shows the literal with the characters of the source text: `16#ffff`, `007`, `-0`. |
-| The printer | `Logex.Printer.print/1` prints the tree that `Logex.Parser.parse/1` gives, as text. It prints each literal with the characters of the source text: `move 16#00ff mask`. It does not take a compiled program. `Logex.Printer` is not a part of the [host contract](glossary.md#host-contract). |
 | The value | `255`, `16#ff`, `16#00ff` and `2#1111_1111` have the same value. Each rule reads them as the same. `1500.0` and `1.5e3` have the same value also. |
 | An [online edit](glossary.md#online-edit) | If you change only the text of a literal and not its value, the rung does not change. The same rule applies to an initial value. The report of the edit is empty. [Online edit](online-edit.md) gives the rules. |
 

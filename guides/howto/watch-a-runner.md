@@ -392,31 +392,31 @@ end
 
 ## If it does not work
 
-| What you see | Cause and what to do |
-|---|---|
-| The watcher gets no event | A different process called `subscribe/2`, for example your script. Call it in `init/1` of the watcher. |
-| The watcher gets no `:ran` and no `:round` event | `subscribe/1` does not subscribe to these kinds. Name them in the list of `subscribe/2`. |
-| The events of a kind stop after a second `subscribe/2` | The second call replaces the kinds of the first. Give each kind in 1 call. |
-| The watcher gets no trip event, but `status` is `:tripped` | The trip came before the watcher subscribed. Read the status map in `init/1`, after `subscribe/2`. |
-| The watcher stops at the first event, and the log has `no function clause matching` and `handle_info` | You gave the runner by its `name:`. The watcher compares the event with the name, but the event holds the pid. Get the pid with `GenServer.whereis/1`. |
-| The mailbox of the watcher gets longer, and the memory goes up | The watcher subscribed to `:ran` or `:round`, or it is slower than the events. Remove those kinds, or make each clause shorter. |
-| `{:retain, {:warning, message}}` when the watcher subscribes | A different program wrote the store that the start read. The runner sends it 1 time to each subscriber whose kinds include `:retain`. [Take back a deploy](take-back-a-deploy.md) gives the steps. |
-| `{:forces, {:error, reason}}` at a stop | The runner did not read its forces file at its start, and its write at the stop failed. The next start can bring back an old [force](../reference/glossary.md#force). [Force an input point](force-inputs.md) gives the forces file. |
-| `k1` is 1 after a trip | `get!/2` gives the value of the last round. The runner wrote 0 to the output points of each device that answered. Read `status` and `unzeroed`: `unzeroed` lists each device whose outputs can still be on. |
+| What you see | Cause | What to do |
+|---|---|---|
+| The watcher gets no event | A different process called `subscribe/2`, for example your script. | Call it in `init/1` of the watcher. |
+| The watcher gets no `:ran` and no `:round` event | `subscribe/1` does not subscribe to these kinds. | Name them in the list of `subscribe/2`. |
+| The events of a kind stop after a second `subscribe/2` | The second call replaces the kinds of the first. | Give each kind in 1 call. |
+| The watcher gets no trip event, but `status` is `:tripped` | The trip came before the watcher subscribed. | Read the status map in `init/1`, after `subscribe/2`. |
+| The watcher stops at the first event, and the log has `no function clause matching` and `handle_info` | You gave the runner by its `name:`. The watcher compares the event with the name, but the event holds the pid. | Get the pid with `GenServer.whereis/1`. |
+| The mailbox of the watcher gets longer, and the memory goes up | The watcher subscribed to `:ran` or `:round`, or it is slower than the events. | Remove those kinds, or make each clause shorter. |
+| `{:retain, {:warning, message}}` when the watcher subscribes | A different program wrote the store that the start read. The runner sends it 1 time to each subscriber whose kinds include `:retain`. | [Take back a deploy](take-back-a-deploy.md) gives the steps. |
+| `{:forces, {:error, reason}}` at a stop | The runner did not read its forces file at its start, and its write at the stop failed. The next start can bring back an old [force](../reference/glossary.md#force). | [Force an input point](force-inputs.md) gives the forces file. |
+| `k1` is 1 after a trip | `get!/2` gives the value of the last round. The runner wrote 0 to the output points of each device that answered. | Read `status` and `unzeroed`: `unzeroed` lists each device whose outputs can still be on. |
 
 `Logex.Runner.subscribe/2` and `Logex.Runner.get!/2` raise an `ArgumentError` with the
 messages of this table. In this guide, the calls are in `init/1`, and `start_link/1`
 links the watcher to the script. Thus the script stops, and its error starts with
 `** (EXIT from`. The next line gives the message.
 
-| Message | Cause and what to do |
-|---|---|
-| `a runner's events are subscribed by a list of their kinds, among :overlap, :fault, :trip, :restart, :edit, :retain, :forces, :ran and :round, got: [:rounds]` | A kind has a wrong name, or the kinds are not in a list, for example `:trip`. Give a list of the kinds of step 1. |
-| `the runner #PID<0.155.0> is not running` | The runner stopped or crashed before the call. Start the watcher after the runner. |
-| `no runner is running under the name Nope` | No runner has this `name:`. Give the name of the runner. |
-| `no runner is running under the name nil` | `GenServer.whereis/1` gave `nil`, because no runner had this name when the watcher started. Start the watcher after the runner. |
-| `` `b1` is a program instance of `boxes`, which declares no `cont` — did you mean `count`? `` | The program of the instance has no tag of this name. Give `instance.tag` with a tag of the program. |
-| `` `k2` is neither a global nor a program instance `` | The name is not the name of a global or of an instance. Give the name of a global, or `instance.tag`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `a runner's events are subscribed by a list of their kinds, among :overlap, :fault, :trip, :restart, :edit, :retain, :forces, :ran and :round, got: [:rounds]` | A kind has a wrong name, or the kinds are not in a list, for example `:trip`. | Give a list of the kinds of step 1. |
+| `the runner #PID<0.155.0> is not running` | The runner stopped or crashed before the call. | Start the watcher after the runner. |
+| `no runner is running under the name Nope` | No runner has this `name:`. | Give the name of the runner. |
+| `no runner is running under the name nil` | `GenServer.whereis/1` gave `nil`, because no runner had this name when the watcher started. | Start the watcher after the runner. |
+| `` `b1` is a program instance of `boxes`, which declares no `cont` — did you mean `count`? `` | The program of the instance has no tag of this name. | Give `instance.tag` with a tag of the program. |
+| `` `k2` is neither a global nor a program instance `` | The name is not the name of a global or of an instance. | Give the name of a global, or `instance.tag`. |
 
 ## See also
 

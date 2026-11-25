@@ -38,7 +38,7 @@ You must have:
 - The options that you gave to `Logex.Runner.start_link/1`, for example
   `retain: "tally.retain"`.
 
-If release 1 ran an [online edit](../reference/glossary.md#online-edit) that you tested or
+If release 1 ran an [online edit](../reference/glossary.md#online-edit) that you put under test or
 assembled, write the edit to the files of release 1 first. The copy holds the values of
 the edited program.
 

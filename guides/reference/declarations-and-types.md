@@ -109,8 +109,8 @@ of a [one-shot](glossary.md#one-shot).
 | The case of the words | A section word, a qualifier and a built-in type word are not case-sensitive: `VAR_INPUT eye BOOL` is correct. The name of a tag is case-sensitive. |
 | A tag that no rung uses | The program [compiles](glossary.md#compile). logex gives a [warning](glossary.md#warning) for the tag. [Warnings](warnings.md) gives each warning. |
 | A tag from Elixir | `Logex.Tag.new!/5` makes a tag with the rules of this page. It is a part of the [host contract](glossary.md#host-contract). If the tag breaks a rule, the function raises an `ArgumentError`. The message is the message of the diagnostic for the same declaration, with no line number. |
-| Where a tag from Elixir goes | `Logex.Compiler.instructionize/3` takes a list of these tags. This function is not a part of the host contract. `Logex.compile/2` takes no tag. |
-| A qualifier on a `var_input` from Elixir | `Logex.Tag.new!/5` does not know if the tag is for a program. Thus it takes the qualifier, and `Logex.Compiler.instructionize/3` raises the `ArgumentError` for a program. |
+| Where a tag from Elixir goes | `Logex.compile/2` and `Logex.compile_file/1` take no tag. A program declares each tag in its text. |
+| A qualifier on a `var_input` from Elixir | `Logex.Tag.new!/5` does not know if the tag is for a program. Thus it takes the qualifier. |
 
 Wrong texts 1 to 13 show the [diagnostics](#the-diagnostics) of these rules.
 

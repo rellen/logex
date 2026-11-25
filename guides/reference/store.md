@@ -249,10 +249,8 @@ wrote the store. A warm start compares them with the program that it got.
 
 | Digest | Of what |
 |---|---|
-| `resource` | The tasks, globals, instances and connections of the configuration, as the printer of the configuration prints them, with no line numbers |
-| `program` | The text of the program type as `Logex.Printer` prints it, and the text of each user block that it holds, after it |
-
-The printer of the configuration is `Logex.Configuration.Text.print/1`.
+| `resource` | The tasks, globals, instances and connections of the configuration, as text with no line numbers |
+| `program` | The text of the program type in a fixed form, and the text of each user block that it holds, after it. |
 
 | A change to a file | Changes the digest |
 |---|---|

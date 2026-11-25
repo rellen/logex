@@ -358,19 +358,19 @@ Most of these diagnostics are at the first `program` line that names the
 `var_external` tag also gives its line in `conveyor.ld`. A diagnostic of a connection
 line is at that line.
 
-| What you see | What to do |
-|---|---|
-| `` there is no global `estop`: declare it `` | No `var_global` line for the tag. Add the line that the message gives. |
-| `` did you mean `estp`? `` | A spelling error. Give the global and the tag the same name. |
-| `(names are case-sensitive)` | The tag has a different case. Write the name as the global has it. |
-| `` but `estop` is an int `` | The global has a different type, for example `int` for a `bool` tag. Give the tag the type of the global. |
-| `never widened` | 2 different number or bit-string types, for example `sint` and `int`. Give the tag the type of the global. |
-| `every dimension included` | An array of a different type or size. Give the tag the type and the sizes of the global. |
-| `not a global` | The name of a task or an instance. Give the global and the tag a different name. |
-| `` reaches the global `estop` itself `` | A connection line for the `var_external` tag. Remove the line. |
-| `nothing writes an input point` | An instruction writes a global at an input point. Remove the write, or use a global with no `at`. |
-| `` there is no `conveyor.ld` beside `` | No `conveyor.ld` in the directory of `line.logex`. Put the file there. |
-| `` leaves its var_input `stop` unconnected `` | No connection for a `var_input` tag. Connect it, for example `c1.stop 0`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` there is no global `estop`: declare it `` | No `var_global` line for the tag. | Add the line that the message gives. |
+| `` did you mean `estp`? `` | A spelling error. | Give the global and the tag the same name. |
+| `(names are case-sensitive)` | The tag has a different case. | Write the name as the global has it. |
+| `` but `estop` is an int `` | The global has a different type, for example `int` for a `bool` tag. | Give the tag the type of the global. |
+| `never widened` | 2 different number or bit-string types, for example `sint` and `int`. | Give the tag the type of the global. |
+| `every dimension included` | An array of a different type or size. | Give the tag the type and the sizes of the global. |
+| `not a global` | The name of a task or an instance. | Give the global and the tag a different name. |
+| `` reaches the global `estop` itself `` | A connection line for the `var_external` tag. | Remove the line. |
+| `nothing writes an input point` | An instruction writes a global at an input point. | Remove the write, or use a global with no `at`. |
+| `` there is no `conveyor.ld` beside `` | No `conveyor.ld` in the directory of `line.logex`. | Put the file there. |
+| `` leaves its var_input `stop` unconnected `` | No connection for a `var_input` tag. | Connect it, for example `c1.stop 0`. |
 
 ### The program type does not compile
 
@@ -378,12 +378,12 @@ If the error is in the file of a program or of a block, the first message is
 ``program type `conveyor` does not compile``. It names the file of the error. The next
 message gives the error and its line in that file.
 
-| What you see | What to do |
-|---|---|
-| `` `estop` is a var_external: `` and `takes no initial value` | An initial value on the `var_external` line. Remove it. A global with no `at` can have one. |
-| `cannot be a var_external in a function block's file` | A `var_external` in a [function block](../reference/glossary.md#function-block). Declare a `var_input` in the block. Give it the global as an [operand](../reference/glossary.md#operand) of the `cal`. |
-| `is a keyword of a configuration file` | Give the tag and the global a different name. |
-| `an instance is the program's own` | A [timer](../reference/glossary.md#timer), a [counter](../reference/glossary.md#counter) or a block declared with `var_external`. Declare it with `var`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` `estop` is a var_external: `` and `takes no initial value` | An initial value on the `var_external` line. | Remove it. A global with no `at` can have one. |
+| `cannot be a var_external in a function block's file` | A `var_external` in a [function block](../reference/glossary.md#function-block). | Declare a `var_input` in the block. Give it the global as an [operand](../reference/glossary.md#operand) of the `cal`. |
+| `is a keyword of a configuration file` | The name of the tag is a word of the configuration file, for example `task`. | Give the tag and the global a different name. |
+| `an instance is the program's own` | A [timer](../reference/glossary.md#timer), a [counter](../reference/glossary.md#counter) or a block declared with `var_external`. | Declare it with `var`. |
 
 [Write a function block](write-a-function-block.md) shows the operands of a `cal`.
 
@@ -392,22 +392,22 @@ message gives the error and its line in that file.
 `Logex.Runtime.put_inputs/3` and `Logex.Runtime.cycle/3` raise these errors as an
 `ArgumentError`.
 
-| What you see | What to do |
-|---|---|
-| `` input `estop` is a var_external `` | Your code sets a `var_external` tag. Read [Run a program alone](#run-a-program-alone). |
-| `is a global with no location` | Your code sets a global with no `at`. Set only the globals at input points. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` input `estop` is a var_external `` | Your code sets a `var_external` tag. | Read [Run a program alone](#run-a-program-alone). |
+| `is a global with no location` | Your code sets a global with no `at`. | Set only the globals at input points. |
 
 ### The configuration compiles with a warning
 
 In these rows, `t1` and `t2` are 2 instances of `tally.ld`, and `s1.n` is a `var_output`
 tag of a different instance.
 
-| What you see | What to do |
-|---|---|
-| `` writes `total_boxes` through its var_external, as `t1` does `` | 2 instances write 1 global, or 1 element of a global array. Let only 1 instance write it. |
-| `` and `s1.n` drives it `` | A connection of a different instance writes the global also. Remove the connection or the write. |
-| `its own copy-out, after the scan, stands` | The instance writes the global, and a connection joins its own `var_output` tag to the global. Remove the connection. |
-| `` is the storage bit of an `ons` `` | A second instance or a connection writes the [storage bit](../reference/glossary.md#storage-bit) of a [one-shot](../reference/glossary.md#one-shot): `ons`, `osr` or `osf`. Declare the storage bit as a `var` tag. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `` writes `total_boxes` through its var_external, as `t1` does `` | 2 instances write 1 global, or 1 element of a global array. | Let only 1 instance write it. |
+| `` and `s1.n` drives it `` | A connection of a different instance writes the global also. | Remove the connection or the write. |
+| `its own copy-out, after the scan, stands` | The instance writes the global, and a connection joins its own `var_output` tag to the global. | Remove the connection. |
+| `` is the storage bit of an `ons` `` | A second instance or a connection writes the [storage bit](../reference/glossary.md#storage-bit) of a [one-shot](../reference/glossary.md#one-shot): `ons`, `osr` or `osf`. | Declare the storage bit as a `var` tag. |
 
 ## See also
 

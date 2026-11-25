@@ -461,10 +461,8 @@ tag, of the global or of the element.
 | `real`, `lreal` | An integer or a float in the range of the type. The 2 ranges follow the table | A value that is not a number, such as `:nan`. A number whose nearest value of the type is outside the range |
 | An array | A list, or a list of lists. Each element in the range of its type | A list of the wrong size. A tuple |
 
-The ranges of the reals are:
-
-- `real`: -3.4028234663852886e38 to 3.4028234663852886e38
-- `lreal`: -1.7976931348623157e308 to 1.7976931348623157e308
+[Elementary types](declarations-and-types.md#elementary-types) gives the range of each
+type, the 2 real types among them.
 
 logex keeps a real input as the nearest value of its type:
 

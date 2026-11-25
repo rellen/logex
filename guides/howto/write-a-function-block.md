@@ -139,8 +139,7 @@ instance does not read its inputs.
    that [widens](../reference/glossary.md#widen) into it. For an output, the member can
    widen into the type of the operand. [Function blocks](../reference/function-blocks.md)
    gives each rule. For what a [coil](../reference/glossary.md#coil) after a `cal` gets,
-   [Instructions: jump and call](../reference/instructions-jump-and-call.md) gives the
-   rule.
+   [`cal`](../reference/instructions-jump-and-call.md#cal) gives the rule.
 
 5. In the root directory of your project, make the file `write-a-function-block.exs` with
    this text. It runs 8 scans of 1000 ms and prints the values after each scan.
@@ -226,39 +225,8 @@ This timing diagram shows the same 8 scans.
 
 ## Compile a program whose text is not in a file
 
-Use this way if the text of your program does not come from a file, for example from a
-database. `Logex.compile/2` does not read files. Give it the
-[function block type](../reference/glossary.md#function-block-type) in its option `types:`.
-
-1. In the root directory of your project, make the file
-   `write-a-function-block-types.exs` with this text.
-
-```elixir
-block = File.read!("write-a-function-block/starter.ld")
-{:ok, starter} = Logex.compile(block, name: "starter")
-source = File.read!("write-a-function-block/conveyors.ld")
-{:ok, conveyors} = Logex.compile(source, name: "conveyors", types: [starter])
-
-state = Logex.Runtime.instance(conveyors)
-state = Logex.Runtime.put_inputs(conveyors, state, %{"start_1" => 1})
-{outputs, _state} = Logex.Runtime.scan(conveyors, state, 1000)
-IO.puts("#{conveyors.name} uses #{starter.name}: belt_1 = #{outputs["belt_1"]}")
-```
-
-For the text of a function block, `Logex.compile/2` returns `{:ok, type}`. `type` is a
-`%Logex.FbType{}`. The option `name:` must be the name on the line `function_block`.
-
-2. Run the script.
-
-```console
-$ mix run write-a-function-block-types.exs
-conveyors uses starter: belt_1 = 1
-```
-
-`Logex.compile/2` returns only the [warnings](../reference/glossary.md#warning) of the
-program. To see the warnings of a function block, compile the program with
-`Logex.compile_file/1`. It returns the warnings of the program, then the warnings of each
-function block. A warning of a function block names its file.
+[Compile a program and its function blocks from text](compile-a-program-from-text.md)
+gives the steps with `Logex.compile/2` and its option `types:`.
 
 ## If it does not work
 

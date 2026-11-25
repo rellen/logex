@@ -33,7 +33,6 @@ gives an example of each.
 | What a `var_external` tag of a program needs from the file | [Globals that a program declares `var_external`](#globals-that-a-program-declares-var_external) |
 | The names that a file can use, and the keywords | [Names and reserved words](#names-and-reserved-words) |
 | How logex finds the `.ld` file of each program type | [The functions that compile a configuration](#the-functions-that-compile-a-configuration) |
-| The text that logex writes for a configuration | [The text of a configuration](#the-text-of-a-configuration) |
 | The same configuration from Elixir, and its structs | [A configuration from Elixir data](#a-configuration-from-elixir-data) |
 | The words of a message | [Words in the messages](#words-in-the-messages) |
 | The message of a wrong text, or a warning | [Configuration file: messages](configuration-file-messages.md) |
@@ -710,30 +709,6 @@ the program types that the map gives. It reads no file.
 
 A wrong name, a text that is not a binary and a wrong map raise an `ArgumentError`.
 
-## The text of a configuration
-
-`Logex.Configuration.Text.print/1` writes the text of a configuration: each item on 1
-line, keywords in lowercase, 1 space between 2 words, no indent and no comment. It takes
-a configuration from a file or from Elixir.
-
-| Configuration | The lines |
-|---|---|
-| From a file | Each item on the line of the file. A comment and a blank line become an empty line. |
-| From Elixir | The tasks, then the globals, then the instances, then the connections, from line 1 |
-| Numbers | Each number as its value. `16#00ff` becomes `255`. A real becomes the shortest text that reads back to its value: `16777217.0` in a `real` becomes `16777216.0`. |
-
-`Logex.Configuration.compile/3` reads the text back to the same configuration. This
-table gives what it reads back.
-
-| Configuration | Read back |
-|---|---|
-| From a file | The same configuration, except 1 warning. A warning about a `real` initial value with too many digits does not come back. The text holds the value of the global, and that value has no extra digits. |
-| From Elixir | The same items. Each item has its line in the text. |
-
-`print/1` raises an `ArgumentError` for an item that no line can hold. An example is
-a `real` global with the initial value `0.1` from Elixir. A `real` holds
-`0.10000000149011612`, not `0.1`, and a line can give only a value that the type holds.
-
 ## A configuration from Elixir data
 
 `Logex.Configuration.new!/1` builds a configuration from Elixir structs. It checks the
@@ -829,12 +804,11 @@ The functions of `Logex.Configuration`:
 | `initial/1` | Returns the first value of a global. |
 | `location/1` | Returns the parts of a location. |
 
-2 more functions:
+1 more function:
 
 | Function | What it does |
 |---|---|
 | `Global.new!/3` | Takes the name, the type and the options `initial:`, `at:`, `retain: true` and `non_retain: true`. It refuses the errors of the 1 global: an option, the name, the type, the location and the initial value, in the words of `new!/1`. First it refuses each argument that no line can give, such as the name `"1x"`. Only if there is none does it refuse what a line can give wrong, such as the value 5 for a `bool`. `new!/1` also checks the global against the other globals and the devices. |
-| `Text.print/1` | Returns the text of a configuration. |
 
 ### Rules of the data
 
@@ -846,14 +820,13 @@ The functions of `Logex.Configuration`:
 | A diagnostic | It has no line, because the data has no line. |
 
 The script builds the configuration of `line_1.logex` with structs. It compares each
-list of items with the list from the file, then it prints the text.
+list of items with the list from the file.
 
 ```elixir
 # The script builds the configuration of line_1.logex from Elixir data. It compares each
-# list of items with the list that the file gives, with no line numbers. Then it
-# prints the text of the configuration.
+# list of items with the list that the file gives, with no line numbers.
 alias Logex.Configuration
-alias Logex.Configuration.{Connection, Global, Instance, Task, Text}
+alias Logex.Configuration.{Connection, Global, Instance, Task}
 
 programs =
   for name <- ~w(belt box_count fan_control stop_record) do
@@ -909,7 +882,6 @@ for part <- [:tasks, :globals, :instances, :connections] do
 end
 
 IO.puts("file: #{inspect(plant.file)}, warnings: #{length(plant.warnings)}")
-IO.write(Text.print(plant))
 ```
 
 ```console
@@ -919,39 +891,9 @@ globals: the same as the file: true
 instances: the same as the file: true
 connections: the same as the file: true
 file: nil, warnings: 0
-task fast interval 10 priority 1 watchdog 50
-task on_stop single estop priority 0
-task main continuous watchdog 200
-var_global estop bool at panel.i.7
-var_global pb_start bool at panel.i.0
-var_global eye bool at panel.i.2
-var_global motor_k bool at panel.q.0
-var_global fan_k bool[2] at panel.q.1
-var_global temps real[2] at card.i.0
-var_global limits real[2] 40.0 45.0
-var_global retain total dint 0
-var_global total_at_stop dint
-program c1 belt with fast
-program b1 box_count with fast
-program f1 fan_control
-program f2 fan_control
-program r1 stop_record with on_stop
-c1.start pb_start
-c1.stop 0
-c1.motor motor_k
-b1.eye eye
-f1.temp temps[0]
-f1.limit limits[0]
-f1.fan fan_k[0]
-f2.temp temps[1]
-f2.limit limits[1]
-f2.fan fan_k[1]
-r1.count total
-r1.count_at_stop total_at_stop
 ```
 
-The lists are the same, except the line numbers. The text has no comment, no blank
-line and no indent. [Build a configuration from Elixir](../howto/build-a-configuration-from-elixir.md)
+The lists are the same, except the line numbers. [Build a configuration from Elixir](../howto/build-a-configuration-from-elixir.md)
 shows how to build a configuration step by step.
 [Cases 135 to 153](configuration-file-messages.md#elixir-data-cases-135-to-153) show
 the errors of the data.

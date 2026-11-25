@@ -23,6 +23,15 @@ has no dependencies and no generated code.
 > started. [Safety and limits](guides/explanation/safety-and-limits.md) gives each limit
 > and its reason.
 
+## What logex is for
+
+These are 4 uses of logex:
+
+- Learn ladder logic on a computer, with no controller.
+- Simulate a machine, for example a conveyor or a box counter, before you commission it.
+- Run ExUnit tests of ladder programs in CI.
+- Control a lab rig that has no safety function.
+
 ## A small program
 
 The program `motor.ld` is a motor starter with a latched fault:
@@ -135,10 +144,10 @@ for a person who changes logex.
 
 ## Status
 
-logex is at an early stage, at version 0.1.0, with no release. It compiles and runs the
-programs of the documentation, and [What logex is not](#what-logex-is-not) gives what it
-does not do. The suite runs each example of the documentation.
-[`CHANGELOG.md`](CHANGELOG.md) gives each change.
+logex is at an early stage, at version 0.1.0, with no release. The suite runs each example
+of the documentation. [What logex is not](#what-logex-is-not) gives what logex does not
+do, and [`CHANGELOG.md`](CHANGELOG.md) gives each change. Report a defect in the
+[issues of logex](https://github.com/rellen/logex/issues).
 
 ## Licence
 

@@ -10,7 +10,8 @@ start a [runner](../reference/glossary.md#runner) on the
 The runner, `Logex.Runner`, reads the inputs, runs the
 [tasks](../reference/glossary.md#task) that are due and writes the outputs, again and
 again. Each of these steps is a [round](../reference/glossary.md#round).
-[Runner](../reference/runner.md) gives the rules of a round.
+[A round of the runner](../reference/execution-model.md#a-round-of-the-runner) gives the
+rules of a round.
 
 > #### Warning {: .warning}
 >
@@ -133,7 +134,7 @@ alias Logex.IO.Sim
    | `idle:` | The idle [watchdog](../reference/glossary.md#watchdog): the longest time for 1 piece of the work of the runner, for example a call from your code. It is 500 ms by default. If a piece takes longer, the runner [trips](../reference/glossary.md#trip). [Set watchdogs](set-watchdogs.md) shows how to choose it. |
    | `name:` | A name for the runner, as `GenServer.start_link/3` takes it. Your code can then call the runner by that name. By default, the runner has no name. |
 
-   [Runner](../reference/runner.md) gives each other option, for example `retain:` and
+   [The options](../reference/runner.md#the-options) gives each other option, for example `retain:` and
    `forces:`.
 
 6. Add these lines, which change the inputs of the simulated device. They press the
@@ -299,35 +300,35 @@ the steps. To get the same rounds at each run, use the manual clock.
 
 `Logex.Runner.start_link/1` returns these values:
 
-| What you see | Cause and what to do |
-|---|---|
-| `{:error, {:io_init, "panel", reason}}` | The runner cannot open the device, or its first read failed. `reason` is the error that `init/3` gave, for example `:econnrefused`. Or it is the result of the first read that failed, for example `{:error, :eio}`. Correct the device, and start the runner again. |
-| `{:error, {:io_init, "panel", :timeout}}` | The device did not open in the time of `open:`. Give the device more time, for example `open: %{"panel" => 10_000}`. |
-| `{:error, {:already_started, pid}}` | A different process has the name of `name:`. Give a different name, or stop the other runner. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `{:error, {:io_init, "panel", reason}}` | The runner cannot open the device, or its first read failed. `reason` is the error that `init/3` gave, for example `:econnrefused`. Or it is the result of the first read that failed, for example `{:error, :eio}`. | Correct the device, and start the runner again. |
+| `{:error, {:io_init, "panel", :timeout}}` | The device did not open in the time of `open:`. | Give the device more time, for example `open: %{"panel" => 10_000}`. |
+| `{:error, {:already_started, pid}}` | A different process has the name of `name:`. | Give a different name, or stop the other runner. |
 
 `Logex.Runner.start_link/1` raises an `ArgumentError` in your process with a message that
 has these words:
 
-| What you see | Cause and what to do |
-|---|---|
-| `Logex.Runner needs io:` | Give `io:`. For a configuration with no point, give `io: %{}`. |
-| ``no adapter is bound to the device `panel` `` | The map of `io:` has no key `"panel"`. Add it, with the name as the configuration writes it. |
-| ``the device `drive` is bound, but no point is at it`` | The map of `io:` has a device that the configuration does not name. Remove it, or correct its name. |
-| `which does not implement Logex.IO` | The value of the device is not an adapter. Give a module that implements `Logex.IO`. |
-| ``the device `panel`'s adapter options:`` | The adapter refused its options. The rest of the message is from the adapter, for example `Logex.IO.Sim is bound with its sim`. Give the options that the adapter takes. |
-| `the runner's clock: is {module, clock}` | `clock:` has a wrong value. To use the clock of the computer, remove `clock:`. |
-| `the runner's poll: is`, `the runner's open:` and so on | An option has a wrong value. The message gives the values that the option takes. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `Logex.Runner needs io:` | The options have no `io:`. | Give `io:`. For a configuration with no point, give `io: %{}`. |
+| ``no adapter is bound to the device `panel` `` | The map of `io:` has no key `"panel"`. | Add it, with the name as the configuration writes it. |
+| ``the device `drive` is bound, but no point is at it`` | The map of `io:` has a device that the configuration does not name. | Remove it, or correct its name. |
+| `which does not implement Logex.IO` | The value of the device is not an adapter. | Give a module that implements `Logex.IO`. |
+| ``the device `panel`'s adapter options:`` | The adapter refused its options. The rest of the message is from the adapter, for example `Logex.IO.Sim is bound with its sim`. | Give the options that the adapter takes. |
+| `the runner's clock: is {module, clock}` | `clock:` has a wrong value. | To use the clock of the computer, remove `clock:`. |
+| `the runner's poll: is`, `the runner's open:` and so on | An option has a wrong value. The message gives the values that the option takes. | Give a value that the message names. |
 
 With `retain:`, a start that fails can write the [store](../reference/glossary.md#store).
 [Keep retained values on disk](keep-values-on-disk.md) gives the rule.
 
 ### The runner stops or trips
 
-| What you see | Cause and what to do |
-|---|---|
-| `status` is `:tripped` | The runner wrote 0 to each output point and runs no rounds. `trip` gives the reason. [Restart after a trip](restart-after-a-trip.md) gives the steps. |
-| `the runner #PID<0.161.0> is not running` | `Logex.Runner.status/1`, `Logex.Runner.get!/2` or `Logex.Runner.stop/1` called a runner that stopped or crashed. After a crash, each device wrote 0 to each output point 1 time and closed. Start a new runner. |
-| `no runner is running under the name Packing` | The same, for a runner that your code calls by its `name:`. |
+| What you see | Cause | What to do |
+|---|---|---|
+| `status` is `:tripped` | The runner wrote 0 to each output point and runs no rounds. `trip` gives the reason. | [Restart after a trip](restart-after-a-trip.md) gives the steps. |
+| `the runner #PID<0.161.0> is not running` | `Logex.Runner.status/1`, `Logex.Runner.get!/2` or `Logex.Runner.stop/1` called a runner that stopped or crashed. After a crash, each device wrote 0 to each output point 1 time and closed. | Start a new runner. |
+| `no runner is running under the name Packing` | The same as the row before, for a runner that your code calls by its `name:`. | Start a new runner. |
 
 ## See also
 

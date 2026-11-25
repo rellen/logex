@@ -142,7 +142,7 @@ A branch has 2 rules:
   `ote c` does in the example of the second rule.
 - On a [false rung](../reference/glossary.md#false-rung), a
   [Logix](../reference/glossary.md#logix) controller writes 0 for its OTE coil and
-  writes nothing for its OTL coil. The coils `ote` and `otl` of logex do the same.
+  writes nothing for its OTL coil (1756-RM018A, pages 85 to 87). The coils `ote` and `otl` of logex do the same.
 
 ## Why logex does it this way
 

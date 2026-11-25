@@ -137,17 +137,18 @@ start at 1.
 
 ## If it does not work
 
-| What you see | What to do | Cause |
+| What you see | Cause | What to do |
 |---|---|---|
-| `{:error, {:io_init, device, detail}}` from `restart/2` | Correct the device. Then call `restart/2` again. | The restart cannot open or read the device. A callback failed, did not answer in the time of the option `open:`, or gave a value that does not fit its point. |
-| `{:error, {:clock, detail}}` from `restart/2` | Correct the clock. Then call `restart/2` again. | The clock still gives no time that the runner can use. |
-| `{:error, {:retain, detail}}` from a cold restart | Correct the disk or the path of the store. Then do the restart again. | The runner cannot write its store. |
-| `<path>: line <n>: ...` from `restart/2` | Correct the line, or remove it. Then call `restart/2` again. | The forces file has a line that the runner cannot use. |
-| `the runner is running: restart/2 starts a runner again once it has tripped` | Call `restart/2` only after a trip. | The status was `:running` when the call arrived. |
-| `a runner restarts :cold or :warm, got: :hot` | Give `:warm` or `:cold`. | The mode is not `:warm` or `:cold`. |
-| `the runner #PID<0.155.0> is not running` | Start a new runner with `Logex.Runner.start_link/1`. | The runner stopped, or it crashed. A runner does not start again by itself. |
-| `restart/2` gives `:ok`, then the status is `:tripped` again, with the same `{:fault, ...}` | Do 1 of the actions of [A retained value trips the plant again](#a-retained-value-trips-the-plant-again). | A retained value causes the fault again in the first round. |
-| An output comes on immediately after a warm restart | Make the output safe at the machine. Remove each force that holds an input. Stop the runner with `Logex.Runner.stop/2`. Start a new runner. If it has a store, give the option `start: :cold`. | A rung writes the output from a retained value, or a force holds an input. |
+| `{:error, {:io_init, device, detail}}` from `restart/2` | The restart cannot open or read the device. A callback failed, did not answer in the time of the option `open:`, or gave a value that does not fit its point. | Correct the device. Then call `restart/2` again. |
+| `{:error, {:clock, detail}}` from `restart/2` | The clock still gives no time that the runner can use. | Correct the clock. Then call `restart/2` again. |
+| `{:error, {:retain, detail}}` from a cold restart | The runner cannot write its store. | Correct the disk or the path of the store. Then do the restart again. |
+| `<path>: line <n>: ...` from `restart/2` | The forces file has a line that the runner cannot use. | Correct the line, or remove it. Then call `restart/2` again. |
+| `the runner is running: restart/2 starts a runner again once it has tripped` | The status was `:running` when the call arrived. | Call `restart/2` only after a trip. |
+| `a runner restarts :cold or :warm, got: :hot` | The mode is not `:warm` or `:cold`. | Give `:warm` or `:cold`. |
+| `the runner #PID<0.155.0> is not running` | The runner stopped, or it crashed. A runner does not start again by itself. | Start a new runner with `Logex.Runner.start_link/1`. |
+| `restart/2` gives `:ok`, then the status is `:tripped` again, with the same `{:fault, ...}` | A retained value causes the fault again in the first round. | Do 1 of the actions of [A retained value trips the plant again](#a-retained-value-trips-the-plant-again). |
+| `trip` is `{:internal, message}` | An exception in logex. It is a defect of logex, and the host cannot cause it. | Keep the message and the values of the resource. Report the defect in the [issues of logex](https://github.com/rellen/logex/issues). |
+| An output comes on immediately after a warm restart | A rung writes the output from a retained value, or a force holds an input. | Make the output safe at the machine. Remove each force that holds an input. Stop the runner with `Logex.Runner.stop/2`. Start a new runner. If it has a store, give the option `start: :cold`. |
 
 The messages of the 4 rows that begin with a path or with `the runner` or `a runner`
 come in an `ArgumentError`.

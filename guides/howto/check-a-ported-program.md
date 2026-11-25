@@ -47,11 +47,11 @@ cure.ld: line 7: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc`
    | What the old program does | What logex does | What to do |
    |---|---|---|
    | A program of IEC 61131-3 adds 2 INT [tags](../reference/glossary.md#tag) into a DINT tag | IEC 61131-3 computes `INT + INT` in INT. logex computes in the `dint`: 30000 + 30000 is 60000 | If the old program depends on the overflow of the INT, write the result into an `int` |
-   | It gets a result that is too large for its type | The value wraps. The instruction passes no power and gives no [fault](../reference/glossary.md#fault). A Logix instruction passes power | Put a [coil](../reference/glossary.md#coil) after the instruction: `xic run add a b total ote total_ok`. To keep a record, repeat the conditions of the rung: `xic run xio total_ok otl overflow` |
+   | It gets a result that is too large for its type | The value wraps. The instruction passes no power and gives no [fault](../reference/glossary.md#fault). A Logix instruction passes power (1756-RM018A, page 868) | Put a [coil](../reference/glossary.md#coil) after the instruction: `xic run add a b total ote total_ok`. To keep a record, repeat the conditions of the rung: `xic run xio total_ok otl overflow` |
    | It moves a DINT into a SINT | logex refuses the `move`. `dint_to_sint` keeps the low bits, and passes no power: 129 gives `-127` | Use the conversion and read its power |
-   | It moves `16#ffff` into an INT | A Logix controller writes `-1`. logex refuses the [literal](../reference/glossary.md#literal): `16#ffff` is 65535 | Write `-1`, or declare the tag `uint` or `word` |
+   | It moves `16#ffff` into an INT | A Logix controller writes `-1` (1756-RM018A, page 869). logex refuses the [literal](../reference/glossary.md#literal): `16#ffff` is 65535 | Write `-1`, or declare the tag `uint` or `word` |
    | It divides by 0 | The result is 0, and the instruction passes no power. The scan reports the [minor fault](../reference/glossary.md#minor-fault) `divide_by_zero`. logex refuses a literal 0 divisor | Read the power of the instruction |
-   | It takes the square root of a negative value | A Logix controller gives the root of the absolute value. logex writes 0.0, passes no power and reports the minor fault `negative_sqrt` | Put `abs` before `sqrt` if the program must have the root of the absolute value |
+   | It takes the square root of a negative value | A Logix controller gives the root of the absolute value (1756-RM018A, page 474). logex writes 0.0, passes no power and reports the minor fault `negative_sqrt` | Put `abs` before `sqrt` if the program must have the root of the absolute value |
 
 > #### Caution {: .error}
 >
@@ -64,7 +64,7 @@ cure.ld: line 7: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc`
 
    | What the old program does | What logex does | What to do |
    |---|---|---|
-   | It reads an [element](../reference/glossary.md#element) with a subscript out of range | A Logix controller has a major fault of type 4, code 20, and stops the logic. In logex the instruction does nothing and passes no power. The scan reports the [major fault](../reference/glossary.md#major-fault) `index_out_of_range`. A runner trips the plant | Put a range check on the [rung](../reference/glossary.md#rung): `ge slot 0 lt slot 8 move weights[slot] checked` |
+   | It reads an [element](../reference/glossary.md#element) with a subscript out of range | A Logix controller has a major fault of type 4, code 20, and stops the logic (1756-RM018A, page 884, and 1756-PM014O, page 9). In logex the instruction does nothing and passes no power. The scan reports the [major fault](../reference/glossary.md#major-fault) `index_out_of_range`. A runner trips the plant | Put a range check on the [rung](../reference/glossary.md#rung): `ge slot 0 lt slot 8 move weights[slot] checked` |
    | It reads a [bit](../reference/glossary.md#bit) with a number out of range | The same rules. The major fault is `bit_out_of_range` | Put a range check on the rung |
    | It uses an [array](../reference/glossary.md#array) of IEC 61131-3 from 1 | The first subscript is 0 | Subtract 1 from each subscript |
 
@@ -105,8 +105,7 @@ cure.ld: line 7: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc`
    other tag gets its [initial value](../reference/glossary.md#initial-value), but a
    `var_input` keeps its value.
 
-   A Logix controller keeps the value of each tag through a loss of power. logex keeps a
-   retained value through a stop of the computer only if a runner keeps a
+   logex keeps a retained value through a stop of the computer only if a runner keeps a
    [store](../reference/glossary.md#store). The option `retain:` of the runner gives the
    store. The runner writes the store each second, unless `retain_period:` gives a
    different period. After a crash, the store holds the values of its last write.

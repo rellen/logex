@@ -233,19 +233,13 @@ stateDiagram-v2
   Crashed --> [*]
 ```
 
-Figure: the life of a runner with a store. The table gives the events that write the
-store.
+Figure: the life of a runner with a store.
 
-| Event | Does the runner write the store? |
-|---|---|
-| A start, warm | No. It reads the store |
-| A start with `start: :cold`, or with no store file | Yes, before the first round |
-| Each period of the option `retain_period:` | Yes, but not during a trip |
-| A trip | Yes |
-| A warm restart | No |
-| A cold restart | Yes, before the first round |
-| A stop, or a shutdown by the supervisor | Yes |
-| A crash or a kill | No |
+The runner writes the store at a cold start, at each period, at a trip, at a stop and at
+a cold restart. It does not write the store at a warm start, at a warm restart or at a
+crash.
+[When the runner writes the store](../reference/store.md#when-the-runner-writes-the-store)
+gives each event.
 
 Thus after a crash, the next runner starts from the last write of the store. It does not
 get the values of the last scan.
@@ -267,12 +261,14 @@ warm, unless the host gives the option `start: :cold`.
 
 logex takes the qualifiers `retain` and `non_retain` from
 [IEC 61131-3](../reference/glossary.md#iec-61131-3). A
-[Logix](../reference/glossary.md#logix) controller has no qualifier: it keeps its
-memory, and its prescan resets some instructions before the first scan.
+[Logix](../reference/glossary.md#logix) controller has no qualifier. Its prescan resets
+some instructions before the first scan (1756-RM018A, pages 73 to 134, and 1756-RM094N,
+page 47). No publication that logex cites says in 1 sentence that its tags keep their
+values through a loss of power.
 
 | Subject | IEC 61131-3 | Logix | logex |
 |---|---|---|---|
-| A tag with no qualifier at a warm restart | The implementer decides | Kept, then the prescan resets some instructions | Initial value |
+| A tag with no qualifier at a warm restart | The implementer decides | Not recorded. The prescan resets some instructions | Initial value |
 | `retain` on an input | Yes | No qualifier | Refused. Each restart keeps the value of the host |
 | A prescan | None | Yes | None |
 | A bit for the first scan | None | `S:FS` | None. A program can make its own bit |
