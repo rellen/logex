@@ -233,19 +233,13 @@ stateDiagram-v2
   Crashed --> [*]
 ```
 
-Figure: the life of a runner with a store. The table gives the events that write the
-store.
+Figure: the life of a runner with a store.
 
-| Event | Does the runner write the store? |
-|---|---|
-| A start, warm | No. It reads the store |
-| A start with `start: :cold`, or with no store file | Yes, before the first round |
-| Each period of the option `retain_period:` | Yes, but not during a trip |
-| A trip | Yes |
-| A warm restart | No |
-| A cold restart | Yes, before the first round |
-| A stop, or a shutdown by the supervisor | Yes |
-| A crash or a kill | No |
+The runner writes the store at a cold start, at each period, at a trip, at a stop and at
+a cold restart. It does not write the store at a warm start, at a warm restart or at a
+crash.
+[When the runner writes the store](../reference/store.md#when-the-runner-writes-the-store)
+gives each event.
 
 Thus after a crash, the next runner starts from the last write of the store. It does not
 get the values of the last scan.

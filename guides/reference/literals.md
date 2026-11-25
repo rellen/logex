@@ -333,27 +333,11 @@ bit is a `bool`.
 
 ### Values of each type
 
-The first table gives the literals of an integer form that are correct for each
-[elementary type](glossary.md#elementary-type). The second table gives the other rules
-and the rules for a real literal.
-
-| Type | Literal of an integer form |
-|---|---|
-| `bool` | 0 or 1 |
-| `sint` | -128 to 127 |
-| `int` | -32768 to 32767 |
-| `dint` | -2147483648 to 2147483647 |
-| `lint` | -9223372036854775808 to 9223372036854775807 |
-| `usint` | 0 to 255 |
-| `uint` | 0 to 65535 |
-| `udint` | 0 to 4294967295 |
-| `ulint` | 0 to 18446744073709551615 |
-| `byte` | 0 to 255 |
-| `word` | 0 to 65535 |
-| `dword` | 0 to 4294967295 |
-| `lword` | 0 to 18446744073709551615 |
-| `real` | Each integer that a `real` holds exactly |
-| `lreal` | Each integer that an `lreal` holds exactly |
+A literal of an integer form is correct for an
+[elementary type](glossary.md#elementary-type) if the type holds its value.
+[Elementary types](declarations-and-types.md#elementary-types) gives the smallest and the
+largest value of each type. This table gives the other rules and the rules for a real
+literal.
 
 | Item | Rule |
 |---|---|
