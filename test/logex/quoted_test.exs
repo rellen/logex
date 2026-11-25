@@ -1286,6 +1286,38 @@ defmodule Logex.QuotedTest do
       ])
     end
 
+    # A step refused by its instance's state, a line a tag, tells its var_external's global
+    # alone, by that global: the state's count is none of the step's (decision 610).
+    test "a step's refusal takes no count from a state's refusal" do
+      source =
+        Enum.map_join(1..101, "\n", &"var t#{pad(&1)} dint") <>
+          "\nvar_input start bool\nvar_external count dint\nvar_output lamp bool\n\n" <>
+          "xic start ote lamp\n"
+
+      {:ok, program} = Logex.compile(source, name: "e")
+
+      {:ok, c} =
+        Configuration.compile(
+          "plant",
+          "var_global count dint 0\n\nprogram i1 e\n  i1.start 0\n",
+          %{
+            "e" => program
+          }
+        )
+
+      rt = Runtime.start(c)
+      state = rt.instances["i1"]
+      state = %{state | env: Map.new(state.env, &unvalued/1)}
+
+      rt = %{
+        rt
+        | instances: Map.put(rt.instances, "i1", state),
+          globals: Map.put(rt.globals, "count", :x)
+      }
+
+      assert_raise ArgumentError, held_outside("count"), fn -> Runtime.cycle(rt, 0, %{}) end
+    end
+
     # A step's refusal tells a copy-in's lines among its var_externals', so it counts the
     # copy-in's past its own hundred too: 101 globals a connection reads and `count`,
     # which a var_external names, told as the first hundred of 102 and a count of 2, where
@@ -1488,6 +1520,72 @@ defmodule Logex.QuotedTest do
       assert Logex.Lexer.quoted_text(a(1_000_000)) == "`#{a(4_096)}…` (1000000 bytes)"
     end
 
+    # Each refusal's message pinned whole, a cut text's 4,096 bytes and its line beside it.
+    defp cut_told(rows) do
+      for {label, fun, message} <- rows do
+        error = assert_raise ArgumentError, fun
+        assert {label, error.message} == {label, message}
+        assert byte_size(error.message) < 4_400, label
+      end
+    end
+
+    # Every line that quotes a key, a path or a configuration's name or location quotes it
+    # through the cut: an element's key with a subscript of 5,000 digits, which a number
+    # of 10,000 characters may be, a global's name, and a location.
+    test "a key, a global's name and a location past 4,096 bytes, each line cut" do
+      {:ok, wide} =
+        Logex.compile(
+          "var_input big dint[101]\nvar_input start bool\nvar_output lamp bool\n\n" <>
+            "xic start ote lamp\n",
+          name: "wide"
+        )
+
+      s = Runtime.instance(wide)
+      zeros = String.duplicate("0", 5_000)
+      cut = &"`#{binary_part(&1, 0, 4_096)}…` (#{byte_size(&1)} bytes)"
+      big = "an array of 101 dints (declared on line 1)"
+      by_hand = &Runtime.put_inputs(wide, s, &1)
+      long = a(5_000)
+
+      cut_told([
+        {"an element set twice", fn -> by_hand.(%{"big[0]" => 1, "big[#{zeros}]" => 1}) end,
+         "inputs #{cut.("big[#{zeros}]")} and `big[0]` each set `big[0]`, an element of " <>
+           "`big`, #{big}: a call sets each element once"},
+        {"a subscript outside", fn -> by_hand.(%{"big[#{zeros}200]" => 1}) end,
+         "input #{cut.("big[#{zeros}200]")}'s subscript 200 is outside the elements of " <>
+           "`big`, 0 to 100: `big` is #{big}"},
+        {"two subscripts", fn -> by_hand.(%{"big[#{zeros}1,2]" => 1}) end,
+         "input #{cut.("big[#{zeros}1,2]")} names an element of `big`, #{big}, by 2 " <>
+           "subscripts, where it takes 1, one a dimension, as in `big[0]`"},
+        {"a name with a `.`", fn -> Global.new!(long <> ".b", :bool) end,
+         "#{cut.(long <> ".b")} cannot name a global: `.` is kept for a path, as in " <>
+           "`m1.start`, and a location, as in `panel.i.0`"},
+        {"a name with brackets", fn -> Global.new!(long <> "[1]", :bool) end,
+         "#{cut.(long <> "[1]")} cannot name a global: brackets are kept for an element's " <>
+           "subscripts, as in `m1.temps[3]`"},
+        {"an input point's initial value",
+         fn -> Global.new!(long, :bool, at: "panel.i.0", initial: 1) end,
+         "#{cut.(long)} is an input point: its value comes from the input image, so it takes " <>
+           "no initial value"},
+        {"an output point's initial value",
+         fn -> Global.new!(long, :bool, at: "panel.q.0", initial: 1) end,
+         "#{cut.(long)} is an output point: it takes no initial value, and is 0 until its " <>
+           "driver writes it"},
+        {"a located global retained",
+         fn -> Global.new!(long, :bool, at: "panel.i.0", retain: true) end,
+         "#{cut.(long)} is an input point, and a located global takes no `retain`: an input " <>
+           "point is read again at every start, and an output point starts at 0 until logic " <>
+           "writes it"},
+        {"a located array's initial list",
+         fn -> Global.new!(long, {:array, :dint, [2]}, at: "panel.i.0", initial: [1, 2]) end,
+         "#{cut.(long)} is an array of input points, `panel.i.0` to `panel.i.1`: their " <>
+           "values come from the input image, so it takes no initial list"},
+        {"a location not as written", fn -> Global.new!("g", :bool, at: "panel.I.#{zeros}0") end,
+         "#{cut.("panel.I.#{zeros}0")} is not a location as written: a location's `i` or `q` " <>
+           "is lowercase and its address has no leading zero, so it is written `panel.i.0`"}
+      ])
+    end
+
     # A megabyte's refusal against a short one's, in reductions, the least of three, in the
     # same run: no more than the short one's and twice what the call reads of the text, the
     # cut's own look at its first 4,096 bytes and what the call does with any text it is
@@ -1587,7 +1685,9 @@ defmodule Logex.QuotedTest do
     # what escapes there is listed in `@outside` with its reason. None does: since
     # decision 616 (RV-33) `instance/1`'s shape check refuses a struct where a map is due,
     # a `Date` or a `Time` in a program's tag table or its blocks, which it took for a map
-    # and its check then walked as one (Protocol.UndefinedError), each pinned below.
+    # and its check then walked as one (Protocol.UndefinedError), each pinned below. A tag
+    # of the table that is a struct is not walked here (`PLAN.md`'s "RV-33 as built",
+    # question 4).
     @outside %{}
 
     # The fields the walk gives a value that nothing reads where it is walked: a

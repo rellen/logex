@@ -205,7 +205,9 @@ defmodule Logex.Lexer do
   # its count (decision 583): its first 4,096 bytes are all the cut reads, so a megabyte
   # of a name costs what 4,096 bytes do, where it was told whole, a megabyte in some 2 s.
   # A text of 4,096 bytes or fewer is whole; one whose first 4,096 bytes are no text but
-  # for a character the cut split is shown as `inspected/2` shows a binary that is none.
+  # for a character the cut split is shown as `inspected/2` shows a binary that is none. A
+  # text shown as a value, through `inspected/2`, is cut as `inspect/1` cuts it, at 4,096
+  # characters (provisional: `PLAN.md`'s "RV-33 as built", question 2).
   @longest_text 4_096
 
   @doc false

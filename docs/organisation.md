@@ -16544,6 +16544,18 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      many more there are, as decision 520 bounds the did-you-mean: `put_inputs/3`,
      `Logex.IO.bind!/2` and any other refusal that lists. Not taken: every line, as built;
      ten and a count. Neither IEC nor Logix has a host API to compare. RV-33 builds it.
+     *(Landed with RV-33, 2026-11-25, `bda244f`: `Logex.Declarations.told/3`, beside
+     `offered/1` and its bound, `@offered`, tells the first hundred lines in the order a
+     refusal gives them and one line that counts the rest, `and 99900 more mistakes, not
+     listed`, none of them made; every refusal of the host contract that joined a line a
+     mistake goes through it, `put_inputs/3`'s, `cycle/3`'s, a state's, a program's edited by
+     hand, a retained image's, `start/1`'s, `IO.bind!/2`'s, `Configuration.new!/1`'s and
+     `check/1`'s, and `Global.new!/3`'s and `Logex.Tag.new!/5`'s options, and a line that
+     quotes a key or looks for a did-you-mean is made only among the hundred, so 100,000
+     keys are told in 9 KB where they were 9.6 MB, and 100,000 devices in 4 KB where they
+     were 4.5 MB. A step's refusal and the runner's start count what the refusal they relay
+     counted (`untold/1`). `quoted_test.exs` pins each at 100 and 101, and its growth at
+     100,000 against 1,000. Provisional: `PLAN.md`'s "RV-33 as built", questions 1 and 3.)*
 
 611. **Where the cut is used (RV-32),** RV-32's question 2: a test harness hands
      `Logex.Parser.parse/1`, outside the host contract, a list that holds a long number.
@@ -16573,6 +16585,17 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      decision 585's "a name or a location that is text quoted whole". Not taken: whole, as
      decision 585 stood; cut at 60 bytes, as a store's refusal cuts a text. IEC has no host
      API; Logix's tag names are 40 characters at most, refused longer. RV-33 builds it.
+     *(Landed with RV-33, 2026-11-25, `bda244f`: `Logex.Lexer.quoted_text/1` cuts a text past
+     4,096 bytes there, at a character's boundary, `` `aaaa…` (1000000 bytes) ``, reading
+     its first 4,096 bytes alone; the keys of `put_inputs/3` and `cycle/3`, the paths of
+     `get/2` and `get!/2` and the names and locations of a configuration's judge go through
+     it, and a name past 4,096 bytes is offered no did-you-mean, so a megabyte's key is
+     told in 4 KB in 7 ms where it was a megabyte in 1.6 s, and `Logex.Tag.new!/5` of a
+     megabyte's type text in 13 ms where it took 17 s. A text a refusal shows as a value is
+     cut as `inspect/1` cuts it, as decision 585 has it. `quoted_test.exs` pins
+     `put_inputs/3`, `get!/2`, `IO.bind!/2`'s device name and `Tag.new!/5`'s type text at
+     4,096 bytes and 4,097, and the hostile walk gives every argument a text of 100,000
+     bytes. Provisional: `PLAN.md`'s "RV-33 as built", questions 2 and 5.)*
 
 614. **Two long numbers that cut alike (RV-32),** RV-32's question 5: a fan's timer `last`
      and the instance's `now`, both past 10,000 digits, differ by 5, and their two cuts
@@ -16605,6 +16628,14 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `instance/1` being trusted. Not taken: left outside the contract, as now; every entry
      point checking the program's shape again, a cost on every scan. IEC has no host API;
      in Logix a program is downloaded whole and checked when it is. RV-33 builds it.
+     *(Landed with RV-33, 2026-11-25, `bda244f`: `Logex.Program.edited_by_hand/1`, the check
+     `instance/1`, `Logex.Configuration.check/1` and both edits make where a program is
+     handed in, refuses a struct as a routine's tags, `` `p`'s tags are no map of its tags
+     by name, got: ~D[2026-11-24]: `p` was edited by hand after it compiled ``, and as its
+     blocks, arrays, units or reals, a line each, where `Protocol.UndefinedError` and
+     `FunctionClauseError` escaped; `put_inputs/3` and `call/4` unchanged.
+     `quoted_test.exs`'s `@outside` is empty. Found beside it: a tag table whose value is a
+     struct, `PLAN.md`'s "RV-33 as built", question 4.)*
 
 ---
 
