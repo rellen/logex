@@ -14,7 +14,7 @@ suite is an "ExUnit test". The [style guide](../style-guide.md#words) gives that
 | Word | Meaning |
 |---|---|
 | ExUnit test | A test of the suite, in a file under `test/`. A contributor page calls it a test. A user page always writes "ExUnit test" |
-| Test step | The step `Logex.Edit.test/2` of an online edit. A contributor page writes "the test step", so that the reader does not take it for an ExUnit test |
+| Test step | The step `Logex.Edit.test/2` of an online edit. On a page about an online edit, "test" beside "accept" or "untest" is this step. On each other contributor page, "test" is an ExUnit test |
 | Suite | Each ExUnit test of the repository. `mix test --warnings-as-errors` runs it |
 | Stage | 1 part of the path from source text to a result: the lexer, the parser, the compiler or the runtime |
 | Seam | The place where 1 stage gives its result to the next stage |
