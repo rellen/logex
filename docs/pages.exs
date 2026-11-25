@@ -176,6 +176,7 @@
   {"docs/implementation/record-runs-store-copies.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/record-runs-file-work.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/record-runs-cost.md", :contributor, "Architecture and implementation"},
+  {"docs/implementation/record-runs-cost-ceilings.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/record-runs-verify.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/record-runs-toolchain.md", :contributor, "Architecture and implementation"},
   {"docs/implementation/record-runs-typespecs.md", :contributor, "Architecture and implementation"},

@@ -39,23 +39,23 @@ and `shl` in [the names](../naming.md):
     program, or while the program runs. For `MOD`, Table 29 note e gives OUT := 0.
   - [Logix](../../guides/reference/glossary.md#logix): `DIV` gives Source A for an
     integer divide, and `MOD` gives 0. Both raise the minor fault 4/4, and the controller
-    runs on.
+    runs on (1756-RM018A, `DIV` pp.445 to 451 and `MOD` pp.451 to 458).
   - MatIEC: `DIV` gives 0 with ENO FALSE. `MOD` gives 0 with ENO TRUE.
   - The S7-1200 gives 0 with ENO 0. STEP 7 Safety V20: with ENO wired, `DIV` gives 0 and
     the F-CPU runs on. With ENO not wired, the F-CPU goes to STOP.
   - CODESYS: the result depends on the target system.
 - **A subscript out of range.**
   - IEC: an error, found only at run time for a subscript that the program computes.
-  - Logix: the major fault 4/20 when the instruction runs. The logic stops, unless a
-    handler of faults clears the fault. Then the faulted instruction does not run, and
-    the next instruction runs.
+  - Logix: the major fault 4/20 when the instruction runs (1756-RM018A p.884). The logic
+    stops, unless a handler of faults clears the fault. Then the faulted instruction does
+    not run, and the next instruction runs (1756-PM014O p.9).
   - The S7-1500 stops. The S7-1200 runs on, with an entry in its diagnostic buffer.
     CODESYS checks only with `CheckBounds`. No vendor uses the nearest subscript or wraps
     the subscript.
 - **A bit number out of range.**
   - IEC: a bit number is a literal only.
-  - Logix: the manuals ask for a bit number in the range of the integer. They do not give
-    the fault.
+  - Logix: the manuals ask for a bit number in the range of the integer (1756-PM004L
+    p.44). They do not give the fault.
 - **A negative square root.**
   - IEC: `SQRT` takes a real. The sources found no clause for a negative value. IEC 60559
     gives NaN.

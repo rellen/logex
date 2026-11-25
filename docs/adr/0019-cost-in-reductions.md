@@ -19,7 +19,9 @@ and its figures. `CONTRIBUTING.md`, in
 [Things that will bite you](../../CONTRIBUTING.md#things-that-will-bite-you), gives the
 steps to write a cost test.
 [Runs and tables of the records: cost](../implementation/record-runs-cost.md#0019-cost-in-reductions) gives the words of this record, the
-measurements, a run of its rules and each option not taken.
+measurements and each option not taken.
+[Runs and tables of the records: the ceilings of cost](../implementation/record-runs-cost-ceilings.md#0019-cost-in-reductions-the-ceilings-and-a-run)
+gives the ceilings, their figures and a run of its rules.
 
 > #### Caution {: .error}
 >

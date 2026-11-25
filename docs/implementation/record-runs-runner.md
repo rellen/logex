@@ -435,6 +435,8 @@ for _write <- 1..3, do: Sim.fail(plant_5.drive, :write, {:error, :eio})
 
 for _poll <- 1..3 do
   Manual.advance(plant_5.clock, 10)
+  # status/1 answers after the runner handles the refusal of the drive and writes each 0.
+  _status = Runner.status(plant_5.runner)
   outputs.(plant_5)
   status.(plant_5, [:trip, :unzeroed])
 end

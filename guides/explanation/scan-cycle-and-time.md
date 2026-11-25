@@ -238,8 +238,8 @@ A runner has 3 rules for the time:
 - **A scan is a function of its arguments.** The same state, inputs and time always give
   the same outputs. A host that records the time and the inputs of each cycle can run
   the same cycles again and get the same outputs.
-- **An ExUnit test does not wait.** A test of a 10 s timer gives 10,000 ms to its scans
-  as a number. It gets the same result on a fast machine and on a slow machine.
+- **An ExUnit test does not wait.** For a 10 s timer, it gives 10,000 ms to the scans as
+  a number. It gets the same result on a fast machine and on a slow machine.
 - **Only 1 part of logex reads a clock.** That part is the runner. An ExUnit test gives
   the runner a manual clock and moves the time.
 
