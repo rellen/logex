@@ -2444,7 +2444,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "`#{name}` is #{Declarations.a_type({:array, type, dims})}, forced to a list of " <>
+        "#{quoted(name)} is #{Declarations.a_type({:array, type, dims})}, forced to a list of " <>
           "#{Logex.Array.shape(dims, "list")} in the elements' order, got: " <>
           Logex.Lexer.inspected(value, charlists: :as_lists)
       )
@@ -2464,7 +2464,7 @@ defmodule Logex.Runner do
 
   defp more_misfits(name, array, count),
     do:
-      "`#{name}` is #{Declarations.a_type(array)}, with #{count} more " <>
+      "#{quoted(name)} is #{Declarations.a_type(array)}, with #{count} more " <>
         "#{plural(count, "element")} outside its type, not listed"
 
   defp plural(1, word), do: word
@@ -2526,11 +2526,11 @@ defmodule Logex.Runner do
     do: {:error, not_input(Map.fetch(state.located, Logex.Name.by_value(name)), named, state)}
 
   defp not_input({:ok, {:point, at}}, {_name, shown}, _state),
-    do: "`#{shown}` is an output point, at `#{at}`: only an input point is forced"
+    do: "#{quoted(shown)} is an output point, at #{quoted(at)}: only an input point is forced"
 
   defp not_input({:ok, {:array, :output, {_first, from}, {_last, to}}}, {_name, shown}, _state),
     do:
-      "`#{shown}` is an array of output points, `#{from}` to `#{to}`: only an input point " <>
+      "#{quoted(shown)} is an array of output points, #{quoted(from)} to #{quoted(to)}: only an input point " <>
         "is forced"
 
   defp not_input(:error, {name, _shown} = named, %{configuration: configuration} = state),
@@ -2547,21 +2547,21 @@ defmodule Logex.Runner do
   # M5-13: an element a located array of input points does not hold, as written.
   defp unheld({:array, :input, {first, _from}, {last, _to}}, {_name, shown}, {_, configuration}),
     do:
-      "`#{shown}` is no input point of `#{configuration.name}`: its array is one of input " <>
-        "points, each element forced by its name as its subscripts' values, `#{first}` to " <>
-        "`#{last}`"
+      "#{quoted(shown)} is no input point of #{quoted(configuration.name)}: its array is one of input " <>
+        "points, each element forced by its name as its subscripts' values, #{quoted(first)} to " <>
+        "#{quoted(last)}"
 
   defp unheld(_other, name, {types, configuration}),
     do: no_input(Map.keys(types), name, configuration)
 
   defp no_input([], {_name, shown}, configuration),
     do:
-      "`#{shown}` is no input point of `#{configuration.name}`, which has none: only an " <>
+      "#{quoted(shown)} is no input point of #{quoted(configuration.name)}, which has none: only an " <>
         "input point is forced"
 
   defp no_input(names, {name, shown}, configuration),
     do:
-      "`#{shown}` is no input point of `#{configuration.name}`" <>
+      "#{quoted(shown)} is no input point of #{quoted(configuration.name)}" <>
         Declarations.suggest(Logex.Name.by_value(name), Enum.sort(names), & &1, "names")
 
   # Every located global's point by its name, an element of a located array by its own,
@@ -2626,7 +2626,7 @@ defmodule Logex.Runner do
 
   defp misfit_written(name, type, spelling),
     do:
-      "`#{name}` is #{Declarations.a_type(type)}, forced to #{Declarations.values(type)}, " <>
+      "#{quoted(name)} is #{Declarations.a_type(type)}, forced to #{Declarations.values(type)}, " <>
         "got: " <> spelling
 
   # The change a request makes to the set of forces, written whole to the file before it
@@ -2998,7 +2998,10 @@ defmodule Logex.Runner do
   defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
     do:
       {forces, lines,
-       [{line, "`#{Logex.Refusal.shown(name)}` is forced on line #{first} already"} | problems]}
+       [
+         {line, "#{quoted(Logex.Refusal.shown(name))} is forced on line #{first} already"}
+         | problems
+       ]}
 
   defp once(nil, names, line, {forces, lines, problems}, problem),
     do:
@@ -3036,7 +3039,7 @@ defmodule Logex.Runner do
 
   defp force_problem({:array, {type, dims, names}}, name, value, _spellings),
     do: [
-      "`#{Logex.Refusal.shown(name)}` is #{Declarations.a_type({:array, type, dims})}, " <>
+      "#{quoted(Logex.Refusal.shown(name))} is #{Declarations.a_type({:array, type, dims})}, " <>
         "forced whole on one line, " <>
         "its name and then #{length(names)} values in the elements' order: the line holds " <>
         "#{count_of(value)}"
@@ -5228,7 +5231,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.shown_number(ms)} from now_ms/1: a clock's time is " <>
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} gave #{Logex.Lexer.shown_number(ms)} from now_ms/1: a clock's time is " <>
           "a whole number of milliseconds from -9223372036854775808 to 9223372036854775807"
       )
 
@@ -5236,7 +5239,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.inspected(other)} from now_ms/1: a " <>
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} gave #{Logex.Lexer.inspected(other)} from now_ms/1: a " <>
           "clock's time is a whole number of milliseconds"
       )
 
@@ -5253,13 +5256,17 @@ defmodule Logex.Runner do
   defp implements!([], _module), do: :ok
 
   defp implements!(:no_module, module),
-    do: raise(ArgumentError, "the runner's clock `#{Logex.Lexer.inspected(module)}` is no module")
+    do:
+      raise(
+        ArgumentError,
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} is no module"
+      )
 
   defp implements!(callbacks, module),
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{Logex.Lexer.inspected(module)}` does not implement Logex.Runner.Clock: it " <>
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} does not implement Logex.Runner.Clock: it " <>
           "has no " <> Enum.join(callbacks, ", ")
       )
 
@@ -5327,7 +5334,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's open: names the device `#{name}`, which io: binds no adapter to" <>
+        "the runner's open: names the device #{quoted(name)}, which io: binds no adapter to" <>
           Declarations.suggest(name, names, & &1, "devices")
       )
 
@@ -5717,7 +5724,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{Logex.Lexer.inspected(module)}` has no wall_ms/1, which a runner given " <>
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} has no wall_ms/1, which a runner given " <>
           "retain: writes its store's time by"
       )
 
@@ -5943,7 +5950,7 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "the runner's clock `#{Logex.Lexer.inspected(module)}` gave #{Logex.Lexer.inspected(answer)} from wall_ms/1: " <>
+        "the runner's clock #{quoted(Logex.Lexer.inspected(module))} gave #{Logex.Lexer.inspected(answer)} from wall_ms/1: " <>
           "a store's header is written at the wall clock's time, a whole number of " <>
           "milliseconds since the Unix epoch from year 0 to year 9999"
       )
@@ -5990,4 +5997,8 @@ defmodule Logex.Runner do
 
   defp expected(other),
     do: "expected a runner from Logex.Runner.start_link/1, got: #{Logex.Lexer.inspected(other)}"
+
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

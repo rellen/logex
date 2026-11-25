@@ -554,7 +554,7 @@ defmodule Logex.Edit do
     do: :ok
 
   defp program!(%FbType{name: name} = type) when is_binary(name),
-    do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
+    do: raise(ArgumentError, "#{quoted(name)} is " <> Declarations.not_a_program(type))
 
   defp program!(other),
     do:
@@ -602,4 +602,7 @@ defmodule Logex.Edit do
 
   defp shown(:testing), do: "under test"
   defp shown(stage), do: Atom.to_string(stage)
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

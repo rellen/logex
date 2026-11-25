@@ -91,6 +91,24 @@ defmodule Logex.QuotedTest do
   xic boxes.q ote full
   """
 
+  # A program that holds a user block, whose type and body the hostile walk edits.
+  @seal """
+  function_block seal
+  var_input start bool
+  var_input stop bool
+  var_output run bool
+
+  ( xic start | xic run ) xio stop ote run
+  """
+
+  @sealed """
+  var_input a bool
+  var s1 seal
+  var_output o bool
+
+  cal s1 a a o
+  """
+
   @config """
   var_global eye_1 bool at panel.i.0
   var_global case_full bool
@@ -1085,6 +1103,25 @@ defmodule Logex.QuotedTest do
       %{rt | globals: Map.new(rt.globals, fn {name, _value} -> {name, :x} end)}
     end
 
+    # RV-33's review (F4): the same, its var_external one of the globals a connection reads.
+    defp misread_through(n, external) do
+      source =
+        Enum.map_join(1..n, "\n", &"var_input v#{pad(&1)} dint") <>
+          "\nvar_input start bool\nvar_external #{external} dint\nvar_output lamp bool\n\n" <>
+          "xic start ote lamp\n"
+
+      {:ok, reader} = Logex.compile(source, name: "reader")
+
+      text =
+        Enum.map_join(1..n, "\n", &"var_global g#{pad(&1)} dint") <>
+          "\n\nprogram i1 reader\n" <>
+          Enum.map_join(1..n, "\n", &"  i1.v#{pad(&1)} g#{pad(&1)}") <> "\n  i1.start 0\n"
+
+      {:ok, c} = Configuration.compile("plant", text, %{"reader" => reader})
+      rt = Runtime.start(c)
+      %{rt | globals: Map.new(rt.globals, fn {name, _value} -> {name, :x} end)}
+    end
+
     defp held_outside(name),
       do:
         "runtime.globals holds `#{name}` outside its type: it is a dint, and its value must " <>
@@ -1328,6 +1365,52 @@ defmodule Logex.QuotedTest do
       assert_raise ArgumentError,
                    Enum.join(lines ++ ["and 2 more mistakes, not listed"], "\n"),
                    fn -> Runtime.cycle(misread(101), 0, %{}) end
+    end
+
+    # RV-33's review (F4): a global a connection reads and a var_external names, past the
+    # copy-in's hundred, is one mistake: 150 globals out of their type, `g150` the
+    # var_external's, are the first hundred and 50 more, where the step counted it in the
+    # copy-in's count and among its var_externals' lines, and told 51.
+    test "a step's refusal counts a global its copy-in and a var_external both read once" do
+      hundred = each(100, fn i -> held_outside("g#{pad(i)}") end)
+
+      assert_raise ArgumentError,
+                   Enum.join(hundred ++ ["and 50 more mistakes, not listed"], "\n"),
+                   fn -> Runtime.cycle(misread_through(150, "g150"), 0, %{}) end
+
+      assert_raise ArgumentError,
+                   Enum.join(hundred ++ ["and 1 more mistake, not listed"], "\n"),
+                   fn -> Runtime.cycle(misread_through(101, "g101"), 0, %{}) end
+    end
+
+    # RV-33's review (F5): the unit of the hundred and of the count is the mistake, an
+    # input's key, and an array's value is one mistake however many of its elements do
+    # not fit, told in up to eleven lines, its first ten misfits and a count of the rest
+    # (decision 151's ten): 120 arrays of 20 sints, each wholly outside its type, are told
+    # as the first hundred arrays, 1,100 lines, and 20 more (provisional: `PLAN.md`'s
+    # RV-33 review, question 3).
+    test "an array's misfits are one mistake, its ten lines and a count among the hundred" do
+      source =
+        Enum.map_join(1..120, "\n", &"var_input a#{pad(&1)} sint[20]") <>
+          "\nvar_input start bool\nvar_output lamp bool\n\nxic start ote lamp\n"
+
+      {:ok, p} = Logex.compile(source, name: "p")
+      inputs = for i <- 1..120, into: %{}, do: {"a#{pad(i)}", List.duplicate(1000, 20)}
+
+      lines =
+        for i <- 1..100 do
+          name = "a#{pad(i)}"
+
+          Enum.map(0..9, &"input `#{name}[#{&1}]` is an sint: 1000 is outside -128 to 127") ++
+            [
+              "input `#{name}` is an array of 20 sints, with 10 more elements outside its " <>
+                "type, not listed"
+            ]
+        end
+
+      assert_raise ArgumentError,
+                   Enum.join(List.flatten(lines) ++ ["and 20 more mistakes, not listed"], "\n"),
+                   fn -> Runtime.put_inputs(p, Runtime.instance(p), inputs) end
     end
   end
 
@@ -1621,6 +1704,218 @@ defmodule Logex.QuotedTest do
     end
   end
 
+  describe "every name a refusal writes itself is cut past 4,096 bytes (RV-33's review)" do
+    # RV-33's review (F2): decision 613 reached the refusals that quoted a key, a path or a
+    # judged name through the cut, and not those that wrote a name in backquotes
+    # themselves, `` `#{name}` ``: `Logex.Tag.new!/5` of a name with `.` parts, `get!/2` of
+    # a tag an instance does not declare, and a configuration's diagnostics that
+    # `new!/1` and `start/1` raise, a task declared twice 5 MB and the types given 16 M
+    # reductions at a megabyte. Each is now cut, and a line to copy that would hold the
+    # name holds none, or its cut start; and a name past 4,096 bytes is never the
+    # did-you-mean looked for.
+
+    test "Logex.Tag.new!/5, get!/2, a configuration's diagnostics and cycle/3", %{rt: rt} do
+      long = a(4_097)
+      cut = "`#{a(4_096)}…` (4097 bytes)"
+
+      {:ok, m} =
+        Logex.compile("var_input start bool\nvar_output lamp bool\n\nxic start ote lamp\n",
+          name: "m"
+        )
+
+      one = [%Configuration.Instance{name: "i1", type: "m"}]
+      zero = [%Configuration.Connection{instance: "i1", member: "start", to: 0}]
+
+      new! =
+        &Configuration.new!(
+          Keyword.merge([name: "c", programs: [m], instances: one, connections: zero], &1)
+        )
+
+      task = %Task{name: opaque(long), interval: 10, priority: 1}
+      global = %Global{name: opaque(long), type: :bool}
+      key = opaque("temps[" <> String.duplicate("0", 9_990) <> "1]")
+
+      cut_told([
+        {"Tag.new!/5, a name with `.` parts",
+         fn -> Logex.Tag.new!(opaque(long <> ".b"), :bool) end,
+         "`#{a(4_096)}…` (4099 bytes) cannot name a tag: `.` is kept for a member, as in a " <>
+           "timer's `t1.dn`"},
+        {"Tag.new!/5, a name with a subscript",
+         fn -> Logex.Tag.new!(opaque(long <> "[1]"), :bool) end,
+         "`#{a(4_096)}…` (4100 bytes) cannot name a tag: brackets are kept for an element's " <>
+           "subscripts, as in `temps[3]`"},
+        {"get!/2, a tag an instance does not declare",
+         fn -> Runtime.get!(rt, opaque("t1." <> long)) end,
+         "`t1` is a program instance of `tally`, which declares no #{cut}"},
+        {"new!/1, an unknown program type",
+         fn -> new!.(instances: [%Configuration.Instance{name: "i1", type: opaque(long)}]) end,
+         "unknown program type #{cut}: the types given are `m`"},
+        {"new!/1, the types given", fn -> new!.(programs: [%{m | name: opaque(long)}]) end,
+         "unknown program type `m`: the types given are #{cut}"},
+        {"new!/1, a task declared twice", fn -> new!.(tasks: [task, task]) end,
+         "#{cut} is declared twice: the first is a task"},
+        {"new!/1, a global declared twice", fn -> new!.(globals: [global, global]) end,
+         "#{cut} is declared twice: the first is a global"},
+        {"new!/1, no task, and no line to declare it",
+         fn ->
+           new!.(instances: [%Configuration.Instance{name: "i1", type: "m", task: opaque(long)}])
+         end, "no task #{cut}"},
+        {"new!/1, no global",
+         fn ->
+           new!.(
+             connections: [
+               %Configuration.Connection{instance: "i1", member: "start", to: opaque(long)}
+             ]
+           )
+         end, "no global #{cut}"},
+        {"new!/1, a connection's member",
+         fn ->
+           new!.(
+             connections:
+               zero ++ [%Configuration.Connection{instance: "i1", member: opaque(long), to: 0}]
+           )
+         end,
+         "`i1` runs `m`, which declares no #{cut}: its var_inputs and var_outputs are `lamp` " <>
+           "and `start`"},
+        {"start/1, an unknown program type",
+         fn ->
+           Runtime.start(%Configuration{
+             name: "c",
+             programs: %{"m" => m},
+             instances: [%Configuration.Instance{name: "i1", type: opaque(long), line: 1}]
+           })
+         end, "line 1: unknown program type #{cut}: the types given are `m`"},
+        {"cycle/3, an array set whole and by an element",
+         fn -> Runtime.cycle(rt, 0, %{"temps" => [1, 2], key => 3}) end,
+         "inputs `temps` and `temps[#{String.duplicate("0", 4_090)}…` (9998 bytes) each set " <>
+           "`temps`, an array of 2 dints (line 4): a call sets an array whole or by its " <>
+           "elements, not both"}
+      ])
+
+      # A line to copy holds the name's cut start, the message twice the cut's.
+      message =
+        "#{cut} is a ton: its preset is the number on its `ton` instruction, as in " <>
+          "`ton #{a(4_096)}… 5000`, not an initial value on its declaration"
+
+      assert_raise ArgumentError, message, fn ->
+        Logex.Tag.new!(opaque(long), Logex.FbType.ton(), :var, 5)
+      end
+    end
+
+    # RV-33's review (F6): a text past 4,096 bytes is judged text by them alone, as
+    # `inspect/1` judges one by its `printable_limit`; the bytes the cut drops are only a
+    # split character's start, a lead byte and the continuation bytes that fit, and a
+    # byte that starts no character, `0x80` or `0xFF`, makes the start no text, shown as
+    # `inspect/1` shows a binary, where it was dropped as a split character's. And (F7) a
+    # text that holds a control character is shown as `inspect/1` shows it, escaped, so
+    # that no device's name writes a line of the refusal, a count's.
+    test "the cut's start, a byte that starts no character, and a control character", %{c: c} do
+      cut = &"`#{a(&1)}…` (#{&2} bytes)"
+
+      for {text, quoted} <- [
+            {a(4_094) <> "€x", cut.(4_094, 4_098)},
+            {a(4_095) <> "€x", cut.(4_095, 4_099)},
+            {a(4_093) <> "😀x", cut.(4_093, 4_098)},
+            {a(4_094) <> "😀x", cut.(4_094, 4_099)},
+            {a(4_096) <> <<255>>, cut.(4_096, 4_097)},
+            {a(5_000) <> <<255>>, cut.(4_096, 5_001)},
+            {a(4_095) <> <<0x80>> <> "bbb", inspect(a(4_095) <> <<0x80>> <> "bbb")},
+            {a(4_093) <> <<0xFF>> <> "bbbb", inspect(a(4_093) <> <<0xFF>> <> "bbbb")},
+            {"a\tb", ~s("a\\tb")},
+            {"x\n" <> a(5_000), inspect("x\n" <> a(5_000))}
+          ] do
+        assert {text, Logex.Lexer.quoted_text(opaque(text))} == {text, quoted}
+      end
+
+      forged = "x\nand 7 more mistakes, not listed"
+
+      assert_raise ArgumentError,
+                   ~s|the device "x\\nand 7 more mistakes, not listed" is bound, but no point | <>
+                     "is at it",
+                   fn ->
+                     Logex.IO.bind!(c, %{opaque(forged) => Sim, "panel" => {Adapter, checked: []}})
+                   end
+    end
+
+    # RV-33's review (F8): an access path's lines that wrote a task's or an instance's name,
+    # or a member's path, in backquotes themselves, each through the cut; and a name of
+    # 4,096 bytes, which is whole, is still offered its did-you-mean, one past them none.
+    test "an access path's task, instance and member, and a did-you-mean at 4,096 bytes" do
+      {:ok, m} =
+        Logex.compile(
+          "var_input start bool\nvar_output lamp bool\nvar t1 ton\n\nxic start ton t1 10\n" <>
+            "xic t1.dn ote lamp\n",
+          name: "m"
+        )
+
+      task = "t" <> a(4_096)
+      instance = "i" <> a(4_096)
+      cut = &"`#{binary_part(&1, 0, 4_096)}…` (#{byte_size(&1)} bytes)"
+
+      rt =
+        Runtime.start(
+          Configuration.new!(
+            name: "c",
+            programs: [m],
+            tasks: [%Task{name: task, interval: 10, priority: 1}],
+            instances: [%Configuration.Instance{name: instance, type: "m", task: task}],
+            connections: [%Configuration.Connection{instance: instance, member: "start", to: 0}]
+          )
+        )
+
+      for {label, fun, message} <- [
+            {"a task", fn -> Runtime.get!(rt, opaque(task)) end,
+             "#{cut.(task)} is a task, not a global or a program instance: an access path starts " <>
+               "at one of those, and overlaps/1 reads a task's overlap count"},
+            {"an instance, its example", fn -> Runtime.get!(rt, opaque(instance)) end,
+             "#{cut.(instance)} is a program instance of `m`: an access path names one of its " <>
+               "tags, as in #{cut.(instance <> ".lamp")}"},
+            {"a member no type has", fn -> Runtime.get!(rt, opaque(instance <> ".t1.zz")) end,
+             "#{cut.(instance <> ".t1.zz")} is not a member of #{cut.(instance <> ".t1")}, a " <>
+               "ton: its members are `pre`, `acc`, `dn`, `tt` and `en`"}
+          ] do
+        error = assert_raise ArgumentError, fun
+        assert {label, error.message} == {label, message}
+      end
+
+      {:ok, p} =
+        Logex.compile(
+          "var_input A#{a(4_095)} bool\nvar_output lamp bool\n\nxic A#{a(4_095)} ote lamp\n",
+          name: "p"
+        )
+
+      s = Runtime.instance(p)
+
+      assert_raise ArgumentError,
+                   "input `#{a(4_096)}` is not declared — did you mean `A#{a(4_095)}`? (tags " <>
+                     "are case-sensitive)",
+                   fn -> Runtime.put_inputs(p, s, %{opaque(a(4_096)) => 1}) end
+
+      assert_raise ArgumentError,
+                   "input `#{a(4_096)}…` (4097 bytes) is not declared: the var_inputs are " <>
+                     "`A#{a(4_095)}`",
+                   fn -> Runtime.put_inputs(p, s, %{opaque(a(4_097)) => 1}) end
+    end
+
+    test "a compile's diagnostic quotes a name whole however long (F3)" do
+      # A compile's diagnostic is no refusal of the host contract: a name of 5,000 bytes is
+      # whole in each place it is quoted, as before decision 613, where the type's check
+      # cut it in one place and not the other (provisional: `PLAN.md`'s RV-33 review,
+      # question 2).
+      name = a(5_000)
+
+      assert {:error, [%Logex.Diagnostic{message: message}]} =
+               Logex.compile(
+                 "var #{name} ton 5\nvar_input x bool\nvar_output y bool\n\nxic x ote y\n",
+                 name: "p"
+               )
+
+      assert message ==
+               "`#{name}` is a ton: its preset is the number on its `ton` instruction, as in " <>
+                 "`ton #{name} 5000`, not an initial value on its declaration"
+    end
+  end
+
   describe "instance/1 refuses a struct where a map is due (decision 616)" do
     # Decision 616 (RV-33; the maintainer, 2026-11-24, RV-32's question 7): a program edited
     # by hand that holds a struct where a map is due, its tag table, its blocks, its
@@ -1673,6 +1968,98 @@ defmodule Logex.QuotedTest do
     end
   end
 
+  describe "a program handed in anywhere refuses a struct where a map is due (RV-33's review)" do
+    # RV-33's review (F1): decision 616 reached `instance/1` and both edits alone. A
+    # configuration's checks sorted a program's tags for its ports before the program's own
+    # check, so a `Date` there escaped `check/1`, `new!/1`, `start/1` and a configuration's
+    # edit as Protocol.UndefinedError, 100 KB with a long year; a held block's body whose
+    # table was a `Date` or `:x`, whose tags were no map, or a block type whose members were
+    # no list escaped `instance/1`, or was taken; and a rung that is no rung was passed over
+    # by the check and raised FunctionClauseError at a scan and in a configuration's walk.
+    setup do
+      {:ok, seal} = Logex.compile(@seal, name: "seal")
+      {:ok, m} = Logex.compile(@sealed, name: "m", types: [seal])
+      {:ok, line} = Configuration.compile("line", "program i1 m\n  i1.a 0\n", %{"m" => m})
+      %{m: m, sealed: line}
+    end
+
+    test "check/1, new!/1, start/1 and a configuration's edit", %{c: c, rt: rt, big: big} do
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+      long = opaque(%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO})
+      dated = %{c | programs: %{"tally" => %{tally | tags: opaque(~D[2026-11-24])}}}
+      longer = %{c | programs: %{"tally" => %{tally | tags: long}}}
+      by_hand = ": `tally` was edited by hand after it compiled"
+      told = "`tally`'s tags are no map of its tags by name, got: ~D[2026-11-24]" <> by_hand
+
+      told([
+        {"check/1", fn -> Configuration.check(dated) end, told},
+        {"check/1, a long year", fn -> Configuration.check(longer) end,
+         "`tally`'s tags are no map of its tags by name, got: %Date{year: #{@cut}, month: 1, " <>
+           "day: 1, calendar: Calendar.ISO}" <> by_hand},
+        {"new!/1",
+         fn ->
+           Configuration.new!(
+             name: "plant",
+             programs: [%{tally | tags: opaque(~T[10:00:00])}],
+             instances: [%Configuration.Instance{name: "t1", type: "tally"}]
+           )
+         end, "`tally`'s tags are no map of its tags by name, got: ~T[10:00:00]" <> by_hand},
+        {"start/1", fn -> Runtime.start(dated) end, told},
+        {"Configuration.Edit.accept/2", fn -> Configuration.Edit.accept(rt, dated) end, told}
+      ])
+    end
+
+    test "a held block's body, its type's members and a rung that is no rung",
+         %{m: m, sealed: line, big: big} do
+      type = m.blocks["seal"]
+      long = opaque(%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO})
+      typed = fn type -> %{m | blocks: %{"seal" => type}} end
+      bodied = fn field, value -> typed.(%{type | body: Map.put(type.body, field, value)}) end
+      by_hand = ": `m` was edited by hand after it compiled"
+      table = "`seal`'s body's block types are no map of the types it holds by name, got: "
+
+      told([
+        {"a body's table, a Date",
+         fn -> Runtime.instance(bodied.(:blocks, opaque(~D[2026-11-24]))) end,
+         table <> "~D[2026-11-24]" <> by_hand},
+        {"a body's table, a long year", fn -> Runtime.instance(bodied.(:blocks, long)) end,
+         table <> "%Date{year: #{@cut}, month: 1, day: 1, calendar: Calendar.ISO}" <> by_hand},
+        {"a body's table, an atom", fn -> Runtime.instance(bodied.(:blocks, opaque(:x))) end,
+         table <> ":x" <> by_hand},
+        {"a body's table at check/1",
+         fn ->
+           Configuration.check(%{
+             line
+             | programs: %{"m" => bodied.(:blocks, opaque(~D[2026-11-24]))}
+           })
+         end, table <> "~D[2026-11-24]" <> by_hand},
+        {"a body's tags, an atom", fn -> Runtime.instance(bodied.(:tags, opaque(:x))) end,
+         "`seal`'s body's tags are no map of its tags by name, got: :x" <> by_hand},
+        {"a body's tags, nil", fn -> Runtime.instance(bodied.(:tags, opaque(nil))) end,
+         "`seal`'s body's tags are no map of its tags by name, got: nil" <> by_hand},
+        {"a body's rungs, an atom", fn -> Runtime.instance(bodied.(:rungs, opaque(:x))) end,
+         "`seal`'s body's rungs are no list of its rungs, got: :x" <> by_hand},
+        {"a body's retained, a long number",
+         fn -> Runtime.instance(bodied.(:retained, [big])) end,
+         "`seal`'s body's retained paths hold #{@cut}, where its tags do not hold it" <> by_hand},
+        {"a type's members, a Date",
+         fn -> Runtime.instance(typed.(%{type | members: opaque(~D[2026-11-24])})) end,
+         "`seal`'s members are no list of its members, got: ~D[2026-11-24]" <> by_hand},
+        {"a type's members, a list of no members",
+         fn -> Runtime.instance(typed.(%{type | members: [1]})) end,
+         "`seal`'s members are no list of its members, got: [1]" <> by_hand},
+        {"a program's rungs, a number", fn -> Runtime.instance(%{m | rungs: m.rungs ++ [10]}) end,
+         "`m`'s rungs hold 10, which is no rung" <> by_hand},
+        {"a program's rung of no list",
+         fn -> Runtime.instance(%{m | rungs: [{:rung, opaque(:y)} | m.rungs]}) end,
+         "`m`'s rungs hold {:rung, :y}, which is no rung" <> by_hand},
+        {"a rung that is no rung at check/1",
+         fn -> Configuration.check(%{line | programs: %{"m" => %{m | rungs: [10]}}}) end,
+         "`m`'s rungs hold 10, which is no rung" <> by_hand}
+      ])
+    end
+  end
+
   describe "a hostile value wherever the host contract takes one (RV-32's review, F7)" do
     # A walk over the host contract's arguments and the fields of the structs it checks,
     # each given in turn a long number, a tuple, a list and a struct that hold one, a
@@ -1693,12 +2080,37 @@ defmodule Logex.QuotedTest do
     # The fields the walk gives a value that nothing reads where it is walked: a
     # program's name is the instance's type, taken as it is; its file, source and warnings
     # and a configuration's warnings are what the compile gave, read by no check.
+    #
+    # Since RV-33's review (F1) the same of a program handed in inside a configuration and
+    # of a held block's body, whose name is its type's; and a held block type's name, which
+    # its key gives, its elements, a built-in's count, and its body, which a `cal` runs and
+    # a scan refuses where it is no program, `state.env holds `s1` outside its type`.
     @unread [
+      "Configuration.Edit.accept/2 program.file",
+      "Configuration.Edit.accept/2 program.source",
+      "Configuration.Edit.accept/2 program.warnings",
+      "check/1 a block's body.file",
+      "check/1 a block's body.name",
+      "check/1 a block's body.source",
+      "check/1 a block's body.warnings",
       "check/1 configuration.warnings",
+      "check/1 program.file",
+      "check/1 program.source",
+      "check/1 program.warnings",
+      "instance/1 a block type.body",
+      "instance/1 a block type.elements",
+      "instance/1 a block type.name",
+      "instance/1 a block's body.file",
+      "instance/1 a block's body.name",
+      "instance/1 a block's body.source",
+      "instance/1 a block's body.warnings",
       "instance/1 program.file",
       "instance/1 program.name",
       "instance/1 program.source",
-      "instance/1 program.warnings"
+      "instance/1 program.warnings",
+      "start/1 program.file",
+      "start/1 program.source",
+      "start/1 program.warnings"
     ]
 
     defp hostile(big) do
@@ -1719,7 +2131,11 @@ defmodule Logex.QuotedTest do
         },
         in_list: [%{__struct__: Date, year: big, month: 1, day: 1, calendar: Calendar.ISO}],
         # Decision 613: a text past 4,096 bytes, a name or a location among them, cut.
-        long_text: String.duplicate("a", 100_000)
+        long_text: String.duplicate("a", 100_000),
+        # RV-33's review (F2): and one that no lexer takes for one name, with `.` parts or a
+        # subscript, which refusals wrote out whole where they quote it themselves.
+        long_dotted: String.duplicate("a.", 50_000) <> "a",
+        long_subscripted: String.duplicate("a", 100_000) <> "[1]"
       ]
     end
 
@@ -1806,6 +2222,46 @@ defmodule Logex.QuotedTest do
         for(
           {field, call} <- fielded(task, &checked.(%{c | tasks: [&1]})),
           do: {"check/1 task.#{field}", call}
+        ) ++ held_callers(%{c: c, rt: rt, tally: tally})
+    end
+
+    # RV-33's review (F1): the fields of a program handed in inside a configuration, at
+    # check/1, start/1 and a configuration's edit, where a `Date` as the tags escaped from a
+    # sort before the program's own check; and those of a block type a program holds and
+    # of its body, at instance/1 and check/1, where a `Date` as a body's table escaped.
+    defp held_callers(%{c: c, rt: rt, tally: tally}) do
+      {:ok, seal} = Logex.compile(@seal, name: "seal")
+      {:ok, m} = Logex.compile(@sealed, name: "m", types: [seal])
+      {:ok, sealed} = Configuration.compile("line", "program i1 m\n  i1.a 0\n", %{"m" => m})
+      type = m.blocks["seal"]
+      in_c = fn program -> %{c | programs: %{"tally" => program}} end
+      typed = fn type -> %{m | blocks: %{"seal" => type}} end
+      bodied = fn body -> typed.(%{type | body: body}) end
+      in_line = fn program -> %{sealed | programs: %{"m" => program}} end
+
+      for(
+        {field, call} <- fielded(tally, &Configuration.check(in_c.(&1))),
+        do: {"check/1 program.#{field}", call}
+      ) ++
+        for(
+          {field, call} <- fielded(tally, &Runtime.start(in_c.(&1))),
+          do: {"start/1 program.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(tally, &Configuration.Edit.accept(rt, in_c.(&1))),
+          do: {"Configuration.Edit.accept/2 program.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(type, &Runtime.instance(typed.(&1))),
+          do: {"instance/1 a block type.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(type.body, &Runtime.instance(bodied.(&1))),
+          do: {"instance/1 a block's body.#{field}", call}
+        ) ++
+        for(
+          {field, call} <- fielded(type.body, &Configuration.check(in_line.(bodied.(&1)))),
+          do: {"check/1 a block's body.#{field}", call}
         )
     end
 
@@ -1835,6 +2291,8 @@ defmodule Logex.QuotedTest do
     # that holds the text shows its first 4,096 bytes, as `inspect/1` does, beside the rest
     # of the value, `compile/2`'s map of types among them (decisions 585 and 613).
     defp longest(:long_text), do: 10_000
+    defp longest(:long_dotted), do: 10_000
+    defp longest(:long_subscripted), do: 10_000
     defp longest(_kind), do: 5_000
 
     test "every refusal an ArgumentError whose message is short text", ctx do

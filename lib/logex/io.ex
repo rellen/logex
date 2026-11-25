@@ -287,14 +287,15 @@ defmodule Logex.IO do
 
   defp ranged(_array, first, last, device, _points),
     do: [
-      "`#{first.name}` to `#{last.name}` (#{located_at(device, first)} to #{located_at(device, last)})"
+      "#{quoted(first.name)} to #{quoted(last.name)} (#{located_at(device, first)} to #{located_at(device, last)})"
     ]
 
   defp array_of(name), do: array_named(Logex.Name.element(name))
   defp array_named({array, _subscripts}), do: array
   defp array_named(nil), do: nil
 
-  defp shown(device, %Point{name: name} = point), do: "`#{name}` (#{located_at(device, point)})"
+  defp shown(device, %Point{name: name} = point),
+    do: "#{quoted(name)} (#{located_at(device, point)})"
 
   defp located_at(device, %Point{direction: direction, address: address}),
     do: Enum.join([device, letter(direction) | Enum.map(address, &Integer.to_string/1)], ".")
@@ -349,7 +350,7 @@ defmodule Logex.IO do
 
   defp lines(name, module, other, false),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, whose check/3 gives a list of " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, whose check/3 gives a list of " <>
         "messages, got: #{Logex.Lexer.inspected(other)}"
     ]
 
@@ -366,7 +367,7 @@ defmodule Logex.IO do
 
   defp lacking(name, module, false),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which is no module"
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, which is no module"
     ]
 
   defp lacking(name, module, true),
@@ -381,7 +382,7 @@ defmodule Logex.IO do
 
   defp missing(name, module, callbacks),
     do: [
-      "the device #{Logex.Lexer.quoted_text(name)} is bound to `#{Logex.Lexer.inspected(module)}`, which does not implement " <>
+      "the device #{Logex.Lexer.quoted_text(name)} is bound to #{quoted(Logex.Lexer.inspected(module))}, which does not implement " <>
         "Logex.IO: it has no " <> either(callbacks)
     ]
 
@@ -397,4 +398,7 @@ defmodule Logex.IO do
 
   defp entry(name, {module, opts}, points), do: {name, module, opts, points}
   defp entry(name, module, points), do: {name, module, [], points}
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

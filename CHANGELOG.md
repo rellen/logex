@@ -222,20 +222,34 @@ API".
   mistakes, not listed`, in the order the lines came, none of them made: a box counter's
   bridge that keys 100,000 inputs by register number is told in 9 KB, where it was told
   in 9.6 MB and some 0.4 s, and 100,000 devices keyed by number in 4 KB, where it was
-  4.5 MB. A refusal of a hundred mistakes or fewer is as it was; the runner's start,
-  which tells a store's image in 50 lines and a count, counts those the start's refusal
-  did not list. Look for: code that counts or parses the lines of such a message.
+  4.5 MB. The unit is the mistake: an array input's value is one, told in up to eleven
+  lines, its first ten elements that do not fit and a count of the rest, as before. A
+  step of `cycle/3` refused for its globals tells its copy-in's and its var_externals'
+  as one list, each global once. A refusal of a hundred mistakes or fewer is as it was;
+  the runner's start, which tells a store's image in 50 lines and a count, counts those
+  the start's refusal did not list. Look for: code that counts or parses the lines of
+  such a message.
 - **A name or a location past 4,096 bytes is cut where a refusal quotes it** (decision
   613, amending 585), at a character's boundary, and told how long it was, where it was
   quoted whole: a bridge's megabyte of a key to `put_inputs/3` is told ``input
   `aaaa…` (1000000 bytes) is not declared``, a line of some 4 KB in a few milliseconds,
   where it was a megabyte after some 1.6 s; so are `cycle/3`'s keys, `get/2`'s and
   `get!/2`'s paths, `IO.bind!/2`'s device names, a configuration's names and locations,
-  `Global.new!/3`'s among them. A name past 4,096 bytes is offered no did-you-mean,
-  where `Logex.Tag.new!/5` of a megabyte's type text took 13 s to look for one. A text of
-  4,096 bytes or fewer is as it was; a text a refusal shows as a value, a type's text
-  among them, is cut as `inspect/1` cuts it, as before. Look for: code that reads a name
-  back out of such a message.
+  `Global.new!/3`'s among them, and every name a refusal writes in backquotes itself:
+  `Logex.Tag.new!/5`'s name with `.` parts or a subscript, `get!/2`'s tag an instance does
+  not declare, a task's or an instance's name in a path, and every diagnostic of a
+  configuration, which `check/1` gives and `new!/1` and `Logex.Runtime.start/1` raise, a
+  task declared twice among them, where one was 5 MB; a line to copy that would hold such
+  a name holds its cut start, or none is given. A name past 4,096 bytes is offered no
+  did-you-mean, and never is one, where `Logex.Tag.new!/5` of a megabyte's type text took
+  13 s to look for one and `new!/1` 0.9 s to look past a megabyte's program type. A text
+  past 4,096 bytes is judged text by them, as `inspect/1` judges one; a byte among them
+  that starts no character shows it as `inspect/1` shows a binary. A name that holds a
+  control character, a newline among them, is quoted as `inspect/1` shows it, escaped, so
+  that no name writes a line of a refusal. A text of 4,096 bytes or fewer with none is as
+  it was; a text a refusal shows as a value, a type's text among them, is cut as
+  `inspect/1` cuts it, as before; a compile's diagnostics quote a name whole, as before.
+  Look for: code that reads a name back out of such a message.
 - **`Logex.Runtime.instance/1` refuses a program edited by hand that holds a struct where a
   map is due** (decision 616), a `Date` or a `Time` as its tags or its blocks, a line
   each in its `ArgumentError`, ``"`p`'s tags are no map of its tags by name, got:
@@ -243,9 +257,15 @@ API".
   `Protocol.UndefinedError`, Elixir's message, 100 KB with a long year; so are a
   struct as its arrays, units or reals, where it was told each of the struct's fields as
   a name. `Logex.Configuration.check/1`, `Logex.Edit.accept/3` and
-  `Logex.Configuration.Edit.accept/2`, which check a program so, refuse it the same;
+  `Logex.Configuration.Edit.accept/2`, which check a program so, refuse it the same, and
+  so do `Logex.Configuration.new!/1` and `Logex.Runtime.start/1`, where a configuration's
+  check sorted a struct as the tags and raised; so is a held block's body whose table of
+  block types is a struct or no map, whose tags are no map or whose rungs no list, a
+  block type whose members are no list of members, and an entry of the rungs that is no
+  rung, where they raised or were taken and a scan raised `FunctionClauseError`.
   `put_inputs/3` and `call/4` check a program's shape alone, as before. Look for: a
-  `rescue` of `Protocol.UndefinedError` around `instance/1`.
+  `rescue` of `Protocol.UndefinedError` or `FunctionClauseError` around `instance/1` or
+  `new!/1`.
 
 ### What it carries, by the work that built it
 

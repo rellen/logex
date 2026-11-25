@@ -77,12 +77,18 @@ defmodule Logex do
   the host contract, `Logex.Runtime`'s, `Logex.Runner`'s, the edits', `Logex.IO`'s and
   `Logex.Configuration`'s among them. A name or a location that is text is quoted whole,
   in backquotes, up to 4,096 bytes, and past them cut and told how long it was,
-  `` `aaaa…` (1000000 bytes) `` (decision 613); one that is no UTF-8 text, or no text at
-  all, is quoted as `inspect/1` shows it, `<<97, 98, 255, 99>>`, so that a refusal's
-  message is always text; and a struct that shows itself, a `Date` or a `Version`, is
-  shown field by field where it holds a long number, which its own `inspect/1` would write
-  out whole (RV-32's review). A refusal that tells a line a mistake tells the first
-  hundred and then how many more there are (decision 610).
+  `` `aaaa…` (1000000 bytes) `` (decision 613), every name a refusal writes among them,
+  and judged text by those 4,096 bytes, as `inspect/1` judges one; one that is no UTF-8
+  text, or no text at all, is quoted as `inspect/1` shows it, `<<97, 98, 255, 99>>`, so
+  that a refusal's message is always text, and so is one that holds a control character,
+  a newline among them, escaped, so that no name writes a line of a refusal (RV-33's
+  review); and a struct that shows itself, a `Date` or a `Version`, is shown field by
+  field where it holds a long number, which its own `inspect/1` would write out whole
+  (RV-32's review). A compile's diagnostics quote a name whole however long, as before
+  decision 613 (provisional: `PLAN.md`'s RV-33 review, question 2). A refusal that tells a
+  line a mistake tells the first hundred mistakes and then how many more there are
+  (decision 610), an array input's value one mistake in up to eleven lines, its first ten
+  misfits and a count (provisional: `PLAN.md`'s RV-33 review, question 3).
   """
 
   # Decision 515 (c), RV-24: what a compile hands back, the host contract's types.

@@ -567,7 +567,12 @@ defmodule Logex.Program do
   defp kept(path, _whole, true), do: [path]
   defp kept(_path, _whole, false), do: []
 
-  defp prefixed(paths, prefix) when is_list(paths), do: Enum.map(paths, &(prefix <> &1))
+  # RV-33's review (F1): a held body's retained paths are read here before its own check
+  # tells what is no path, so a path that is no text is passed over, where joining it
+  # raised ArgumentError with Elixir's message, 100 KB with a long number.
+  defp prefixed(paths, prefix) when is_list(paths) and length(paths) >= 0,
+    do: for(path <- paths, is_binary(path), do: prefix <> path)
+
   defp prefixed(_none, _prefix), do: []
 
   defp members_kept(prefix, type, held),
@@ -670,7 +675,27 @@ defmodule Logex.Program do
     held_bodies(blocks, {program, table}, acc)
   end
 
-  defp routine(_not_a_routine, _where, acc, _table), do: acc
+  # RV-33's review (F1): a body whose tags are no map, `:x` or a list, or whose rungs are
+  # no list, is one line, where it was taken as a routine of nothing and its `cal` raised
+  # at a scan; a program's own are refused before the walk (`instance/1`'s shape check,
+  # `Logex.Configuration.check/1`'s).
+  defp routine(%__MODULE__{tags: tags}, {program, _block} = where, {lines, seen}, _table)
+       when not is_map(tags),
+       do:
+         {[
+            "#{owner(where)} tags are no map of its tags by name, got: " <>
+              "#{Logex.Lexer.inspected(tags)}: #{named(program)} was edited by hand after it compiled"
+            | lines
+          ], seen}
+
+  defp routine(%__MODULE__{rungs: rungs}, {program, _block} = where, {lines, seen}, _table)
+       when not is_list(rungs),
+       do:
+         {[
+            "#{owner(where)} rungs are no list of its rungs, got: " <>
+              "#{Logex.Lexer.inspected(rungs)}: #{named(program)} was edited by hand after it compiled"
+            | lines
+          ], seen}
 
   # Only a program's own table is walked: a held body's table is the program's (decision
   # 53), so a body names no table of its own to walk. Since M6-1 a body's instances are read
@@ -680,21 +705,50 @@ defmodule Logex.Program do
 
   defp held_bodies(_no_table, _at, acc), do: acc
 
+  # RV-33's review (F1): a body whose own table of block types is a struct, a `Date`, or
+  # no map, `:x`, and a block type whose members are no list of members, are a line each,
+  # where the walk merged the table and raised Protocol.UndefinedError, 100 KB with a long
+  # year, or BadMapError, and the instance's start raised on the members.
+  defp once(%Logex.FbType{name: name, members: members}, {program, _table}, {lines, seen})
+       when not is_list(members),
+       do: {[members_line(name, members, program) | lines], seen}
+
   defp once(
-         %Logex.FbType{name: name, body: %__MODULE__{} = body},
-         {program, table},
-         {lines, seen} = acc
-       ),
+         %Logex.FbType{name: name, body: %__MODULE__{blocks: blocks}},
+         {program, _table},
+         {lines, seen}
+       )
+       when blocks != nil and (is_struct(blocks) or not is_map(blocks)),
        do:
-         unseen(
-           MapSet.member?(seen, body),
-           body,
-           {program, name},
-           acc,
-           {{lines, MapSet.put(seen, body)}, merged(table, body.blocks)}
-         )
+         {[
+            "#{owner({program, name})} block types are no map of the types it holds by " <>
+              "name, got: #{Logex.Lexer.inspected(blocks)}: #{named(program)} was edited by " <>
+              "hand after it compiled"
+            | lines
+          ], seen}
+
+  defp once(%Logex.FbType{members: members, body: %__MODULE__{}} = type, at, acc),
+    do: held(Enum.all?(members, &is_struct(&1, Logex.FbType.Member)), type, at, acc)
 
   defp once(_no_body, _at, acc), do: acc
+
+  defp held(true, %Logex.FbType{name: name, body: body}, {program, table}, {lines, seen} = acc),
+    do:
+      unseen(
+        MapSet.member?(seen, body),
+        body,
+        {program, name},
+        acc,
+        {{lines, MapSet.put(seen, body)}, merged(table, body.blocks)}
+      )
+
+  defp held(false, %Logex.FbType{name: name, members: members}, {program, _table}, {lines, seen}),
+    do: {[members_line(name, members, program) | lines], seen}
+
+  defp members_line(name, members, program),
+    do:
+      "#{Logex.Lexer.quoted_text(name)}'s members are no list of its members, got: " <>
+        "#{Logex.Lexer.inspected(members)}: #{named(program)} was edited by hand after it compiled"
 
   # A body's own table, where it has one, read with the one it is held in; the quiet names
   # made again only then (M6-2's review), so a check of held bodies makes them once.
@@ -709,10 +763,24 @@ defmodule Logex.Program do
 
   # The walk itself, a clause an element, with no closure: a few reductions an
   # instruction, paid once a program since decision 190, where it is first handed in.
-  defp rungs([{:rung, elements} | rest], at, lines),
+  defp rungs([{:rung, elements} | rest], at, lines) when is_list(elements),
     do: rungs(rest, at, elements(elements, at, lines))
 
-  defp rungs([_not_a_rung | rest], at, lines), do: rungs(rest, at, lines)
+  # RV-33's review (F1): an entry of the rungs that is no rung, `10` or `{:rung, :y}`, is a
+  # line, where the check passed over it and a scan, or a configuration's walk of the
+  # writes, raised FunctionClauseError.
+  defp rungs([not_a_rung | rest], {_tags, {program, _block} = where} = at, {lines, called}),
+    do:
+      rungs(
+        rest,
+        at,
+        {[
+           "#{owner(where)} rungs hold #{Logex.Lexer.inspected(not_a_rung)}, which is no " <>
+             "rung: #{named(program)} was edited by hand after it compiled"
+           | lines
+         ], called}
+      )
+
   defp rungs(_end, _at, lines), do: lines
 
   defp elements([{:branches, legs} | rest], at, lines),
@@ -794,7 +862,7 @@ defmodule Logex.Program do
 
   defp computes({:error, what}, symbol, line, operands, {program, _block} = where, lines),
     do: [
-      "#{located(where)}`#{symbol}` on line #{Logex.Lexer.inspected(line)}#{within(where)} computes in the type of " <>
+      "#{located(where)}#{quoted(symbol)} on line #{Logex.Lexer.inspected(line)}#{within(where)} computes in the type of " <>
         "#{written(List.last(operands), what, where)}: #{named(program)} was edited by " <>
         "hand after it compiled"
       | lines
@@ -972,17 +1040,17 @@ defmodule Logex.Program do
     do: "#{shown(destination)}, whose array is #{a(type)}, no array"
 
   defp written(destination, {:no_instance, instance}, where),
-    do: "#{shown(destination)}, and #{declarer(where)} declares no `#{instance}`"
+    do: "#{shown(destination)}, and #{declarer(where)} declares no #{quoted(instance)}"
 
   defp written(destination, {:instance, instance, type}, _where),
-    do: "#{shown(destination)}, and `#{instance}` is #{a(type)}, not a built-in's instance"
+    do: "#{shown(destination)}, and #{quoted(instance)} is #{a(type)}, not a built-in's instance"
 
   defp written({:member, _, [_, member]} = destination, {:no_member, type}, _where),
-    do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
+    do: "#{shown(destination)}, and #{a(type)} has no #{quoted(member)}"
 
   # M5-14: a member of an element of an array of instances so.
   defp written({:member, _, _element, [member]} = destination, {:no_member, type}, _where),
-    do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
+    do: "#{shown(destination)}, and #{a(type)} has no #{quoted(member)}"
 
   # Decision 190: what a scan of a program edited by hand after its check is told of a
   # destination it reaches, in the words above.
@@ -993,16 +1061,16 @@ defmodule Logex.Program do
   defp declarer({_program, _block}), do: "the body"
 
   defp shown({:name, _, name}), do: Logex.Lexer.quoted_text(name)
-  defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+  defp shown({:member, _, path}), do: "#{quoted(Enum.join(path, "."))}"
 
   defp shown({:member, _, element, members}),
-    do: "`#{Enum.join([elem(element, tuple_size(element) - 1) | members], ".")}`"
+    do: "#{quoted(Enum.join([elem(element, tuple_size(element) - 1) | members], "."))}"
 
   defp shown({:bit, _, _path, _n, _mask, name}), do: Logex.Lexer.quoted_text(name)
   defp shown({:bit_at, _, _path, _index, _width, name}), do: Logex.Lexer.quoted_text(name)
   defp shown({:element, _, _array, _index, name}), do: Logex.Lexer.quoted_text(name)
   defp shown({:element_at, _, _array, _index, _dims, name}), do: Logex.Lexer.quoted_text(name)
-  defp shown(other), do: "`#{Logex.Lexer.inspected(other)}`"
+  defp shown(other), do: "#{quoted(Logex.Lexer.inspected(other))}"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)
 
@@ -1012,4 +1080,7 @@ defmodule Logex.Program do
   defp a(type) when is_atom(type), do: Logex.Declarations.a_type(type)
   defp a(type) when is_array(type), do: Logex.Declarations.a_type(type)
   defp a(other), do: Logex.Lexer.inspected(other)
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

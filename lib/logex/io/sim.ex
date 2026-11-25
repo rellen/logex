@@ -432,7 +432,7 @@ defmodule Logex.IO.Sim do
 
   defp holding(sim, pid, device),
     do:
-      "the simulated device #{Logex.Lexer.inspected(sim)} is the device `#{device}`'s, opened by " <>
+      "the simulated device #{Logex.Lexer.inspected(sim)} is the device #{quoted(device)}'s, opened by " <>
         "#{Logex.Lexer.inspected(pid)}, which has not closed it: a sim is one device's"
 
   # The next failure told to a callback, taken, with the clock a delay passes on.
@@ -855,9 +855,9 @@ defmodule Logex.IO.Sim do
 
   defp beyond(%Point{name: name, direction: direction, address: address}, device, size),
     do:
-      "`#{name}` is at `#{at(device, direction, address)}`, past the sim's #{size} " <>
-        "#{noun(direction, size)}, `#{at(device, direction, [0])}` to " <>
-        "`#{at(device, direction, [size - 1])}`"
+      "#{quoted(name)} is at #{quoted(at(device, direction, address))}, past the sim's #{size} " <>
+        "#{noun(direction, size)}, #{quoted(at(device, direction, [0]))} to " <>
+        "#{quoted(at(device, direction, [size - 1]))}"
 
   defp at(device, :input, address), do: Enum.join([device, "i" | address], ".")
   defp at(device, :output, address), do: Enum.join([device, "q" | address], ".")
@@ -939,7 +939,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "a runner has opened the simulated device #{Logex.Lexer.inspected(sim)} for the device `#{named}`: " <>
+        "a runner has opened the simulated device #{Logex.Lexer.inspected(sim)} for the device #{quoted(named)}: " <>
           "an input's address is the configuration's text from then on, " <>
           "#{Logex.Lexer.inspected(at(named, :input, [0]))}, got: " <>
           Logex.Lexer.inspected(address, charlists: :as_lists)
@@ -951,7 +951,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "#{Logex.Lexer.inspected(address)} is an output of the device `#{named}`, and set/2 and set/3 " <>
+        "#{Logex.Lexer.inspected(address)} is an output of the device #{quoted(named)}, and set/2 and set/3 " <>
           "set the simulated device #{Logex.Lexer.inspected(sim)}'s inputs"
       )
 
@@ -959,8 +959,8 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "#{Logex.Lexer.inspected(address)} is the device `#{device}`'s, and the simulated device " <>
-          "#{Logex.Lexer.inspected(sim)} is the device `#{named}`'s, its inputs " <>
+        "#{Logex.Lexer.inspected(address)} is the device #{quoted(device)}'s, and the simulated device " <>
+          "#{Logex.Lexer.inspected(sim)} is the device #{quoted(named)}'s, its inputs " <>
           "#{Logex.Lexer.inspected(at(named, :input, [0]))} and on"
       )
 
@@ -969,7 +969,7 @@ defmodule Logex.IO.Sim do
       raise(
         ArgumentError,
         "#{Logex.Lexer.inspected(address)} is no address as the configuration writes one, an input of " <>
-          "the device `#{named}` as #{Logex.Lexer.inspected(at(named, :input, [0]))}"
+          "the device #{quoted(named)} as #{Logex.Lexer.inspected(at(named, :input, [0]))}"
       )
 
   defp address!([_ | _] = address), do: whole!(fields?(address), address)
@@ -1033,4 +1033,8 @@ defmodule Logex.IO.Sim do
         ArgumentError,
         "Logex.IO.Sim cannot act out #{Logex.Lexer.inspected(how)} in #{callback}"
       )
+
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

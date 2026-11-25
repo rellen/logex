@@ -277,6 +277,9 @@ defmodule Logex.Runtime do
   problem in one call comes in one raise, a line each, in key order, each value through
   the one cut (decision 586), and since decision 610 the first hundred of them and then
   one line that counts the rest, `and 99900 more mistakes, not listed`, none of them made,
+  an array's value one problem however many of its elements do not fit, its first ten
+  misfits a line each and one that counts the rest (provisional: `PLAN.md`'s RV-33
+  review, question 3),
   so that 100,000 keys a bridge sends by mistake are told in a few kilobytes, where they
   were told in 9.6 MB, as every refusal of this module that tells a line a mistake tells
   them; and since decision 613 a key past 4,096 bytes is cut where a line quotes it, and
@@ -958,7 +961,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a warm restart keeps the retained path `#{path}`, which the program's tags do not " <>
+        "a warm restart keeps the retained path #{quoted(path)}, which the program's tags do not " <>
           "give: #{by_hand()}"
       )
 
@@ -1348,6 +1351,9 @@ defmodule Logex.Runtime do
       rescue
         refused in ArgumentError ->
           externals_told(misfit_externals(runtime, task_instances(task)), refused, __STACKTRACE__)
+      catch
+        {__MODULE__, :misread, lines} ->
+          misread_told(misfit_externals(runtime, task_instances(task)) ++ lines)
       end
 
     {runtime, Enum.reverse(events)}
@@ -1360,6 +1366,9 @@ defmodule Logex.Runtime do
       rescue
         refused in ArgumentError ->
           externals_told(misfit_externals(runtime, instances), refused, __STACKTRACE__)
+      catch
+        {__MODULE__, :misread, lines} ->
+          misread_told(misfit_externals(runtime, instances) ++ lines)
       end
 
     {runtime, Enum.reverse(events)}
@@ -1684,8 +1693,8 @@ defmodule Logex.Runtime do
 
   defp unknown_element_head({:ok, _type}, array, head, _runtime),
     do:
-      "#{shown_path(head)} names an element of `#{array}`, a program instance: an access path names " <>
-        "an element of one of its tags, as in `#{array}.temps[3]`"
+      "#{shown_path(head)} names an element of #{quoted(array)}, a program instance: an access path names " <>
+        "an element of one of its tags, as in #{quoted("#{array}.temps[3]")}"
 
   defp unknown_element_head(:error, array, _head, runtime),
     do: unknown_head(kind(runtime, array), array, runtime)
@@ -1703,7 +1712,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "#{shown_path(head)} names an element of `#{array}`, but `#{array}` is #{what}, no array"
+        "#{shown_path(head)} names an element of #{quoted(array)}, but #{quoted(array)} is #{what}, no array"
       )
 
   defp path_index(subscripts, dims, {head, array, what}) do
@@ -1716,15 +1725,15 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "#{shown_path(head)}'s subscript `#{name}` is a tag's name: an access path names an element by " <>
-          "literal subscripts, as in `#{array}[0]`"
+        "#{shown_path(head)}'s subscript #{quoted(name)} is a tag's name: an access path names an element by " <>
+          "literal subscripts, as in #{quoted("#{array}[0]")}"
       )
 
   defp indexed([], index, dims, {head, array, what}) when length(index) != length(dims),
     do:
       raise(
         ArgumentError,
-        "#{shown_path(head)} names an element of `#{array}`, #{what}, by #{length(index)} " <>
+        "#{shown_path(head)} names an element of #{quoted(array)}, #{what}, by #{length(index)} " <>
           "subscript#{plural(length(index))}, where it takes #{length(dims)}, one a dimension"
       )
 
@@ -1742,7 +1751,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "#{shown_path(head)}'s subscript `#{i}` is outside 0 to #{n - 1}: `#{array}` is #{what}"
+        "#{shown_path(head)}'s subscript #{quoted(i)} is outside 0 to #{n - 1}: #{quoted(array)} is #{what}"
       )
 
   defp plural(1), do: ""
@@ -1993,7 +2002,7 @@ defmodule Logex.Runtime do
 
   # M2-5: what Logex.compile/2 gives for a function block's file, which a program runs.
   defp program!(%FbType{name: name} = type) when is_binary(name),
-    do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
+    do: raise(ArgumentError, "#{quoted(name)} is " <> Declarations.not_a_program(type))
 
   defp program!(other),
     do:
@@ -2174,7 +2183,7 @@ defmodule Logex.Runtime do
 
   defp held(:error, type, path, _blocks, acc),
     do: [
-      "state.env lacks `#{pathed(path)}`: it is " <>
+      "state.env lacks #{quoted(pathed(path))}: it is " <>
         "#{Declarations.a_type(type)}, which a state holds whole, as " <>
         "`Logex.Runtime.instance/1` makes it"
       | acc
@@ -2310,7 +2319,7 @@ defmodule Logex.Runtime do
 
   defp more_outside(array, path, count),
     do:
-      "state.env holds `#{pathed(path)}`, #{Declarations.a_type(array)}, " <>
+      "state.env holds #{quoted(pathed(path))}, #{Declarations.a_type(array)}, " <>
         "with #{count} more #{elements(count)} outside its type, not listed"
 
   # A host's value as a message shows it, a list of integers as a list, never as the
@@ -2365,7 +2374,7 @@ defmodule Logex.Runtime do
 
   defp described(a_type, told, path),
     do:
-      "state.env holds `#{pathed(path)}` outside its type: it is " <>
+      "state.env holds #{quoted(pathed(path))} outside its type: it is " <>
         "#{a_type}, and " <> told
 
   # What a held value outside its type is told (decisions 171 and 173): an integer its
@@ -2535,7 +2544,7 @@ defmodule Logex.Runtime do
   defp clash(true, {array, keyed}, tag),
     do: [
       "inputs #{keyed_list([array | Enum.sort(for {_index, key} <- keyed, do: key)])} each set " <>
-        "`#{array}`, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call sets an array " <>
+        "#{quoted(array)}, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call sets an array " <>
         "whole or by its elements, not both"
     ]
 
@@ -2544,8 +2553,8 @@ defmodule Logex.Runtime do
       for(
         {index, [_, _ | _] = keys} <- Enum.sort(Enum.group_by(keyed, &elem(&1, 0), &elem(&1, 1))),
         do:
-          "inputs #{keyed_list(Enum.sort(keys))} each set `#{Logex.Array.name(array, index)}`, " <>
-            "an element of `#{array}`, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call " <>
+          "inputs #{keyed_list(Enum.sort(keys))} each set #{quoted(Logex.Array.name(array, index))}, " <>
+            "an element of #{quoted(array)}, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call " <>
             "sets each element once"
       )
 
@@ -2695,7 +2704,7 @@ defmodule Logex.Runtime do
 
   defp element_input({:ok, %Tag{type: {:array, _, _}} = tag}, {key, _, _}, _tags, _program),
     do:
-      "input #{Logex.Lexer.inspected(key)} names an element of `#{tag.name}`, a #{tag.section}#{on_line(tag)}, " <>
+      "input #{Logex.Lexer.inspected(key)} names an element of #{quoted(tag.name)}, a #{tag.section}#{on_line(tag)}, " <>
         "not a var_input: only a var_input is set from outside"
 
   defp element_input(_not_an_array, {key, _, _}, tags, _program) do
@@ -2724,15 +2733,15 @@ defmodule Logex.Runtime do
 
   defp counted_input({:tag, name}, _counted, {tag, key, _value}, {_subscripts, _type, dims}),
     do:
-      "input #{Logex.Lexer.quoted_text(key)}'s subscript `#{name}` is a tag's name: a host names an element by " <>
-        "numbers, as in `#{tag.name}[#{zeros(dims)}]`"
+      "input #{Logex.Lexer.quoted_text(key)}'s subscript #{quoted(name)} is a tag's name: a host names an element by " <>
+        "numbers, as in #{quoted("#{tag.name}[#{zeros(dims)}]")}"
 
   defp counted_input(nil, false, {tag, key, _value}, {subscripts, _type, dims}),
     do:
-      "input #{Logex.Lexer.quoted_text(key)} names an element of `#{tag.name}`, " <>
+      "input #{Logex.Lexer.quoted_text(key)} names an element of #{quoted(tag.name)}, " <>
         "#{Declarations.a_type(tag.type)}#{on_line(tag)}, by #{length(subscripts)} " <>
         "#{subscripts_word(length(subscripts))}, where it takes #{length(dims)}, one a " <>
-        "dimension, as in `#{tag.name}[#{zeros(dims)}]`"
+        "dimension, as in #{quoted("#{tag.name}[#{zeros(dims)}]")}"
 
   defp counted_input(nil, true, {tag, key, value}, {subscripts, type, dims}) do
     outside =
@@ -2750,7 +2759,7 @@ defmodule Logex.Runtime do
   defp within({{{:literal, n}, dim}, at}, {tag, key, _value}, {_type, dims}),
     do:
       "input #{Logex.Lexer.quoted_text(key)}'s subscript #{n} is outside #{dimension_word(length(dims), at)} " <>
-        "of `#{tag.name}`, 0 to #{dim - 1}: `#{tag.name}` is " <>
+        "of #{quoted(tag.name)}, 0 to #{dim - 1}: #{quoted(tag.name)} is " <>
         "#{Declarations.a_type(tag.type)}#{on_line(tag)}"
 
   defp zeros(dims), do: Enum.map_join(dims, ",", fn _ -> 0 end)
@@ -2769,7 +2778,7 @@ defmodule Logex.Runtime do
   # `t1.zz` or `t1.dn.x`, which reach into `t1` all the same.
   defp undeclared({:ok, %Tag{type: %FbType{} = type} = tag}, path, key, _tags),
     do:
-      "input #{label(key)} #{reaches(member(type, path))} `#{tag.name}`, " <>
+      "input #{label(key)} #{reaches(member(type, path))} #{quoted(tag.name)}, " <>
         "#{Declarations.instance_of(type)}: " <>
         "only a var_input is set from outside"
 
@@ -2792,7 +2801,9 @@ defmodule Logex.Runtime do
   defp hint(line, "", inputs),
     do:
       {line,
-       fn -> ": the var_inputs are " <> Enum.map_join(Enum.sort(inputs), ", ", &"`#{&1}`") end}
+       fn ->
+         ": the var_inputs are " <> Enum.map_join(Enum.sort(inputs), ", ", &"#{quoted(&1)}")
+       end}
 
   defp hint(line, suggestion, _inputs), do: line <> suggestion
 
@@ -2814,14 +2825,14 @@ defmodule Logex.Runtime do
   defp fit(kind, tag, value)
        when kind in [:signed, :unsigned, :bit_string] and not is_integer(value),
        do:
-         "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
+         "input #{quoted(tag.name)} is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
            "found #{shown_value(value)}"
 
   # M5-10 (decision 166): a real's input is a number, an integer or a float, stored as the
   # real's nearest value, only one past its range refused.
   defp fit(:real, tag, value) when not is_number(value),
     do:
-      "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be a number, " <>
+      "input #{quoted(tag.name)} is #{Declarations.a_type(tag.type)}: its value must be a number, " <>
         "found #{shown_value(value)}"
 
   defp fit(_kind, %Tag{type: type} = tag, value),
@@ -2838,12 +2849,12 @@ defmodule Logex.Runtime do
 
   defp listed(false, {tag, array}, {value, dims, _type}),
     do:
-      "input `#{tag.name}` is #{Declarations.a_type(array)}: its value must be " <>
+      "input #{quoted(tag.name)} is #{Declarations.a_type(array)}: its value must be " <>
         "#{list_shape(dims)}, found #{shown_value(value)}"
 
   defp more_unfit(tag, array, count),
     do:
-      "input `#{tag.name}` is #{Declarations.a_type(array)}, with #{count} more " <>
+      "input #{quoted(tag.name)} is #{Declarations.a_type(array)}, with #{count} more " <>
         "#{elements(count)} outside its type, not listed"
 
   defp listed_flat(value, [_count]), do: value
@@ -2858,7 +2869,7 @@ defmodule Logex.Runtime do
 
   defp fits(false, %Tag{type: type} = tag, value),
     do:
-      "input `#{tag.name}` is #{Declarations.a_type(type)}: " <>
+      "input #{quoted(tag.name)} is #{Declarations.a_type(type)}: " <>
         Declarations.misfit(type, shown(Declarations.kind(type), value))
 
   # A bool's misfit is shown as the host gave it, an integer's as a number.
@@ -2873,7 +2884,7 @@ defmodule Logex.Runtime do
   defp label(key) when byte_size(key) > @longest_text, do: Logex.Lexer.quoted_text(key)
   defp label(key), do: labelled(Logex.Lexer.tokenize(key), key)
 
-  defp labelled({:ok, [{:name, _at, key}], _lines}, key), do: "`#{key}`"
+  defp labelled({:ok, [{:name, _at, key}], _lines}, key), do: "#{quoted(key)}"
   defp labelled(_tokens, key), do: Logex.Lexer.inspected(key)
 
   defp on_line(%Tag{line: nil}), do: ""
@@ -3198,8 +3209,8 @@ defmodule Logex.Runtime do
         keys = Enum.sort(keyed_by(is_map_key(inputs, point), point, keys)),
         length(keys) > 1,
         do:
-          "inputs #{keyed_list(keys)} each set `#{point}`, an input point of " <>
-            "`#{hd(:binary.split(point, "["))}`, #{located_type(point, wiring)}: a " <>
+          "inputs #{keyed_list(keys)} each set #{quoted(point)}, an input point of " <>
+            "#{quoted(hd(:binary.split(point, "[")))}, #{located_type(point, wiring)}: a " <>
             "call sets each point once"
       )
 
@@ -3229,8 +3240,8 @@ defmodule Logex.Runtime do
         keys != [],
         keys = Enum.sort(for(key <- keys, do: Map.get(written, key, key))),
         do:
-          "inputs #{Enum.map_join([array | keys], " and ", &"`#{&1}`")} each set " <>
-            "`#{array}`, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
+          "inputs #{Enum.map_join([array | keys], " and ", &"#{quoted(&1)}")} each set " <>
+            "#{quoted(array)}, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
             "#{global_line(Map.fetch!(globals, array))}: a call sets an array whole or by its " <>
             "elements, not both"
       )
@@ -3372,7 +3383,7 @@ defmodule Logex.Runtime do
   defp fitted_point(problem, _point, _key), do: problem
 
   defp not_input({:ok, _output}, global),
-    do: "an output point (at `#{global.at}`), not an input point"
+    do: "an output point (at #{quoted(global.at)}), not an input point"
 
   defp not_input(:error, _global), do: "a global with no location, not an input point"
 
@@ -3385,7 +3396,7 @@ defmodule Logex.Runtime do
   # name is: none of them is set from outside.
   defp named_point({:instance, type}, key, _runtime),
     do:
-      "input #{label(key)} is a program instance of `#{type}`, not an input point: " <>
+      "input #{label(key)} is a program instance of #{quoted(type)}, not an input point: " <>
         "only an input point is set from outside"
 
   defp named_point(:task, key, _runtime),
@@ -3407,7 +3418,7 @@ defmodule Logex.Runtime do
 
   defp whole_array({"q", {_first, from}, {_last, to}}, _global, key, _value),
     do:
-      "input #{label(key)} is an array of output points, `#{from}` to `#{to}`, not an " <>
+      "input #{label(key)} is an array of output points, #{quoted(from)} to #{quoted(to)}, not an " <>
         "input point: only an input point is set from outside"
 
   defp whole_array(nil, _global, key, _value),
@@ -3463,13 +3474,13 @@ defmodule Logex.Runtime do
     {_, _, address} =
       List.keyfind(Logex.Array.points(array, dims, fields), index, 0)
 
-    "input #{label(key)} is an output point (at `#{at_of(device, io, address)}`), not an " <>
+    "input #{label(key)} is an output point (at #{quoted(at_of(device, io, address))}), not an " <>
       "input point: only an input point is set from outside"
   end
 
   defp reaching(true, head, key, _wiring),
     do:
-      "input #{label(key)} reaches into the program instance `#{head}`: " <>
+      "input #{label(key)} reaches into the program instance #{quoted(head)}: " <>
         "only an input point is set from outside"
 
   defp reaching(false, _head, key, wiring), do: no_point(key, wiring)
@@ -3488,22 +3499,22 @@ defmodule Logex.Runtime do
 
   defp unheld({"i", {first, _from}, {last, _to}}, key, {array, _runtime}),
     do:
-      "input #{label(key)} is not an input point: `#{array}` is an array of input points, " <>
-        "each element set by its name as its subscripts' values, `#{first}` to `#{last}`"
+      "input #{label(key)} is not an input point: #{quoted(array)} is an array of input points, " <>
+        "each element set by its name as its subscripts' values, #{quoted(first)} to #{quoted(last)}"
 
   defp unheld(_output, key, {_array, runtime}), do: no_point(key, runtime.wiring)
 
   # The input points as a hint lists them, a located array's as the range of its
   # elements, `temps[0]` to `temps[7]`, in name order among the rest.
-  defp listed_points(nil, points, _located), do: Enum.map(points, &"`#{&1}`")
+  defp listed_points(nil, points, _located), do: Enum.map(points, &"#{quoted(&1)}")
 
   defp listed_points(elements, points, located),
     do:
       Enum.sort_by(
-        for(point <- points, not is_map_key(elements, point), do: {point, "`#{point}`"}) ++
+        for(point <- points, not is_map_key(elements, point), do: {point, "#{quoted(point)}"}) ++
           for(
             {array, {"i", {first, _from}, {last, _to}}} <- located,
-            do: {array, "`#{first}` to `#{last}`"}
+            do: {array, "#{quoted(first)} to #{quoted(last)}"}
           ),
         &elem(&1, 0)
       )
@@ -3647,7 +3658,7 @@ defmodule Logex.Runtime do
     %Instance{first: first} = state = Map.fetch!(runtime.instances, name)
 
     copy_in = Map.fetch!(wiring.copy_in, name)
-    read!(copy_in, globals, wiring.globals)
+    read_in!(copy_in, globals, wiring.globals)
     inputs = Map.new(copy_in, fn {member, to} -> {member, value(to, globals)} end)
 
     externals = Map.fetch!(wiring.externals, name)
@@ -3699,8 +3710,16 @@ defmodule Logex.Runtime do
   # host left in a runtime it built is refused where its global is narrower than the
   # var_input it fills, as it is where the two are one type (decision 171, M5-3's review):
   # a line each, in name order, a global read twice told once.
-  defp read!(copy_in, globals, declared),
-    do: read_fitted(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+  #
+  # Since RV-33's review (F4) its misfits are thrown to the step that runs the instance,
+  # `cycle_step/2`, the one caller of `scanned/3`, which tells them with its
+  # var_externals' misfits as one list; a restart's check of the var_externals alone
+  # (attached/3) refuses its own itself (read_fitted/1).
+  defp read_in!(copy_in, globals, declared),
+    do: thrown(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+
+  defp thrown([]), do: :ok
+  defp thrown(lines), do: throw({__MODULE__, :misread, lines})
 
   # The review after Milestone 6 (b2-resource-6): a var_external's global, merged into its
   # instance's state, is checked with it inside call/4, where a misfit was told as the
@@ -3720,30 +3739,16 @@ defmodule Logex.Runtime do
 
   defp externals_told([], refused, stacktrace), do: reraise(refused, stacktrace)
 
-  defp externals_told(lines, refused, _stacktrace) do
-    told = Enum.map(String.split(Exception.message(refused), "\n"), &Declarations.untold/1)
-    {kept, more} = refused_globals(told, [], 0)
-    raise(ArgumentError, globals_told(lines ++ kept, counted(kept, more)))
-  end
+  # A refusal of another kind, a state's, gives none of its lines and none of its count.
+  defp externals_told(lines, _refused, _stacktrace),
+    do: raise(ArgumentError, globals_told(lines, 0))
 
-  # A copy-in's refusal's lines, each `runtime.globals holds`, and since decision 610 the
-  # count of those past its first hundred, which it did not list, so that the step's
-  # refusal counts them among its own; a refusal of another kind, a state's, gives none of
-  # its lines and none of its count. A line past the hundred that an instance's
-  # var_external would tell again is counted once more than it would be told.
-  defp refused_globals([], kept, more), do: {kept, more}
-
-  defp refused_globals([{:line, "runtime.globals holds " <> _rest = line} | told], kept, more),
-    do: refused_globals(told, [line | kept], more)
-
-  defp refused_globals([{:line, _line} | told], kept, more),
-    do: refused_globals(told, kept, more)
-
-  defp refused_globals([{:more, count} | told], kept, more),
-    do: refused_globals(told, kept, more + count)
-
-  defp counted([], _more), do: 0
-  defp counted(_kept, more), do: more
+  # RV-33's review (F4): a copy-in's misfits are thrown to the step whole, every line made
+  # where its hundred were told, and told with the var_externals' as one list, each global
+  # once, the first hundred and a count of the rest, where the step read back the count of
+  # the copy-in's refusal from its text and counted a global past that hundred twice, once
+  # in the count and once among the var_externals' lines.
+  defp misread_told(lines), do: raise(ArgumentError, globals_told(lines, 0))
 
   defp externals_fit([], _globals, _declared, acc), do: acc
 
@@ -3784,7 +3789,7 @@ defmodule Logex.Runtime do
 
   defp global_fit(%Configuration.Global{name: name, type: type}, value, acc),
     do: [
-      "runtime.globals holds `#{name}` outside its type: it is " <>
+      "runtime.globals holds #{quoted(name)} outside its type: it is " <>
         "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
       | acc
     ]
@@ -3793,7 +3798,7 @@ defmodule Logex.Runtime do
 
   defp array_global(false, %Configuration.Global{name: name, type: type}, value, acc),
     do: [
-      "runtime.globals holds `#{name}` outside its type: it is #{Declarations.a_type(type)}, " <>
+      "runtime.globals holds #{quoted(name)} outside its type: it is #{Declarations.a_type(type)}, " <>
         "and its value must be #{tuple_shape(elem(type, 2))} of #{Declarations.word(elem(type, 1))}s, " <>
         "found #{shown_value(value)}"
       | acc
@@ -3803,7 +3808,7 @@ defmodule Logex.Runtime do
 
   defp real_global(false, %Configuration.Global{name: name, type: type}, value, acc),
     do: [
-      "runtime.globals holds `#{name}` outside its type: it is " <>
+      "runtime.globals holds #{quoted(name)} outside its type: it is " <>
         "#{Declarations.a_type(type)}, and " <> unfitting(:real, type, value)
       | acc
     ]
@@ -3870,7 +3875,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "#{shown_path(head)} is a program instance of `#{type}`: an access path names one of its tags" <>
+        "#{shown_path(head)} is a program instance of #{quoted(type)}: an access path names one of its tags" <>
           example_tag(Map.fetch!(runtime.config.programs, type), head)
       )
 
@@ -3908,7 +3913,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "#{shown_path(path)} names a bit of #{shown_path(head)}, a program instance of `#{program.name}`, which " <>
+        "#{shown_path(path)} names a bit of #{shown_path(head)}, a program instance of #{quoted(program.name)}, which " <>
           "has no bits: an access path names one of its tags" <> example_tag(program, head)
       )
 
@@ -4092,7 +4097,7 @@ defmodule Logex.Runtime do
 
   defp undeclared(head, tag, program),
     do:
-      "#{shown_path(head)} is a program instance of `#{program.name}`, which declares no `#{tag}`" <>
+      "#{shown_path(head)} is a program instance of #{quoted(program.name)}, which declares no #{quoted(tag)}" <>
         Declarations.suggest(tag, Enum.sort(Map.keys(program.tags)))
 
   defp named_whole(at, type),
@@ -4145,7 +4150,7 @@ defmodule Logex.Runtime do
 
   defp no_member(%FbType.Member{role: :local, name: member}, type, {at, _named}, names),
     do:
-      "#{shown_path(at <> "." <> member)} is a `var` of `#{type.name}`, hidden outside it: " <>
+      "#{shown_path(at <> "." <> member)} is a `var` of #{quoted(type.name)}, hidden outside it: " <>
         public_only(names)
 
   defp no_member(nil, type, {at, member}, names),
@@ -4156,7 +4161,9 @@ defmodule Logex.Runtime do
   defp public_only([]), do: "an access path reads only its public members, and it has none"
 
   defp public_only(names),
-    do: "an access path reads only its public members, " <> and_list(Enum.map(names, &"`#{&1}`"))
+    do:
+      "an access path reads only its public members, " <>
+        and_list(Enum.map(names, &"#{quoted(&1)}"))
 
   # The member a read of the instance would mean: the first value the block sets, else the
   # first it is given. A user block may have neither (M2-5).
@@ -4168,7 +4175,10 @@ defmodule Logex.Runtime do
   defp example_of([], _at), do: ", and it has none an access path reads"
 
   defp block_hint("", []), do: ": it has none an access path reads"
-  defp block_hint("", names), do: ": its members are " <> and_list(Enum.map(names, &"`#{&1}`"))
+
+  defp block_hint("", names),
+    do: ": its members are " <> and_list(Enum.map(names, &"#{quoted(&1)}"))
+
   defp block_hint(suggestion, _names), do: suggestion
 
   defp and_list([one]), do: one
@@ -5559,7 +5569,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} computes in the type of " <>
+        "a scan's #{quoted(op)} on line #{Logex.Lexer.inspected(line)} computes in the type of " <>
           Program.met(destination, what) <>
           ": the program was edited by hand after it was handed in and checked"
       )
@@ -5653,7 +5663,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} reads the unit of #{shown_timer(timer)} from units that " <>
+        "a scan's #{quoted(op)} on line #{Logex.Lexer.inspected(line)} reads the unit of #{shown_timer(timer)} from units that " <>
           "are no map, got: #{Logex.Lexer.inspected(units)}: #{by_hand()}"
       )
 
@@ -5663,12 +5673,12 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "a scan's `#{op}` on line #{Logex.Lexer.inspected(line)} times #{shown_timer(timer)} in a unit of " <>
+        "a scan's #{quoted(op)} on line #{Logex.Lexer.inspected(line)} times #{shown_timer(timer)} in a unit of " <>
           "#{Logex.Lexer.inspected(per_ms)}, which is no positive whole number a millisecond: #{by_hand()}"
       )
 
-  defp shown_timer({:name, _, name}), do: "`#{name}`"
-  defp shown_timer({:element, _, _array, _index, name}), do: "`#{name}`"
+  defp shown_timer({:name, _, name}), do: "#{quoted(name)}"
+  defp shown_timer({:element, _, _array, _index, name}), do: "#{quoted(name)}"
 
   defp by_hand, do: "the program was edited by hand after it was handed in and checked"
 
@@ -6207,4 +6217,7 @@ defmodule Logex.Runtime do
   defp closed?(value) when is_number(value), do: value != 0
   defp closed?(value) when value in [nil, false], do: false
   defp closed?(_value), do: true
+  # RV-33's review (F2): a word a refusal writes in backquotes itself, through the cut
+  # (decision 613, `Logex.Lexer.quoted/1`).
+  defp quoted(word), do: Logex.Lexer.quoted(word)
 end

@@ -111,9 +111,11 @@ defmodule Logex.Tag do
   value that is no number, as `inspect/1` shows it, each long number in it cut (decision
   585), as every refusal of the host contract quotes a host's value (decision 586). A
   name that is text is quoted whole, in backquotes, up to 4,096 bytes and past them cut
-  and told how long it was (decision 613), and one that is no UTF-8 text as
+  and told how long it was (decision 613), one with `.` parts or a subscript among them,
+  a line to copy holding its cut start (RV-33's review), and one that is no UTF-8 text as
   `inspect/1` shows it, `<<97, 98, 255, 99>>` (RV-32's review); a type's text, a value,
-  as `inspect/1` cuts it. Its problems, the first hundred and how many more (decision
+  as `inspect/1` cuts it. A line of source that declares the same tag is told its name
+  whole, as a compile's diagnostic is. Its problems, the first hundred and how many more (decision
   610).
 
   Since decision 296 (2026-10-27) the qualifier is an option, the line's own word as its
