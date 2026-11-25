@@ -318,7 +318,8 @@ broken.logex:10: error: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
 broken.logex:11: error: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`
 ```
 
-[Diagnostics](../reference/diagnostics.md) gives the rules of each field.
+[The fields of a diagnostic](../reference/diagnostics.md#the-fields-of-a-diagnostic) gives
+the rules of each field.
 
 ## If it does not work
 

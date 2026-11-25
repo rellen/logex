@@ -207,8 +207,8 @@ end
    The runner reads the device at each [poll period](../reference/glossary.md#poll-period),
    10 ms. The read at 20 ms fails. The runner [trips](../reference/glossary.md#trip) and
    writes 0 to each output point. A failure `{:delay, ms}` gives no trip: it moves the
-   manual clock by `ms`. [I/O adapters](../reference/io-adapters.md) gives each failure
-   and the trip that it causes.
+   manual clock by `ms`. [Failures that a sim acts out](../reference/io-adapters.md#failures-that-a-sim-acts-out)
+   gives each failure and the trip that it causes.
 
 6. Put a second describe block after the `end` of the first, before the last `end` of
    the file. In it, the first write of the device takes 2 ms of the manual clock.
@@ -253,7 +253,8 @@ end
    The call of `get!` waits for its [slot](../reference/glossary.md#slot) after that
    round. With the default
    [share](../reference/glossary.md#share), 4 calls of `advance(clock, 0)` or fewer give
-   the call its answer. [Runner](../reference/runner.md) gives the rules of a slot.
+   the call its answer. [Calls and the share](../reference/runner.md#calls-and-the-share)
+   gives the rules of a slot.
 
 ```mermaid
 %%{init: {"sequence": {"actorMargin": 20, "width": 90, "diagramMarginX": 5}}}%%

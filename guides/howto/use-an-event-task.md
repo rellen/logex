@@ -194,7 +194,8 @@ Add `interval` and a number of ms between the trigger and the priority, for exam
 `task trip single estop interval 30 priority 0`. The task then also runs at each due time
 of the interval while the trigger is 0. It runs at most 1 time in a cycle. A run when the
 trigger goes from 0 to 1 does not move the due times.
-[Execution model](../reference/execution-model.md) gives each rule.
+[The trigger of an event task](../reference/execution-model.md#the-trigger-of-an-event-task)
+gives each rule.
 
 ## Call the cycles from your code
 

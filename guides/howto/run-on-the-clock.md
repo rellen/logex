@@ -10,7 +10,8 @@ start a [runner](../reference/glossary.md#runner) on the
 The runner, `Logex.Runner`, reads the inputs, runs the
 [tasks](../reference/glossary.md#task) that are due and writes the outputs, again and
 again. Each of these steps is a [round](../reference/glossary.md#round).
-[Runner](../reference/runner.md) gives the rules of a round.
+[A round of the runner](../reference/execution-model.md#a-round-of-the-runner) gives the
+rules of a round.
 
 > #### Warning {: .warning}
 >
@@ -133,7 +134,7 @@ alias Logex.IO.Sim
    | `idle:` | The idle [watchdog](../reference/glossary.md#watchdog): the longest time for 1 piece of the work of the runner, for example a call from your code. It is 500 ms by default. If a piece takes longer, the runner [trips](../reference/glossary.md#trip). [Set watchdogs](set-watchdogs.md) shows how to choose it. |
    | `name:` | A name for the runner, as `GenServer.start_link/3` takes it. Your code can then call the runner by that name. By default, the runner has no name. |
 
-   [Runner](../reference/runner.md) gives each other option, for example `retain:` and
+   [The options](../reference/runner.md#the-options) gives each other option, for example `retain:` and
    `forces:`.
 
 6. Add these lines, which change the inputs of the simulated device. They press the

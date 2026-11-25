@@ -67,8 +67,8 @@ includes a value from the [host](../reference/glossary.md#host), a
 [device](../reference/glossary.md#device) or a [force](../reference/glossary.md#force). A
 real tag starts at 0.0. It never holds an infinity, a NaN (a value that is not a number)
 or `-0.0`. You cannot read 1 [bit](../reference/glossary.md#bit) of a real tag: `speed.3`
-is an error. [Declarations and types](../reference/declarations-and-types.md) gives the
-exact limits and each rule of the real types.
+is an error. [Elementary types](../reference/declarations-and-types.md#elementary-types)
+gives the exact limits and each rule of the real types.
 
 ## Write a real literal
 

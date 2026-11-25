@@ -353,7 +353,7 @@ Each row gives a part of the message. The full message of a
 `Logex.Runner.status/1` gives the reason of a trip in `trip`. Each subscriber gets the
 message `{Logex.Runner, runner, {:trip, reason}}`.
 [Restart after a trip](restart-after-a-trip.md) gives the steps after a trip.
-[Runner](../reference/runner.md) gives each reason.
+[The reasons of a trip](../reference/runner.md#the-reasons-of-a-trip) gives each reason.
 
 | What you see | Cause | What to do |
 |---|---|---|

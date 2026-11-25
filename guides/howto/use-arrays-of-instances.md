@@ -57,7 +57,7 @@ Obey these rules:
 - Run an element of a `ctud` type, such as `stock[0,0]`, with 1 `ctu` and 1 `ctd`. Give
   both the same literal subscript and the same preset.
 
-[Function blocks](../reference/function-blocks.md) gives each rule.
+[Arrays of instances](../reference/function-blocks.md#arrays-of-instances) gives each rule.
 
 ## Run 1 timer, 1 counter and 1 function block for each conveyor
 

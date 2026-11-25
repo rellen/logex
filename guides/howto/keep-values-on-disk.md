@@ -363,7 +363,7 @@ The kill comes after the last write. Thus the new runner does not get the third 
 | `fresh start` | The new runner has 2 boxes. The crash lost the third box and the [latch](../reference/glossary.md#latch) of `t1.full`, which `case_full` shows. |
 | `start: :cold` | Each retained value is its initial value again. |
 
-[The store](../reference/store.md) gives each
+[The lines of the store](../reference/store.md#the-lines-of-the-store) gives each
 line of the store.
 
 ## On your plant

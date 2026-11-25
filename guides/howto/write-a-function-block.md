@@ -139,8 +139,7 @@ instance does not read its inputs.
    that [widens](../reference/glossary.md#widen) into it. For an output, the member can
    widen into the type of the operand. [Function blocks](../reference/function-blocks.md)
    gives each rule. For what a [coil](../reference/glossary.md#coil) after a `cal` gets,
-   [Instructions: jump and call](../reference/instructions-jump-and-call.md) gives the
-   rule.
+   [`cal`](../reference/instructions-jump-and-call.md#cal) gives the rule.
 
 5. In the root directory of your project, make the file `write-a-function-block.exs` with
    this text. It runs 8 scans of 1000 ms and prints the values after each scan.

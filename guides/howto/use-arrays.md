@@ -41,8 +41,8 @@ list after the type gives the first values, 1 literal for each element. The last
 subscript counts up first. Thus `var a int[2,3] 1 2 3 4 5 6` gives `a[0,2]` the value 3
 and `a[1,0]` the value 4.
 
-[Declarations and types](../reference/declarations-and-types.md) gives each rule and
-each limit of an array.
+[Arrays](../reference/declarations-and-types.md#arrays) gives each rule and each limit of
+an array.
 
 ## Name an element
 

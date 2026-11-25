@@ -217,8 +217,8 @@ rungs. The [host](../reference/glossary.md#host) finds the fault here:
 | A [configuration](../reference/glossary.md#configuration) with `Logex.Runtime.cycle/3` | An event `{:fault, task, instance, fault}`, after the event `{:ran, task, instance, time}` of the scan |
 
 The fault gives the instruction, the line and the file. The file is `nil` for a program
-that `Logex.compile/2` compiled from text. [Faults](../reference/faults.md) gives each
-field.
+that `Logex.compile/2` compiled from text. [The fields of a fault](../reference/faults.md#the-fields-of-a-fault)
+gives each field.
 
 ## Compare 2 values
 
