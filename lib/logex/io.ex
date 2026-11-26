@@ -266,29 +266,30 @@ defmodule Logex.IO do
   # to card.i.7).
   defp at(device, [%Point{} = point]), do: "#{shown(device, point)} is at"
 
+  # Since decision 629 the first hundred, each quoted only among them, and a count.
   defp at(device, points),
     do:
       points
       |> Enum.chunk_by(&array_of(&1.name))
-      |> Enum.flat_map(&ranged(device, &1))
-      |> are_at()
+      |> Enum.flat_map(&ranged/1)
+      |> Declarations.named(&shown_at(device, &1))
+      |> Kernel.<>(" are at")
 
-  defp are_at([one]), do: one <> " are at"
-  defp are_at(shown), do: listed(shown) <> " are at"
-
-  defp ranged(device, [first, _ | _] = points) do
+  defp ranged([first, _ | _] = points) do
     last = List.last(points)
-    ranged(array_of(first.name), first, last, device, points)
+    ranged(array_of(first.name), first, last, points)
   end
 
-  defp ranged(device, points), do: Enum.map(points, &shown(device, &1))
+  defp ranged(points), do: points
 
-  defp ranged(nil, _first, _last, device, points), do: Enum.map(points, &shown(device, &1))
+  defp ranged(nil, _first, _last, points), do: points
+  defp ranged(_array, first, last, _points), do: [{first, last}]
 
-  defp ranged(_array, first, last, device, _points),
-    do: [
+  defp shown_at(device, {first, last}),
+    do:
       "#{quoted(first.name)} to #{quoted(last.name)} (#{located_at(device, first)} to #{located_at(device, last)})"
-    ]
+
+  defp shown_at(device, %Point{} = point), do: shown(device, point)
 
   defp array_of(name), do: array_named(Logex.Name.element(name))
   defp array_named({array, _subscripts}), do: array
@@ -302,9 +303,6 @@ defmodule Logex.IO do
 
   defp letter(:input), do: "i"
   defp letter(:output), do: "q"
-
-  defp listed([one, two]), do: "#{one} and #{two}"
-  defp listed([one | rest]), do: one <> ", " <> listed(rest)
 
   defp adapter(name, {module, opts}, points) when is_atom(module) and is_list(opts),
     do: adapted(name, module, points, opts, Keyword.keyword?(opts))

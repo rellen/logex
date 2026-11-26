@@ -642,7 +642,9 @@ These rules give the form of each message of an `ArgumentError`:
   `card`, then `panel`.
 - A name near a declared name gets the near name, for example ``did you mean `start`?``.
 - A name with no near name gets the list of the names that it can be, for example
-  ``the var_inputs are `overtemp`, `reset`, `start`, `stop` ``.
+  ``the var_inputs are `overtemp`, `reset`, `start`, `stop` ``. A list of more than
+  100 names gives the first 100 and the number of the other names, for example
+  `and 9900 more, not listed`.
 
 ## Examples
 

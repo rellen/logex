@@ -2950,7 +2950,9 @@ defmodule Logex.Configuration do
   defp types_hint(message, "", []), do: message <> ": no program types were given"
 
   defp types_hint(message, "", names),
-    do: {message, :types, fn -> ": the types given are " <> listed(names) end}
+    do:
+      {message, :types,
+       fn -> ": the types given are " <> Declarations.named(names, &"#{quoted(&1)}") end}
 
   defp types_hint(message, suggestion, _names), do: message <> suggestion
 

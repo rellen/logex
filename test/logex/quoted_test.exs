@@ -21,6 +21,10 @@ defmodule Logex.QuotedTest do
   4,096 bytes cut where a refusal quotes it, pinned at 4,096 bytes and 4,097, its cost at
   a megabyte held to a short one's; and `instance/1` refusing a struct where a map is
   due, which escaped as Protocol.UndefinedError.
+
+  Since RV-34 (decision 629): a line that lists names tells the first hundred and how many
+  more, each pinned whole at 100 names and at 101, its cost and text at 10,000 held to its
+  own at 100.
   """
   use ExUnit.Case, async: true
 
@@ -1551,6 +1555,222 @@ defmodule Logex.QuotedTest do
 
     defp element_line(i),
       do: ~s|input "k#{String.pad_leading("#{i}", 6, "0")}[0]" is not declared|
+  end
+
+  describe "a line that lists names tells the first hundred and a count (decision 629)" do
+    # Decision 629 (RV-34; the maintainer, 2026-11-26, RV-33's question 3), reached into
+    # diagnostics too: a line of a refusal of the host contract that lists
+    # names gives the first hundred in its order and how many more there are, where
+    # `put_inputs/3` told a fan controller's 10,000 var_inputs in one line of 100,047
+    # bytes. Each such line at 100 names and at 101, its message pinned whole, and its
+    # growth at 10,000 against 100 in reductions, in the same run.
+    defp n5(i), do: "n" <> String.pad_leading(Integer.to_string(i), 5, "0")
+
+    # The names a line lists, quoted, told as the line tells them: every one of a hundred,
+    # the last two joined by `last`, and the first hundred of more and a count.
+    defp names_told(n, quote, last \\ " and ", between \\ ", ")
+
+    defp names_told(n, quote, last, between) when n <= 100,
+      do: Enum.map_join(1..(n - 1)//1, between, &quote.(&1)) <> last <> quote.(n)
+
+    defp names_told(n, quote, _last, between),
+      do: Enum.map_join(1..100, between, &quote.(&1)) <> " and #{n - 100} more, not listed"
+
+    # A fan controller of `n` var_inputs.
+    defp fan(n) do
+      source =
+        Enum.map_join(1..n, "\n", &"var_input #{n5(&1)} bool") <>
+          "\nvar_output o bool\n\nxic n00001 ote o\n"
+
+      {:ok, p} = Logex.compile(source, name: "fan")
+      {p, Runtime.instance(p)}
+    end
+
+    # A plant of `n` input points on the panel, and a program instance of a block of `n`
+    # var_inputs and one hidden `var`.
+    defp wide(n) do
+      {:ok, big} =
+        Logex.compile(
+          "function_block big\n" <>
+            Enum.map_join(1..n, "\n", &"var_input #{n5(&1)} bool") <>
+            "\nvar hidden bool\nvar_output q bool\n\nxic n00001 ote q\n",
+          name: "big"
+        )
+
+      {:ok, host} =
+        Logex.compile("var_input a bool\nvar b1 big\nvar_output o bool\n\nxic a ote o\n",
+          name: "host",
+          types: [big]
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "plant",
+          Enum.map_join(1..n, "\n", &"var_global g#{n5(&1)} bool at panel.i.#{&1}") <>
+            "\n\nprogram h1 host\n  h1.a 0\n",
+          %{"host" => host}
+        )
+
+      {c, Runtime.start(c)}
+    end
+
+    # `n` program types, each the tally renamed, and an instance of a type none is.
+    defp typed(n, type \\ "nope") do
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+
+      fn ->
+        Configuration.new!(
+          name: "plant",
+          programs: Enum.map(1..n, &%{tally | name: n5(&1)}),
+          instances: [%Configuration.Instance{name: "i1", type: type}]
+        )
+      end
+    end
+
+    defp lines_of(n) do
+      {p, s} = fan(n)
+      {c, rt} = wide(n)
+
+      [
+        {"put_inputs/3's var_inputs", fn -> Runtime.put_inputs(p, s, %{"nope" => 1}) end,
+         "input `nope` is not declared: the var_inputs are " <>
+           names_told(n, &"`#{n5(&1)}`", ", ")},
+        {"cycle/3's input points", fn -> Runtime.cycle(rt, 0, %{"nope" => 1}) end,
+         "input `nope` is not an input point: the input points are " <>
+           names_told(n, &"`g#{n5(&1)}`")},
+        {"IO.bind!/2's points of a device", fn -> Logex.IO.bind!(c, %{}) end,
+         "no adapter is bound to the device `panel`, which " <>
+           names_told(n, &"`g#{n5(&1)}` (panel.i.#{&1})") <> " are at"},
+        {"get!/2's members", fn -> Runtime.get!(rt, "h1.b1.nope") end,
+         "`h1.b1.nope` is not a member of `h1.b1`, an instance of `big`: its members are " <>
+           names_told(n + 1, &member/1)},
+        {"get!/2's public members", fn -> Runtime.get!(rt, "h1.b1.hidden") end,
+         "`h1.b1.hidden` is a `var` of `big`, hidden outside it: an access path reads only " <>
+           "its public members, " <> names_told(n + 1, &member/1)},
+        {"new!/1's types given", typed(n),
+         "unknown program type `nope`: the types given are " <> names_told(n, &"`#{n5(&1)}`")}
+      ]
+    end
+
+    defp member(i), do: "`#{n5(i)}`"
+
+    test "each line at 100 names and at 101" do
+      for n <- [100, 101], {label, refuse, message} <- lines_of(n) do
+        error = assert_raise ArgumentError, refuse
+        assert {label, n, error.message} == {label, n, message}
+      end
+    end
+
+    # Each line of 10,000 names against the same of 100 and of 1, in the same run, in
+    # reductions, the least of three (`spent/1`): its text the 101's with its count, and
+    # each name past the hundred costing less than three quarters of one among them, so
+    # that a name past them is never quoted. A key past 4,096 bytes is looked for among no
+    # name (decision 631), so that a line's cost is its list's and not its did-you-mean's;
+    # on `main` a name past the hundred cost what one among them did, put_inputs/3's 47.6
+    # reductions against 47.6, where they cost 23.5 now.
+    test "a line of 10,000 names costs near a hundred's, its text the hundred's" do
+      long = String.duplicate("q", 4097)
+
+      refusals = fn n ->
+        {p, s} = fan(n)
+        {c, rt} = wide(n)
+        typed = typed(n, long)
+
+        [
+          {"put_inputs/3's var_inputs", fn -> Runtime.put_inputs(p, s, %{long => 1}) end},
+          {"cycle/3's input points", fn -> Runtime.cycle(rt, 0, %{long => 1}) end},
+          {"IO.bind!/2's points of a device", fn -> Logex.IO.bind!(c, %{}) end,
+           fn -> Logex.IO.bind!(c, %{"panel" => {Adapter, checked: []}}) end},
+          {"get!/2's members", fn -> Runtime.get!(rt, "h1.b1." <> long) end,
+           fn -> Runtime.get!(rt, "h1.b1.n00001") end},
+          {"new!/1's types given", typed, typed(n, "n00001")}
+        ]
+      end
+
+      [ones, hundreds, hundred_ones, manys] = Enum.map([1, 100, 101, 10_000], refusals)
+
+      for {{label, one} = row, hundred, hundred_one, many} <-
+            Enum.zip([ones, hundreds, hundred_ones, manys]) do
+        at_one = listing(row)
+        at_hundred = listing(hundred)
+        {_, told_101} = spent(elem(hundred_one, 1))
+        {_, told} = spent(elem(many, 1))
+        at_many = listing(many)
+        _ = one
+
+        # A block's members are its var_inputs and its `q`, one more than its `n`.
+        more = fn n -> n - 100 + Map.get(%{"get!/2's members" => 1}, label, 0) end
+
+        assert {label, told} ==
+                 {label,
+                  String.replace(
+                    told_101,
+                    " and #{more.(101)} more, not listed",
+                    " and #{more.(10_000)} more, not listed"
+                  )}
+
+        assert {label, byte_size(told)} == {label, byte_size(told_101) + 3}
+
+        assert (at_many - at_hundred) / 9_900 < 0.75 * (at_hundred - at_one) / 99,
+               "#{label}: #{(at_many - at_hundred) / 9_900} a name past the hundred, " <>
+                 "against #{(at_hundred - at_one) / 99} among them"
+      end
+    end
+
+    # A refusal's cost, less its twin's where it has one: the same call that passes, so
+    # that what is left is the refusal's own.
+    defp listing({_label, refuse}), do: elem(spent(refuse), 0)
+    defp listing({_label, refuse, twin}), do: elem(spent(refuse), 0) - elem(spent(twin), 0)
+
+    test "keys that set one element or an array twice, and a retained image's paths" do
+      source = "var_input steps dint[3]\nvar retain tl ton[2]\nvar_output o bool\n\nxic o ote o\n"
+      {:ok, p} = Logex.compile(source, name: "p")
+      s = Runtime.instance(p)
+      image = Runtime.retained(p, s)
+
+      for n <- [100, 101] do
+        # `steps[1]`, `steps[01]`, ...: `n` spellings of one element, in the order a sort
+        # gives them, the most zeros first.
+        spelt = fn i -> "steps[#{String.duplicate("0", n - i)}1]" end
+        keys = Map.new(1..n, &{spelt.(&1), 1})
+
+        error = assert_raise ArgumentError, fn -> Runtime.put_inputs(p, s, keys) end
+
+        assert {n, error.message} ==
+                 {n,
+                  "inputs " <>
+                    names_told(n, &"`#{spelt.(&1)}`", " and ", " and ") <>
+                    " each set `steps[1]`, an element of `steps`, an array of 3 dints " <>
+                    "(declared on line 1): a call sets each element once"}
+
+        acc = fn i -> "tl[#{String.duplicate("0", n - i)}1].acc" end
+        values = Map.merge(image.values, Map.new(1..n, &{acc.(&1), {:dint, 0}}))
+
+        error =
+          assert_raise ArgumentError, fn -> Runtime.instance(p, %{image | values: values}) end
+
+        assert {n, error.message} ==
+                 {n,
+                  "`values` holds " <>
+                    names_told(n, &"`#{acc.(&1)}`", " and ", " and ") <>
+                    ", which name one path, `tl[1].acc`"}
+
+        # The array whole and `n - 1` of its elements, each told by its key, in the order a
+        # sort gives them.
+        wide = Runtime.start(plant("var_global temps dint[101] at panel.i.1"))
+        elements = Enum.sort(for i <- 0..(n - 2), do: "temps[#{i}]")
+        inputs = Map.new(elements, &{&1, 1}) |> Map.put("temps", List.duplicate(1, 101))
+        error = assert_raise ArgumentError, fn -> Runtime.cycle(wide, 0, inputs) end
+        told = ["temps" | elements]
+
+        assert {n, error.message} ==
+                 {n,
+                  "inputs " <>
+                    names_told(n, &"`#{Enum.at(told, &1 - 1)}`", " and ", " and ") <>
+                    " each set `temps`, an array of 101 dints (line 4): a call sets an array " <>
+                    "whole or by its elements, not both"}
+      end
+    end
   end
 
   describe "a text past 4,096 bytes is cut where a refusal quotes it (decision 613)" do

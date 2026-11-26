@@ -508,7 +508,7 @@ defmodule Logex.Declarations do
   defp untold_count({count, " more mistakes, not listed"}, _line), do: {:more, count}
   defp untold_count(_other, line), do: {:line, line}
 
-  # Decision 629 (RV-34), reached into diagnostics by decision 636: a line that lists names,
+  # Decision 629 (RV-34), reached into diagnostics too (PLAN.md's RV-34): a line that lists names,
   # `put_inputs/3`'s var_inputs, `cycle/3`'s input points, an access path's members and
   # `Logex.Configuration.new!/1`'s types given among them, gives the first hundred,
   # `@offered`, in the order it is handed them, and how many more there are, so that a fan
@@ -516,23 +516,24 @@ defmodule Logex.Declarations do
   # where one line held every name, 100,047 bytes. `quote` makes an entry's text, called
   # only among the hundred, so that a name past them is never quoted; `last` joins the
   # last two of a list told whole, `" and "`, or `", "` where the line joins every name
-  # with a comma. A list past the hundred ends `and 9900 more, not listed`, `and 1 more,
+  # with a comma, and `between` the others, `", "`, or `" and "` where the line joins
+  # every name so. A list past the hundred ends `and 9900 more, not listed`, `and 1 more,
   # not listed` for one, the count line's words (decision 627) without the noun, which the
   # line names before its list (provisional: PLAN.md's RV-34, the count's words).
   @doc false
-  def named(names, quote, last \\ " and ") do
+  def named(names, quote, last \\ " and ", between \\ ", ") do
     {shown, rest} = Enum.split(names, @offered)
-    named_list(Enum.map(shown, quote), length(rest), last)
+    named_list(Enum.map(shown, quote), length(rest), {last, between})
   end
 
-  defp named_list([], 0, _last), do: ""
-  defp named_list([one], 0, _last), do: one
+  defp named_list([], 0, _joins), do: ""
+  defp named_list([one], 0, _joins), do: one
 
-  defp named_list(quoted, 0, last),
-    do: Enum.join(Enum.drop(quoted, -1), ", ") <> last <> List.last(quoted)
+  defp named_list(quoted, 0, {last, between}),
+    do: Enum.join(Enum.drop(quoted, -1), between) <> last <> List.last(quoted)
 
-  defp named_list(quoted, more, _last),
-    do: Enum.join(quoted, ", ") <> " and #{more} more, not listed"
+  defp named_list(quoted, more, {_last, between}),
+    do: Enum.join(quoted, between) <> " and #{more} more, not listed"
 
   @doc """
   The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
