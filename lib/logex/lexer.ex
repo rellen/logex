@@ -215,8 +215,7 @@ defmodule Logex.Lexer do
   # that holds a control character, a newline among them, is shown as `inspected/2` shows
   # it, `"x\\nand 7 more mistakes, not listed"`, so that no name a host gives writes a line
   # of a refusal of its own, a count's among them. A text shown as a value, through
-  # `inspected/2`, is cut as `inspect/1` cuts it, at 4,096 characters (provisional:
-  # `PLAN.md`'s "RV-33 as built", question 2).
+  # `inspected/2`, is cut as `inspect/1` cuts it, at 4,096 characters (decision 628).
   @longest_text 4_096
 
   # The bytes of the control characters, C0 and DEL, which `inspect/1` writes escaped.
@@ -237,7 +236,7 @@ defmodule Logex.Lexer do
   @doc false
   # RV-33's review (F3): a name as a compile's diagnostic quotes it, whole however long, as
   # before decision 613, which cuts a name in a refusal of the host contract alone
-  # (provisional: `PLAN.md`'s RV-33 review, question 2); a binary that is no text as
+  # (decision 633); a binary that is no text as
   # `inspected/2` shows it.
   def quoted_whole(text) when is_binary(text), do: quoted_text(String.valid?(text), text)
   def quoted_whole(other), do: inspected(other)

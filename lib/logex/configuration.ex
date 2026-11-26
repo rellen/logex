@@ -162,7 +162,7 @@ defmodule Logex.Configuration do
   that is text is quoted whole, in backquotes, up to 4,096 bytes and past them cut and
   told how long it was (decision 613), in every diagnostic of a configuration as in a
   refusal, those `check/1` gives among them, a line to copy giving the cut start or none
-  (provisional: `PLAN.md`'s RV-33 review, question 1); one that is no UTF-8 text, or holds
+  (decision 632); one that is no UTF-8 text, or holds
   a control character, as `inspect/1` shows it, `<<97, 98, 255, 99>>`; and a struct that
   writes itself out, a `Date` among them, field by field where it holds a long number
   (RV-32's review).

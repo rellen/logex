@@ -132,16 +132,20 @@ that the entry of the item in `PLAN.md` names, then the day that the item merged
 | RV-31 | `Logex.Configuration.Global.new!/3` refuses each error of 1 global when it is called: its name, its type, its location and its value. A refusal of the host cuts a long number that it quotes. The comments of CI on its caches | 576, 577, 580 and 583. Merged 11-23 (cd9601a) |
 | DOC-1, step 2 | The pages of this site, the decision records and a short README | 546 to 548, 556 to 572. Merged 11-23 (4ce7465) |
 | RV-32 | Each refusal of the host contract cuts a long value that it quotes. A test of the cache of the PLT named for what it checks | 586 and 587. Merged 11-24 (ea0d31c) |
+| DOC-1, step 3 | A review of the whole. The pages changed by the answers to step 2: the length of a page, the words and the sources of the claims about Logix. Also the pages on a phone, the uses of logex and the decision records | 589 to 595. Merged 11-25 (d82a4af) |
+| RV-33 | A refusal of many errors of the host gives the first 100 and a count of the others. A refusal cuts a long text. `Logex.Runtime.instance/1` refuses a struct where a map must be | 610, 613 and 616. Merged 11-25 (ac1e4ec) |
 
-The answers to the questions of these items are in 6 groups:
+The answers to the questions of these items are in 7 groups:
 
 - 549 to 555: the answers to RV-24, which RV-30 built.
 - 556 to 572: the answers to DOC-1 step 1.
 - 573 and 574: the answers to RV-29.
 - 575 to 583: the answers to RV-30. RV-31 built 576, 577, 580 and 583.
 - 584 to 588: the answers to RV-31. RV-32 built 586 and 587.
-- 589 to 616: the answers to step 2 of DOC-1 and to RV-32. Step 3 of DOC-1 builds 589
-  to 595, RV-33 builds 610, 613 and 616, and RV-34 builds 596 to 607.
+- 589 to 616: the answers to step 2 of DOC-1 and to RV-32. Step 3 of DOC-1 built 589
+  to 595, RV-33 built 610, 613 and 616, and RV-34 builds 596 to 607.
+- 617 to 635: the answers to step 3 of DOC-1 and to RV-33. 626 changes 596. RV-34 builds
+  624, 626, 629 and 630.
   [Project history](project-history.md#the-work-that-waits) gives these items with the
   other work that waits.
 

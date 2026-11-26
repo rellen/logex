@@ -31,7 +31,7 @@ This page is a summary. The full record is in 3 documents:
 ## What logex has, milestone by milestone
 
 This chart shows each block of work against the calendar, from 2026-08-30 to
-2026-11-23.
+2026-11-25.
 
 ```mermaid
 gantt
@@ -49,11 +49,11 @@ gantt
   M5 data types : 2026-10-21, 2026-10-28
   M6 retained values : 2026-10-27, 2026-11-02
   Review, RV-1 to RV-19 : 2026-11-01, 2026-11-13
-  RV-20 to RV-32, DOC-1 steps 1, 2 : 2026-11-12, 2026-11-24
+  RV-20 to RV-33, DOC-1 steps 1 to 3 : 2026-11-12, 2026-11-26
 ```
 
 Figure: the blocks of work by date. Milestone 1 took 4 weeks. Each later block took 1
-to 12 days.
+to 14 days.
 
 The table gives the facts of the chart. The last column gives the decisions of the work,
 then the first and the last day that the work merged into `main`, in 2026.
@@ -205,12 +205,10 @@ entry of the item in `PLAN.md` names.
 
 | Item | What it does | Decisions |
 |---|---|---|
-| RV-33 | A refusal of many errors of the host gives the first 100 and a count of the others. A refusal cuts a long text. `Logex.Runtime.instance/1` refuses a struct where a map must be | 610, 613 and 616 |
-| DOC-1, step 3 | A review of the whole. The pages changed by the answers to step 2: the length of a page, the words and the sources of the claims about Logix. Also the pages on a phone, the uses of logex and the decision records | 546 to 548, 556 to 572, 589 to 595 |
-| RV-34 | The behaviours that step 2 of DOC-1 found: the store, forcing and the host contract. Also 4 messages, 4 warnings, the help of a refusal, the tests and the tools | 596 to 607 |
+| RV-34 | The behaviours that step 2 of DOC-1 found: the store, forcing and the host contract. Also 4 messages, the warnings that are missing or lost, the help of a refusal, the tests and the tools. Also a run of a one-shot under an event task and under a periodic task. A refusal that lists names gives the first 100 and a count. `Logex.Runtime.instance/1` refuses a tag that is not a `%Logex.Tag{}` | 596 to 607, 624, 626, 629 and 630 |
 | RV-23 | Each "provisional" mark traced to its decision, or put to the maintainer | 519 |
 | RV-25 | The runner and the contract test file split by concern, with no change of behaviour | 515 |
-| DOC-2 | The documentation of each module written again by the style guide, with the words of the messages and the warnings | 546, 596 |
+| DOC-2 | The documentation of each module written again by the style guide, with the words of the messages and the warnings | 546, 596, 626 |
 
 logex has no release. `mix.exs` gives the version 0.1.0, and `CHANGELOG.md` has only
 `## Unreleased` (decision 541).
