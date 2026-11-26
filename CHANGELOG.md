@@ -281,6 +281,16 @@ API".
   `put_inputs/3` and `call/4` check a program's shape alone, as before. Look for: a
   `rescue` of `Protocol.UndefinedError` or `FunctionClauseError` around `instance/1` or
   `new!/1`.
+- **A program edited by hand whose table holds a tag that is no `%Logex.Tag{}` is
+  refused** (decision 630), a line a tag, by name: a box counter's host that puts a `Date`
+  where `total`'s tag goes, `%{p | tags: %{p.tags | "total" => ~D[2026-11-24]}}`, is told
+  ``"`p`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]: `p` was edited by hand
+  after it compiled"`` by `Logex.Runtime.instance/1` and `instance/2`,
+  `Logex.Configuration.check/1` and `new!/1`, `Logex.Runtime.start/1`,
+  `Logex.Edit.accept/3` and `Logex.Configuration.Edit.accept/2`, where each raised
+  `FunctionClauseError` out of `Logex.Program.tag_destination/2`; so is a tag of a held
+  block's body, which was taken. Look for: a `rescue` of `FunctionClauseError` around
+  those calls.
 
 ### What it carries, by the work that built it
 

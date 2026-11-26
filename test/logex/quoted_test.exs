@@ -2491,6 +2491,80 @@ defmodule Logex.QuotedTest do
     end
   end
 
+  describe "a tag that is no %Logex.Tag{} is refused wherever a program is handed in (decision 630)" do
+    # Decision 630 (RV-34; the maintainer, 2026-11-26, RV-33's question 4), at every check
+    # of decision 616: a box counter's host puts a `Date` where one tag of a compiled
+    # program's table goes, and `instance/1`, `Logex.Configuration.check/1` and `new!/1`,
+    # `Logex.Runtime.start/1` and both edits refuse it, a line a tag, where on `main` each
+    # raised FunctionClauseError out of `Logex.Program.tag_destination/2`, and a held
+    # body's tag was taken.
+    @counter """
+    var_input eye bool
+    var total dint
+    var_output full bool
+
+    xic eye add total 1 total
+    xic eye ote full
+    """
+
+    @by_hand ": `box` was edited by hand after it compiled"
+
+    test "instance/1 and /2, check/1, new!/1, start/1 and both edits, a line each" do
+      {:ok, box} = Logex.compile(@counter, name: "box")
+      dated = %{box | tags: Map.put(box.tags, "total", ~D[2026-11-24])}
+      line = "`box`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]" <> @by_hand
+      {:ok, c} = Configuration.compile("plant", "program b1 box\n  b1.eye 0\n", %{"box" => box})
+      in_c = %{c | programs: %{"box" => dated}}
+      s = Runtime.instance(box)
+      rt = Runtime.start(c)
+
+      told([
+        {"instance/1", fn -> Runtime.instance(dated) end, line},
+        {"instance/2", fn -> Runtime.instance(dated, Runtime.retained(box, s)) end, line},
+        {"check/1", fn -> Configuration.check(in_c) end, line},
+        {"new!/1",
+         fn ->
+           Configuration.new!(
+             name: "plant",
+             programs: [dated],
+             instances: Enum.map(c.instances, &%{&1 | line: nil}),
+             connections: Enum.map(c.connections, &%{&1 | line: nil})
+           )
+         end, line},
+        {"start/1", fn -> Runtime.start(in_c) end, line},
+        {"Edit.accept/3, the candidate", fn -> Logex.Edit.accept(box, dated, s) end, line},
+        {"Edit.accept/3, the running", fn -> Logex.Edit.accept(dated, box, s) end, line},
+        {"Configuration.Edit.accept/2", fn -> Logex.Configuration.Edit.accept(rt, in_c) end, line}
+      ])
+    end
+
+    test "every such tag a line, by name, and a held body's" do
+      {:ok, box} = Logex.compile(@counter, name: "box")
+      tags = %{box.tags | "total" => {:total, 0}, "eye" => :eye, "full" => nil}
+      error = assert_raise ArgumentError, fn -> Runtime.instance(%{box | tags: tags}) end
+
+      assert error.message ==
+               Enum.map_join(
+                 [{"eye", ":eye"}, {"full", "nil"}, {"total", "{:total, 0}"}],
+                 "\n",
+                 fn {name, got} ->
+                   "`box`'s tag `#{name}` is no %Logex.Tag{}, got: #{got}" <> @by_hand
+                 end
+               )
+
+      {:ok, seal} = Logex.compile(@seal, name: "seal")
+      {:ok, m} = Logex.compile(@sealed, name: "m", types: [seal])
+      body = m.blocks["seal"].body
+      body = %{body | tags: Map.put(body.tags, "stop", ~T[10:00:00])}
+      held = %{m | blocks: %{"seal" => %{m.blocks["seal"] | body: body}}}
+      error = assert_raise ArgumentError, fn -> Runtime.instance(held) end
+
+      assert error.message ==
+               "`seal`'s body's tag `stop` is no %Logex.Tag{}, got: ~T[10:00:00]: `m` was " <>
+                 "edited by hand after it compiled"
+    end
+  end
+
   describe "a hostile value wherever the host contract takes one (RV-32's review, F7)" do
     # A walk over the host contract's arguments and the fields of the structs it checks,
     # each given in turn a long number, a tuple, a list and a struct that hold one, a
@@ -2503,9 +2577,10 @@ defmodule Logex.QuotedTest do
     # what escapes there is listed in `@outside` with its reason. None does: since
     # decision 616 (RV-33) `instance/1`'s shape check refuses a struct where a map is due,
     # a `Date` or a `Time` in a program's tag table or its blocks, which it took for a map
-    # and its check then walked as one (Protocol.UndefinedError), each pinned below. A tag
-    # of the table that is a struct is not walked here: decision 630 has `instance/1`
-    # refuse it, a line each, not built yet.
+    # and its check then walked as one (Protocol.UndefinedError), each pinned below; and
+    # since decision 630 (RV-34) a tag of the table that is no `%Logex.Tag{}`, which it
+    # took for a tag (FunctionClauseError), each hostile value given here as a tag of the
+    # table at `instance/1`, `check/1`, `start/1` and both edits, and of a held body's.
     @outside %{}
 
     # The fields the walk gives a value that nothing reads where it is walked: a
@@ -2619,6 +2694,10 @@ defmodule Logex.QuotedTest do
         {"get!/2", &Runtime.get!(rt, &1)},
         {"Edit.accept/3 the running program's name", &Logex.Edit.accept(%{p | name: &1}, p, s)},
         {"Edit.accept/3 the candidate's name", &Logex.Edit.accept(p, %{p | name: &1}, s)},
+        {"instance/1 a tag of the table",
+         &Runtime.instance(%{p | tags: Map.put(p.tags, "total", &1)})},
+        {"Edit.accept/3 a tag of the candidate's table",
+         &Logex.Edit.accept(p, %{p | tags: Map.put(p.tags, "total", &1)}, s)},
         {"IO.bind!/2 a device's name", &Logex.IO.bind!(c, %{&1 => Sim})},
         {"IO.bind!/2 an adapter's options", &Logex.IO.bind!(c, %{"panel" => {Sim, &1}})},
         {"Sim.set/3 a value", &Sim.set(elem(Sim.start_link(), 1), [0], &1)},
@@ -2682,6 +2761,16 @@ defmodule Logex.QuotedTest do
           {field, call} <- fielded(tally, &Configuration.Edit.accept(rt, in_c.(&1))),
           do: {"Configuration.Edit.accept/2 program.#{field}", call}
         ) ++
+        [
+          {"check/1 a tag of a program's table",
+           &Configuration.check(in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"start/1 a tag of a program's table",
+           &Runtime.start(in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"Configuration.Edit.accept/2 a tag of a program's table",
+           &Configuration.Edit.accept(rt, in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"instance/1 a tag of a block's body",
+           &Runtime.instance(bodied.(%{type.body | tags: Map.put(type.body.tags, "stop", &1)}))}
+        ] ++
         for(
           {field, call} <- fielded(type, &Runtime.instance(typed.(&1))),
           do: {"instance/1 a block type.#{field}", call}

@@ -361,7 +361,9 @@ defmodule Logex.Runtime do
   `arrays` or `retained` are not, or whose bitwise instruction's destination has no type
   it can compute in; and since decision 616 one that holds a struct where a map is due, a
   `Date` or a `Time` as its tags, its blocks, its arrays, units or reals, a line each, where
-  it raised Protocol.UndefinedError out of `instance/1`. Every other entry point checks
+  it raised Protocol.UndefinedError out of `instance/1`; and since decision 630 one whose
+  table, or a held body's, holds a tag that is no `%Logex.Tag{}`, a `Date` as `total`'s, a
+  line a tag, where it raised FunctionClauseError. Every other entry point checks
   only a program's shape, so a program swapped in by hand after that check is trusted, and
   a scan that
   reaches such a destination raises there. Otherwise a `%Logex.Program{}`,
