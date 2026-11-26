@@ -282,6 +282,23 @@ defmodule Logex.PageTest do
       assert Page.masked("a `[b](c)` and ``<d> | e`` f") == "a xxxxxxxx and xxxxxxxxxxx f"
     end
 
+    # DOC-1's close (decision 596; RV-34): a picture's alternative text holds brackets in
+    # pairs, as GitHub reads it, where a reading that stopped at the first `]` found no
+    # picture, so no mark above it named one and its alternative text went unread.
+    test "a picture is read whole, its alternative text holding brackets in pairs" do
+      line = "  ![The rung of `t[1]` and `grid[1,2]`, [a] [b [c]].](../assets/t.svg) after"
+
+      assert Page.picture(line) ==
+               {"The rung of `t[1]` and `grid[1,2]`, [a] [b [c]].", "../assets/t.svg"}
+
+      assert Page.pictures("a ![one [1]](a.svg) and ![two](b.svg)") ==
+               [{"one [1]", "a.svg"}, {"two", "b.svg"}]
+
+      assert Page.unpictured("see ![the `t[1]` rung](a.svg).") == "see the `t[1]` rung."
+      assert Page.picture("text ![x](a.svg)") == nil
+      assert Page.picture("![x [y](a.svg)") == nil
+    end
+
     test "the list of pages is read from the root given" do
       assert {"README.md", _kind, :first} = hd(Page.listed(@root))
     end

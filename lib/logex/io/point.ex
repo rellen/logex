@@ -8,6 +8,10 @@ defmodule Logex.IO.Point do
   `Logex.Declarations.table/0`: `:bool`, an integer type such as `:dint` or `:uint`, a
   bit string such as `:word`, or a real, `:real` or `:lreal`, an array's element's type
   for an element. Plain data.
+
+  Inside the host contract (decision 523): what `Logex.IO`'s behaviour hands an adapter,
+  built by `Logex.IO.points/1` from a configuration `Logex.Configuration.new!/1` checked,
+  so an adapter may rely on each field as this moduledoc gives it; a host builds none.
   """
 
   @enforce_keys [:name, :direction, :address, :type]

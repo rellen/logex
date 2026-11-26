@@ -234,6 +234,13 @@ defmodule Logex.Parser do
   # Located at the innermost `(` still open when the input ends — the one to close.
   def format_error(:unclosed), do: "this `(` is never closed: the input ends before its `)`"
 
+  # The three `case`s of lib/, the one module CLAUDE.md's rule of clauses lets hold one
+  # (`clauses_test.exs`, decision 264): `rungs/2`, the `(` clause of `branch/2` and
+  # `legs/3` each take apart what a descent below gives, `{:ok, elements, rest}` or the
+  # error to pass up as it came, and go on by the token that follows, where clauses would
+  # need a function of their own for each answer, each called once and named by no rule
+  # of the grammar. Kept as built since M0 (provisional: PLAN.md's RV-34, the parser's
+  # three `case`s).
   defp rungs(tokens, acc) do
     case branch(tokens, []) do
       {:ok, elems, rest} -> line_end(rest, elems, acc)
