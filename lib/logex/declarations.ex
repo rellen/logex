@@ -354,7 +354,7 @@ defmodule Logex.Declarations do
   differing only in case is always the suggestion; otherwise the nearest by Jaro distance,
   if it is near enough. A `name` that is not valid UTF-8 gets none, and since decision 613
   neither does one past 4,096 bytes, nor is one past them among `names` ever the
-  suggestion (provisional: `PLAN.md`'s "RV-33 as built", question 5). `shown` renders the
+  suggestion (decision 631). `shown` renders the
   name chosen, so a member is matched on its own name and shown whole, as `t1.dn`, and
   `kind` says what is case-sensitive: `"tags"`, or `"members"`.
   """
@@ -480,8 +480,8 @@ defmodule Logex.Declarations do
   # among nothing. `made` takes the hundred lines made, where a refusal gives a list of
   # names once, on the first line that needs it (Logex.Runtime's once/1), and `more` counts
   # what a refusal told in an earlier message holds past its own hundred (`untold/1`). The
-  # count's words, and a line that lists names in one line given whole, are provisional:
-  # `PLAN.md`'s "RV-33 as built", questions 1 and 3.
+  # count's words are decision 627's; a line that lists names in one line is given whole
+  # still, where decision 629 tells the first hundred names and a count.
   @doc false
   def told(mistakes, made \\ & &1, more \\ 0) do
     {shown, rest} = Enum.split(mistakes, @offered)

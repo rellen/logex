@@ -278,8 +278,7 @@ defmodule Logex.Runtime do
   the one cut (decision 586), and since decision 610 the first hundred of them and then
   one line that counts the rest, `and 99900 more mistakes, not listed`, none of them made,
   an array's value one problem however many of its elements do not fit, its first ten
-  misfits a line each and one that counts the rest (provisional: `PLAN.md`'s RV-33
-  review, question 3),
+  misfits a line each and one that counts the rest (decision 634),
   so that 100,000 keys a bridge sends by mistake are told in a few kilobytes, where they
   were told in 9.6 MB, as every refusal of this module that tells a line a mistake tells
   them; and since decision 613 a key past 4,096 bytes is cut where a line quotes it, and

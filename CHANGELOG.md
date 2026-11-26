@@ -28,7 +28,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–616.
+Decisions: 1–635.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (waiting under decision 541, no release planned: its number, and whether its tag is
@@ -212,7 +212,8 @@ API".
   255, 99>>`, where its bytes were written raw and the message was no text. Look for:
   code that reads a number back out of such a message, or matches a name in backquotes
   in one.
-- **A refusal of many mistakes tells the first hundred and how many more** (decision 610),
+- **A refusal of many mistakes tells the first hundred and how many more** (decisions 610,
+  627, 634 and 635),
   where it told one line a mistake however many: `Logex.Runtime.put_inputs/3`'s and
   `cycle/3`'s inputs, a state's values outside their types, a program, a candidate or a
   resource's program type edited by hand, a retained image's lines,
@@ -229,9 +230,9 @@ API".
   the runner's start, which tells a store's image in 50 lines and a count, counts those
   the start's refusal did not list. Look for: code that counts or parses the lines of
   such a message.
-- **A name or a location past 4,096 bytes is cut where a refusal quotes it** (decision
-  613, amending 585), at a character's boundary, and told how long it was, where it was
-  quoted whole: a bridge's megabyte of a key to `put_inputs/3` is told ``input
+- **A name or a location past 4,096 bytes is cut where a refusal quotes it** (decisions
+  613, amending 585, 628, 631, 632 and 633), at a character's boundary, and told how long
+  it was, where it was quoted whole: a bridge's megabyte of a key to `put_inputs/3` is told ``input
   `aaaa…` (1000000 bytes) is not declared``, a line of some 4 KB in a few milliseconds,
   where it was a megabyte after some 1.6 s; so are `cycle/3`'s keys, `get/2`'s and
   `get!/2`'s paths, `IO.bind!/2`'s device names, a configuration's names and locations,
@@ -346,16 +347,21 @@ API".
   pictures drawn by `scripts/draw.exs`; a workflow builds the site on every push and
   publishes it from `main`.
 - **The pages under the answers to DOC-1's close**, DOC-1's third step (decisions
-  589–595): nothing a program or a host's call did is changed. A page that is not a
-  reference has 2,000 words at most, `scripts/prose.exs` refusing a longer one, and each
-  decision record's runs and long tables are on a contributor page it links (589); "test"
-  on the user's pages is the online edit's step alone, a test of the suite an "ExUnit
-  test" (590); a reference page and a how-to guide use the host contract alone (591);
-  every claim about Logix gives its source, or says "Not recorded" on the page of the
-  differences from Logix alone (592); a picture shrinks to a phone's column and a wide
-  table scrolls (593); README names four uses of logex and links the GitHub issues for a
-  defect (594); and a record is edited in place while its choice holds (595). The site
-  no longer links a Hex package that logex does not publish.
+  589–595, and 617–623 and 625, which take its readings as built): nothing a program or a
+  host's call did is changed. A page that is not a reference has 2,000 words at most,
+  `scripts/prose.exs` refusing a longer one, a reference page none (589 and 618), and each
+  decision record's runs and long tables are on a contributor page it links, the pages
+  listed in the contributors' map (589 and 619); "test" on the user's pages is the online
+  edit's step alone, a test of the suite an "ExUnit test", and the contributors' words on
+  one page (590 and 623); a reference page and a how-to guide use the host contract alone,
+  a reference page showing the refusal of a type renamed by hand and a tutorial following
+  its template (591, 621 and 622); every claim about Logix gives its source, or says "Not
+  recorded" on the page of the differences from Logix alone, a decision record's among
+  them (592 and 620); a picture shrinks to a phone's column and a wide table scrolls
+  (593); README names four uses of logex, kept as drafted, links the GitHub issues for a
+  defect and keeps its 154 lines (594, 617 and 625); and a record is edited in place while
+  its choice holds (595). The site no longer links a Hex package that logex does not
+  publish.
 - **The answers to RV-24's questions**, RV-30 (decisions 549–555): `scripts/gate.sh` runs
   OTP's Dialyzer as its fifth step, after the suite, so a spec the code breaks is seen
   before the commit (549); a call whose answer is thrown away is red,

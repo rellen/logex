@@ -1416,8 +1416,7 @@ defmodule Logex.QuotedTest do
     # input's key, and an array's value is one mistake however many of its elements do
     # not fit, told in up to eleven lines, its first ten misfits and a count of the rest
     # (decision 151's ten): 120 arrays of 20 sints, each wholly outside its type, are told
-    # as the first hundred arrays, 1,100 lines, and 20 more (provisional: `PLAN.md`'s
-    # RV-33 review, question 3).
+    # as the first hundred arrays, 1,100 lines, and 20 more (decision 634).
     test "an array's misfits are one mistake, its ten lines and a count among the hundred" do
       source =
         Enum.map_join(1..120, "\n", &"var_input a#{pad(&1)} sint[20]") <>
@@ -2113,8 +2112,7 @@ defmodule Logex.QuotedTest do
     test "a compile's diagnostic quotes a name whole however long (F3)" do
       # A compile's diagnostic is no refusal of the host contract: a name of 5,000 bytes is
       # whole in each place it is quoted, as before decision 613, where the type's check
-      # cut it in one place and not the other (provisional: `PLAN.md`'s RV-33 review,
-      # question 2).
+      # cut it in one place and not the other (decision 633).
       name = a(5_000)
 
       assert {:error, [%Logex.Diagnostic{message: message}]} =
@@ -2286,8 +2284,8 @@ defmodule Logex.QuotedTest do
     # decision 616 (RV-33) `instance/1`'s shape check refuses a struct where a map is due,
     # a `Date` or a `Time` in a program's tag table or its blocks, which it took for a map
     # and its check then walked as one (Protocol.UndefinedError), each pinned below. A tag
-    # of the table that is a struct is not walked here (`PLAN.md`'s "RV-33 as built",
-    # question 4).
+    # of the table that is a struct is not walked here: decision 630 has `instance/1`
+    # refuse it, a line each, not built yet.
     @outside %{}
 
     # The fields the walk gives a value that nothing reads where it is walked: a

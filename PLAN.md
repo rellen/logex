@@ -60,7 +60,10 @@ waits are `docs/contributing/project-history.md`'s, and the step's close is buil
 to DOC-1's close's questions and RV-32's, 2026-11-24: DOC-1's second step and RV-32 have
 landed, and `docs/contributing/project-history.md`'s "The work that waits" names decisions
 589–616 and the order from here, RV-33, DOC-1's third step, RV-34, RV-23, RV-25 and
-DOC-2.)*
+DOC-2.)* *(Since the answers to DOC-1's third step's questions and RV-33's, 2026-11-26:
+DOC-1's third step and RV-33 have landed, `d82a4af` and `ac1e4ec`, and
+`docs/contributing/project-history.md`'s "The work that waits" names decisions 617–635
+and the order from here, RV-34, RV-23, RV-25 and DOC-2.)*
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -22519,7 +22522,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
 
   Its questions for the maintainer are recorded here when it lands. *(Since its build
   and review, 2026-11-25: "DOC-1's step 3 as built" and "DOC-1's step 3 reviewed" record
-  them, the draft of the uses first.)*
+  them, the draft of the uses first.)* *(Since the answers, 2026-11-26: decisions 617 to
+  625 settle them, and decision 626 amends 596; "DOC-1's step 3's and RV-33's questions
+  answered, 2026-11-26" records them.)*
 
   **DOC-1's step 1 as built** (2026-11-15, branch `doc1` over `80d3cdf`). The foundation is
   there, and one page written on it whole, the tutorial "Your first program", so that each
@@ -24156,7 +24161,9 @@ marks where DOC-1 has put them; then RV-25, alone; and DOC-2 last.
   reads as a link to no function: the message is quoted whole.
 
   **The questions for the maintainer, each kept as built until answered.** The first is
-  594's draft; the rest are readings the step took where the record is silent.
+  594's draft; the rest are readings the step took where the record is silent. *(Answered
+  2026-11-25, each with the option recommended: decisions 617 to 625 in this order,
+  question 8's run built by RV-34.)*
 
   1. *The uses of logex (594's draft, to correct).* README and `what-logex-is.md` say:
      "Learn ladder logic on a computer, with no controller. Simulate a machine, for example
@@ -25924,6 +25931,8 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
     the record, marked where it stands (`Logex.Declarations`' comment on `told/3`,
     questions 1 and 3; `Logex.Lexer`'s on `quoted_text/1`, question 2; `Logex.Declarations`'
     doc of `suggest/4`, question 5; `quoted_test.exs`'s comment on `@outside`, question 4).
+    *(Answered 2026-11-26, each with the option recommended: decisions 627 to 631 in this
+    order, 629 and 630 built by RV-34; the marks are the numbers.)*
     1. *The count's words* (decision 610: "how many more there are"). A box counter's
        bridge sends 100,000 inputs keyed by register number. (a) As built: the hundredth
        line, then `and 99900 more mistakes, not listed`, the store's refusal's form
@@ -26105,7 +26114,9 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   - *Questions for the maintainer*, each the closest reading of the record, marked where it
     stands (`Logex.Configuration`'s moduledoc, question 1; `Logex.Lexer`'s
     `quoted_whole/1`, `Logex`'s moduledoc, question 2; `Logex`'s and `Logex.Runtime`'s
-    moduledocs, question 3; decision 610's note, question 4).
+    moduledocs, question 3; decision 610's note, question 4). *(Answered 2026-11-26, each
+    with the option recommended, as built: decisions 632 to 635 in this order; the marks
+    are the numbers.)*
     1. *A configuration's diagnostics* (F2; decision 613: "a text past 4,096 bytes is cut
        in a refusal", amending 585, which took `check/1`'s quoting as its model). A fan
        plant's host builds 300 instances in Elixir, one named by a megabyte of garbage
@@ -26137,10 +26148,39 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
        50. (c) That line first, which changes the order the pins below a hundred hold. IEC
        and Logix have no host API to compare.
 
-- **RV-34 — the behaviours DOC-1's close found** (decisions 596 to 607). The review item
-  decision 596 makes, of question 8's findings in three of its groups, each run again on
-  `main`, then mended with a test that fails when the mend is reverted, or put to the
-  maintainer where its mend would choose a rule (596):
+**DOC-1's step 3's and RV-33's questions answered, 2026-11-26** (decisions 617–635).
+DOC-1's third step landed on `main` at `d82a4af` and RV-33 at `ac1e4ec`. The maintainer
+answered the step's review's nine questions on 2026-11-25, with an amendment of decision
+596, and RV-33's nine, its build's five and its review's four, on 2026-11-25 and 26, each
+with the option recommended. Of DOC-1's third step's: the four uses kept as drafted (617);
+a reference page exempt from the 2,000-word limit, amending 589 (618); the pages of the
+records' runs a list in the contributors' map (619); a record's claim about Logix cited or
+dropped, 592 (b) as mended (620); `function-blocks.md`'s text 35 showing the refusal of a
+type renamed by hand (621); a tutorial left to its template (622); the contributors' words
+on one page, amending 590 (623); a run of a lamp's push button under an event task and
+under a periodic task on `use-one-shots-and-pulse-coils.md`, the row worded to what the run
+shows (624); and README's 154 lines kept (625); each as built but 624. And decision 596
+amended (626): the group *warnings missing or lost* needs code, so RV-34 builds those
+warnings and DOC-2 keeps only the wording. Of RV-33's: the count's words, `and 99900 more
+mistakes, not listed` (627); a text a refusal shows as a value cut as `inspect/1` cuts it
+(628); a line that lists names told by its first hundred names and a count (629);
+`instance/1` refusing a tag that is no `%Logex.Tag{}`, a line each (630); no did-you-mean
+for a name past 4,096 bytes (631); a configuration's diagnostics cut in every place (632);
+a compile's diagnostics quoting a name whole (633); the mistake the unit of the hundred
+(634); and the "both qualifiers" line left in its order (635); each as built but 629 and
+630. The marks they settle made their numbers with this record: `Logex`'s,
+`Logex.Runtime`'s and `Logex.Configuration`'s moduledocs, `Logex.Declarations`' doc of
+`suggest/4` and its comment on `told/3`, `Logex.Lexer`'s comments on `quoted_text/1` and
+`quoted_whole/1`, three comments of `quoted_test.exs`, and the landed notes of decisions
+589 to 592, 594, 610, 613 and 616, with a note on 596 pointing to 626; and, edited in place
+under decision 595, record 0023 cites 620 and record 0008 627, 628 and 631 to 635. RV-34
+now takes 624, 626, 629 and 630, beside 596's review item and 597 to 607. The order from
+here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
+
+- **RV-34 — the behaviours DOC-1's close found** (decisions 596 to 607, 624, 626, 629 and
+  630). The review item decision 596 makes, of question 8's findings in three of its
+  groups, each run again on `main`, then mended with a test that fails when the mend is
+  reverted, or put to the maintainer where its mend would choose a rule (596):
   - *the store and forcing*: one element of a retained array out of its type's range drops
     the whole array to its initial values; no status key names the copy an earlier start
     made; no public function prints the digests of the files;
@@ -26154,8 +26194,9 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
     clauses check; `instance_array_test.exs` finds a line by a search; `scripts/page.exs`
     does not read a picture whose alternative text holds `[`.
 
-  The groups *messages* and *warnings missing or lost* are DOC-2's, which rewrites the
-  modules' text (596). And the close's behaviours, each pinned whole where it is a message:
+  The group *messages* is DOC-2's, which rewrites the modules' text (596), and since
+  decision 626 the group *warnings missing or lost* is built here, below, its wording
+  DOC-2's. And the close's behaviours, each pinned whole where it is a message:
   `not` and the shifts told they compute in the source's type (decision 214); a bit coil's
   warning naming the one bit the coil writes, a `move` after an `ote` on one of its bits
   among them; a `var_output` nothing writes told the value it holds, not its spelling; and
@@ -26184,6 +26225,46 @@ DOC-1's third step; then RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   `examples/line_device.exs`'s waits under the runner's device limit, a comment tying them
   to it and its page saying why (606). And `Logex.compile/2` taking `declared:`,
   `Logex.Tag.new!/5`'s tags beside the source's declarations (607).
+
+  *(Since the answers to DOC-1's third step's questions and RV-33's, 2026-11-26.)* Four
+  steps more, each run again on `main` first, then built with a test that fails when it is
+  reverted, a message or warning pinned whole, or put to the maintainer where its build
+  would choose a rule:
+  - *The warnings missing or lost* (626, amending 596). A `cal` and an `ote` on one tag,
+    `cal s1 a b belt` beside `xic a ote belt`, and two `cal`s on `belt`, warned as two
+    `ote`s on one tag are, "the last one in the scan decides it"; a `move` and an `ote` on
+    one `bool`, `xic a move 1 belt` beside `xic a ote belt`, warned so too; the rules for a
+    `bool` array and for a `word` made to agree; a real literal in a long timer's `pre`, a
+    time in ns, warned, the form the close's finding names found first (`ton t 1.5` and
+    `move 1.5 t.pre` on a `ton_ltime` are refused today, not taken unwarned); and
+    `Logex.Configuration.compile_file/1` keeping a program's warnings among its own, where
+    its `warnings` hold none and only the program type's struct does. Each is a row of
+    `validation_test.exs`'s or `configuration_test.exs`'s warnings, and the pages that list
+    the warnings, the cheatsheet and the how-to guides' failure tables among them, gain
+    their rows.
+  - *The one-shots' run* (624). `use-one-shots-and-pulse-coils.md` shows a run of a lamp's
+    push button pressed and released between two runs of an event task, its one-shot
+    missing the edge, and the same program under a periodic task, its one-shot seeing it,
+    from a file under `examples/` that `readme_test.exs` runs and compares; the row for
+    "sees its rung only at the task's runs" worded to what the run shows, and changed
+    where the run shows a periodic task missing an edge too.
+  - *A line that lists names* (629). Every line of a refusal of the host contract that
+    lists names, found by a search of `lib/` (`put_inputs/3`'s "the var_inputs are",
+    `cycle/3`'s "the input points are", an access path's "its members are" and `new!/1`'s
+    "the types given are" among them), tells the first hundred names in its order and how
+    many more there are, as `Logex.Declarations.told/3` tells mistakes; a fan controller's
+    10,000 var_inputs and one unknown key told in a few kilobytes, where they are told in
+    100,047 bytes. Pinned at 100 and 101 names in `quoted_test.exs`, with its growth at
+    10,000 names against 100 in reductions, in the same run. Whether a diagnostic that
+    lists names, a configuration's "its var_inputs and var_outputs are" and a compile's
+    "its members are", is bounded so too is put to the maintainer before it is built
+    (decision 633 keeps a compile's diagnostics whole).
+  - *A tag that is no tag* (630). `instance/1`'s shape check,
+    `Logex.Program.edited_by_hand/1`, refusing a tag of the table that is no
+    `%Logex.Tag{}`, a `Date` as `%{p | tags: %{"total" => ~D[2026-11-24]}}`, one pinned
+    line each in its `ArgumentError`, where `FunctionClauseError` escapes from
+    `Logex.Program.start/1`; `quoted_test.exs`'s hostile walk then giving a tag of the
+    table a hostile value, and its comment on `@outside` made true.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

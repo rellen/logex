@@ -38,9 +38,10 @@ is a part of a Markdown file. These words do not mean a [test](../../guides/refe
 
 Accepted. No later record replaces this record.
 
-Plan item DOC-1 builds the decision in 3 steps. Step 1 is on `main` at `9d3d696`, and
-step 2 at `4ce7465`. Step 3 reviews the whole. Its decisions 589, 590 and 592 change the
-records, and [The writing rules](#the-writing-rules) states them.
+Plan item DOC-1 builds the decision in 3 steps. Step 1 is on `main` at `9d3d696`, step 2
+at `4ce7465` and step 3 at `d82a4af`. Step 3 reviews the whole. Its decisions 589, 590
+and 592 change the records, and [The writing rules](#the-writing-rules) states them.
+Decision 620 keeps the rule of 592 for the records.
 
 ## Date
 
@@ -168,7 +169,7 @@ A decision record has these rules:
 - It says "ExUnit test" for a test of the suite, and "test" for the step of an online edit
   (decision 590).
 - It gives each claim about Logix its source. Only the page of the differences from
-  Logix says "Not recorded" where no record gives a source (decision 592).
+  Logix says "Not recorded" where no record gives a source (decisions 592 and 620).
 
 ### The suite runs each example
 
@@ -269,7 +270,7 @@ This record sums up these decisions of
 - 556, 562, 563, 564, 567 and 571: the form of the site.
 - 557, 558, 565, 566 and 572: the examples and the marks of the blocks.
 - 559, 560, 561, 568, 569 and 570: the writing rules and the checker.
-- 589, 590 and 592: the length of a record, its words and its sources.
+- 589, 590, 592 and 620: the length of a record, its words and its sources.
 
 [`PLAN.md`](../../PLAN.md) keeps the history of plan item DOC-1.
 [The list of decision records](README.md) gives each record.

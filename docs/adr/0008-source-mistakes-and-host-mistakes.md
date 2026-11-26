@@ -14,7 +14,7 @@ Accepted. No later record replaces this record.
 
 ## Date
 
-2026-09-29 (`PLAN.md` M1-5) to 2026-11-24. The last section lists the decisions.
+2026-09-29 (`PLAN.md` M1-5) to 2026-11-26. The last section lists the decisions.
 
 ## Context
 
@@ -162,9 +162,9 @@ than 10,000 characters (decision 369).
 A refusal of the host contract quotes a number whole up to 10,000 characters, as a
 compile quotes a literal. It quotes a longer number by its first 24 characters and its
 length (decisions 583, 584 and 586). It shows a value as `inspect/1` shows it (decision
-585). It shows a name or a location of more than 4,096 bytes as its first 4,096 bytes and
-its length (decision 613). A check of a list gives 100 errors and the number of the others
-(decision 610).
+585). It shows a name or a location of more than 4,096 bytes by its first 4,096 bytes and
+length (decisions 613 and 632). A check of a list gives 100 errors and the number of
+the others (decisions 610, 627 and 634).
 
 `test/logex/compile_total_test.exs` does a seeded walk of changed source texts. No text
 raises. Each of the 3 compiles of `Logex` runs in a separate process, which
@@ -221,7 +221,8 @@ This record sums up these decisions of
   and 436.
 - States and resources: 171 to 174, 184 to 186 and 188.
 - Globals from the host: 555, 575 to 577 and 588.
-- A long value in a refusal of the host: 583 to 586, 610, 613 and 616.
+- A long value in a refusal of the host: 583 to 586, 610, 613, 616, 627, 628 and 631 to
+  635.
 - The bounds of a compile: 369, 370, 403, 429, 478, 520, 522 and 524 to 526.
 
 [§4.6](../organisation.md#46-execution-model) of the same document says why the runtime
