@@ -85,12 +85,16 @@ The reader takes 4 headers. Each write that names a program makes a store of `lo
 4`.
 
 - **`logex retain 4`** is a store of `logex retain 3` with a `digest` line before its end
-  line. The line holds the MD5 of the value lines. The reader computes it again, and
-  refuses a store whose `digest` line does not hold it or that has no `digest` line. The
-  refusal gives the digest of the value lines and the cold-start sentence. It waits for
-  each other problem: for a store with another problem, the refusal gives only that
-  problem. The
-  header is provisional (PLAN.md's RV-34).
+  line. The line holds the MD5 of the value lines. The reader computes it again. It
+  refuses a store whose `digest` line does not hold it or does not read, and a store with
+  no `digest` line. The header is provisional (PLAN.md's RV-34).
+  - The refusal of a wrong digest, or of one that does not read, gives the digest of the
+    value lines and the cold-start sentence.
+  - The refusal of no `digest` line says that the end of the store can be lost. It gives
+    the cold-start sentence and no digest. A digest written into a store that was cut
+    short and given an end line reads the lost values at their initial values.
+  - The digest waits for each other problem. For a store with another problem, the
+    refusal gives that problem, and a `digest` line that does not read with no digest.
 - **`logex retain 3`** has an end line and names its program by printed digests. It has
   no `digest` line. The reader refuses it, and a store of `logex retain 4`, in these 3
   cases:

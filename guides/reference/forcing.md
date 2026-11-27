@@ -33,7 +33,7 @@ forces. Then it gives what a start, a restart and a stop do with the forces.
 | The points and values that a force takes | [Points and values](#points-and-values) |
 | The text of the forces file, and how a start reads it | [The forces file](#the-forces-file) |
 | What occurs while the disk writes the forces file | [The write and the rounds](#the-write-and-the-rounds) |
-| The keys `forces`, `forcing`, `forces_unknown`, `forces_unknown_sets` and `forces_unread` | [Status](#status) |
+| The keys `forces`, `forcing`, `forces_unknown` and `forces_unread` | [Status](#status) |
 | The forces at a start, a restart, a stop and a crash | [Start, restart and stop](#start-restart-and-stop) |
 | A force of the [trigger](glossary.md#trigger) of an [event task](glossary.md#event-task) | [Forces and event tasks](#forces-and-event-tasks) |
 | The other options and rules of the runner | [Runner](runner.md) |
@@ -800,8 +800,10 @@ The start refuses each of these lines:
   9999
 
 A refusal is 1 `ArgumentError`, with 1 line for each problem of a wrong line of the file.
-A line can have 2 problems. The first is a second line for a point. The second is a value
-that the type does not hold, or a name that is no input point.
+A line can have more than 1 problem. The first is that a point of the line is forced on an
+earlier line. Then come the problems of its values, 1 for each value that the type does
+not hold. A name that is no input point is 1 problem. The refusal does not say that an
+earlier line forces it, because that line forced nothing.
 
 Each line of the message starts with the path and the number of the line. The runner
 does not start. At a restart, the restart raises the error. The runner stays tripped and
@@ -1033,14 +1035,14 @@ succeeded. The table after the block gives each event of the run.
 
 <!-- unchecked: the status during 2 cut writes, copied from a run with the file server of the virtual machine held -->
 ```text
-write out: %{forces: %{"pb_reset" => 1}, forcing: %{"eye" => 1, "pb_reset" => 1}, forces_unknown: nil, forces_unknown_sets: []}
+write out: %{forces: %{"pb_reset" => 1}, forcing: %{"eye" => 1, "pb_reset" => 1}, forces_unknown: []}
 eye in the round: 0
 answer to eye: {:error, {:forces, :timeout}}
-cut: %{forces: %{"pb_reset" => 1}, forcing: %{"estop" => 1, "pb_reset" => 1}, forces_unknown: %{"eye" => 1, "pb_reset" => 1}, forces_unknown_sets: [%{"eye" => 1, "pb_reset" => 1}]}
+cut: %{forces: %{"pb_reset" => 1}, forcing: %{"estop" => 1, "pb_reset" => 1}, forces_unknown: [%{"eye" => 1, "pb_reset" => 1}]}
 answer to estop: {:error, {:forces, :timeout}}
-cut again: %{forces: %{"pb_reset" => 1}, forcing: nil, forces_unknown: %{"estop" => 1, "pb_reset" => 1}, forces_unknown_sets: [%{"estop" => 1, "pb_reset" => 1}, %{"eye" => 1, "pb_reset" => 1}]}
+cut again: %{forces: %{"pb_reset" => 1}, forcing: nil, forces_unknown: [%{"estop" => 1, "pb_reset" => 1}, %{"eye" => 1, "pb_reset" => 1}]}
 file: "eye 1\npb_reset 1\n"
-next write: %{forces: %{"eye" => 1, "pb_reset" => 1}, forcing: nil, forces_unknown: nil, forces_unknown_sets: []}
+next write: %{forces: %{"eye" => 1, "pb_reset" => 1}, forcing: nil, forces_unknown: []}
 file: "eye 1\npb_reset 1\n"
 ```
 
@@ -1048,31 +1050,30 @@ file: "eye 1\npb_reset 1\n"
 |---|---|
 | 1 | A process forces `eye`. The write waits for the disk, and `forcing` shows the new set. |
 | 2 | A round reads `eye` as 0, from the old set. |
-| 3 and 4 | A second process forces `estop`. Then the write of `eye` is cut, and `forces_unknown` shows its set. The force of `estop` is the next write, and `forcing` shows its set. That set does not hold `eye`, because the write of `eye` was cut. |
-| 5 and 6 | The write of `estop` is cut. `forces_unknown` shows the set of this second cut write. `forces_unknown_sets` shows the sets of both cut writes, the newest first. |
-| 7 | The disk answers. The file holds `eye`, the set of the first cut write, which `forces_unknown_sets` shows. |
-| 8 and 9 | The host forces `eye` again, and the write succeeds. `forces_unknown` is `nil`, `forces_unknown_sets` is `[]`, and the file holds the set of the runner. |
+| 3 and 4 | A second process forces `estop`. Then the write of `eye` is cut, and `forces_unknown` holds its set. The force of `estop` is the next write, and `forcing` shows its set. That set does not hold `eye`, because the write of `eye` was cut. |
+| 5 and 6 | The write of `estop` is cut. `forces_unknown` holds the sets of both cut writes, the newest first. |
+| 7 | The disk answers. The file holds `eye`, the set of the first cut write, which `forces_unknown` holds. |
+| 8 and 9 | The host forces `eye` again, and the write succeeds. `forces_unknown` is `[]`, and the file holds the set of the runner. |
 
 ## Status
 
-`Logex.Runner.status/1` gives 5 keys about forces. Each key is in the map at all times.
+`Logex.Runner.status/1` gives 4 keys about forces. Each key is in the map at all times.
 
 | Key | Value | Until |
 |---|---|---|
 | `forces` | `%{point => value}`: each force in effect | It changes when a write succeeds, and when a restart reads the file. |
 | `forcing` | The set of the write in progress, or `nil` | The write ends |
-| `forces_unknown` | The set of the last cut write, or `nil`. A later cut write replaces it. After 1 or more cut writes, the file can hold the set of any of those writes, or the set before them. | A later write of the forces file succeeds or fails. A restart does not clear it. |
-| `forces_unknown_sets` | A list of the sets of each cut write, the newest first, each set 1 time, or `[]`. The file holds 1 of these sets, or the set in `forces`. Its first set is `forces_unknown`. | As `forces_unknown` |
+| `forces_unknown` | A list of the sets of each cut write, the newest first, each set 1 time, or `[]`. The file can hold any of these sets, or the set in `forces`. | A later write of the forces file succeeds or fails. A restart does not clear it. |
 | `forces_unread` | `{path, reason}`, or `nil`. The forces file that the last start or restart did not read. `reason` is `:timeout` or the error of the file system, for example `:eisdir`. | A write of a force or an unforce succeeds |
 
 | Situation | The keys |
 |---|---|
-| No write in progress | `forces` gives the set. The 3 other keys are `nil`, and `forces_unknown_sets` is `[]`. |
+| No write in progress | `forces` gives the set. `forcing` and `forces_unread` are `nil`, and `forces_unknown` is `[]`. |
 | A write in progress | `forces` gives the old set, and `forcing` gives the new set. |
-| A write was cut | `forces` gives the old set, and `forces_unknown` gives the set of the cut write. |
-| 2 writes were cut | `forces_unknown` gives the set of the second, and `forces_unknown_sets` gives the sets of both, the second first. |
+| A write was cut | `forces` gives the old set, and `forces_unknown` gives the set of the cut write in a list. |
+| 2 writes were cut | `forces_unknown` gives the sets of both, the second first. |
 | A write was cut, then a restart | `forces` gives the set that the restart read from the file. `forces_unknown` gives the set of the cut write. |
-| The next write succeeded | `forces` gives the new set. `forcing` and `forces_unknown` are `nil`, and `forces_unknown_sets` is `[]`. |
+| The next write succeeded | `forces` gives the new set. `forcing` is `nil`, and `forces_unknown` is `[]`. |
 | A fresh start did not read the file | `forces` is `%{}`, and `forces_unread` gives `{path, reason}`. |
 | A restart did not read the file | `forces` gives the set of the runner, and `forces_unread` gives `{path, reason}`. |
 
@@ -1092,7 +1093,7 @@ stateDiagram-v2
 ```
 
 Figure 3: the keys `forcing` and `forces_unknown` across the writes. A write that
-succeeds or fails sets the 2 keys to `nil`.
+succeeds or fails sets `forcing` to `nil` and `forces_unknown` to `[]`.
 
 ## Start, restart and stop
 

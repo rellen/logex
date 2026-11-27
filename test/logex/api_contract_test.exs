@@ -14560,6 +14560,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # naming its set unknown still, and a later write that knows it.
     :restart_after_cut_write,
     :cut_known_by_later_write,
+    # Decision 600 (RV-34), since its second host lane's review: two writes cut before the
+    # restart, each one's set named.
+    :two_writes_cut,
     :files_left_at_kill,
     # Decision 486 (RV-18), since its review: a step past the idle watchdog setting the
     # devices' turn at its end.
@@ -14917,8 +14920,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       unread: nil,
       file_forces: nil,
       # Decision 502 (RV-19): the set a force's write the walk cut at its limit held,
-      # which status/1 names unknown until a later write of the file ends, and that force.
-      forces_unknown: nil,
+      # which status/1 names unknown until a later write of the file ends, and that force;
+      # since decision 600 (RV-34) every such set, newest first and each once, [] where none.
+      forces_unknown: [],
       cut_force: nil,
       # Decision 437 (RV-16): the forces file as the round in hand began, as the seam read
       # it (`on_file!/2`).
@@ -16535,12 +16539,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp restart_cut(false, w), do: w
 
+  # Decision 600 (RV-34), restated: one cut restart in two, by the same stream, cuts a
+  # second force's write after the first, its own force drawn so: every write goes through
+  # the one `.tmp`, so the second's delete of the first's waits in the held server, where
+  # it is cut; once the server is let go the first's rename lands and the second's delete
+  # finds nothing, so the file holds the first's set, and status/1 names both sets, newest
+  # first and each once, through the restart, where it named the newest alone and so not
+  # the set the file then held; the later write that knows them asks the second's force
+  # again.
   defp restart_cut(true, w) do
     plain = Enum.sort(Map.keys(@inputs)) -- (["pt[0]", "pt[1]", "pt[2]"] ++ triggers(w.config))
-    name = Enum.at(plain, restart_cut_drawn(length(plain)) - 1)
-    {_device, _address, type} = @inputs[name]
-    values = paired_values(type)
-    value = Enum.at(values, restart_cut_drawn(length(values)) - 1)
+    cuts = for _cut <- 1..restart_cut_drawn(2), do: cut_drawn(plain)
     # No `.tmp` left standing, whose delete would wait in the held server ahead of the
     # write's rename.
     File.rm(w.file <> ".tmp")
@@ -16548,22 +16557,41 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :ok = :sys.suspend(server)
 
     try do
-      force = send_force(w.runner, name, value)
-      %{writing: %{write: {writer, ref}}} = :sys.get_state(w.runner)
-      rename_waiting(server, writer, System.monotonic_time(:millisecond) + 5000)
-      send(w.runner, {Logex.Runner.Writer, :forces_late, ref})
-      assert :gen_server.wait_response(force, 5000) == {:reply, {:error, {:forces, :timeout}}}
+      cuts
+      |> Enum.zip([:rename, :delete])
+      |> Enum.each(fn {{name, value}, waits} -> cut_force!(w, server, {name, value}, waits) end)
     after
       :sys.resume(server)
     end
 
-    held = Map.put(w.forces, name, value)
+    sets = for {name, value} <- cuts, do: Map.put(w.forces, name, value)
+    held = hd(sets)
     text = for {forced, at} <- Enum.sort(held), into: "", do: "#{forced} #{at}\n"
     assert File.read!(w.file) == text
-    assert %{forces: forces, forces_unknown: ^held} = Runner.status(w.runner)
+    unknown = Enum.uniq(Enum.reverse(sets))
+    assert %{forces: forces, forces_unknown: ^unknown} = Runner.status(w.runner)
     assert forces == w.forces
     reach(:restart_after_cut_write, true)
-    %{w | file_forces: held, forces_unknown: held, cut_force: {name, value}}
+    reach(:two_writes_cut, length(cuts) == 2)
+    %{w | file_forces: held, forces_unknown: unknown, cut_force: List.last(cuts)}
+  end
+
+  defp cut_drawn(plain) do
+    name = Enum.at(plain, restart_cut_drawn(length(plain)) - 1)
+    {_device, _address, type} = @inputs[name]
+    values = paired_values(type)
+    {name, Enum.at(values, restart_cut_drawn(length(values)) - 1)}
+  end
+
+  # A force whose write waits in the held file server's mailbox, in its rename or its
+  # delete of the `.tmp` (`waits`), cut there by its limit's own message: `{:error,
+  # {:forces, :timeout}}`, not taken.
+  defp cut_force!(w, server, {name, value}, waits) do
+    force = send_force(w.runner, name, value)
+    %{writing: %{write: {writer, ref}}} = :sys.get_state(w.runner)
+    rename_waiting(server, {writer, waits}, System.monotonic_time(:millisecond) + 5000)
+    send(w.runner, {Logex.Runner.Writer, :forces_late, ref})
+    assert :gen_server.wait_response(force, 5000) == {:reply, {:error, {:forces, :timeout}}}
   end
 
   defp restart_cut_drawn(n) do
@@ -16572,15 +16600,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     drawn
   end
 
-  # The cut write's rename waiting in the held file server's mailbox, once it does, within
-  # the walk's own limit of real time.
+  # The cut write's rename, or since decision 600 its delete, waiting in the held file
+  # server's mailbox, once it does, within the walk's own limit of real time.
   defp rename_waiting(server, writer, until) do
     {:messages, messages} = Process.info(server, :messages)
     rename_found(Enum.any?(messages, &rename_of?(&1, writer)), server, writer, until)
   end
 
-  defp rename_of?({:"$gen_call", {pid, _tag}, request}, writer) when pid == writer,
-    do: elem(request, 0) == :rename
+  defp rename_of?({:"$gen_call", {pid, _tag}, request}, {writer, waits}) when pid == writer,
+    do: elem(request, 0) == waits
 
   defp rename_of?(_message, _writer), do: false
 
@@ -16592,9 +16620,6 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     rename_waiting(server, writer, until)
   end
 
-  defp unknown_sets(nil), do: []
-  defp unknown_sets(set), do: [set]
-
   # The set the cut write held named unknown through the restart (checked/1), and known
   # once a later write lands: the same force asked again.
   defp cut_known(%{cut_force: nil} = w), do: w
@@ -16602,7 +16627,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp cut_known(%{cut_force: {name, value}} = w) do
     assert Runner.force(w.runner, name, value) == :ok
     reach(:cut_known_by_later_write, true)
-    forced(%{w | forces: Map.put(w.forces, name, value), forces_unknown: nil, cut_force: nil})
+    forced(%{w | forces: Map.put(w.forces, name, value), forces_unknown: [], cut_force: nil})
   end
 
   # Decision 439 (RV-16), restated: every device a restart reads again is limited by its
@@ -19473,10 +19498,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # (RV-18): `forcing`, the set a write that is out holds, always there, nil at every
     # check, every force the walk asks answered before it checks.
     assert Map.fetch!(status, :forces_unread) == w.unread
+    # Decision 600 (RV-34): every set a cut write held, newest first, [] where none.
     assert Map.fetch!(status, :forces_unknown) == w.forces_unknown
-    # Decision 600 (RV-34): every set a cut write held, newest first; the walk cuts one
-    # write before a later write knows it, so its one set or none.
-    assert Map.fetch!(status, :forces_unknown_sets) == unknown_sets(w.forces_unknown)
     assert Map.fetch!(status, :forcing) == nil
     retain_keys!(status.retain)
 

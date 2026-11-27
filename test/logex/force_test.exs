@@ -615,9 +615,9 @@ defmodule Logex.ForceTest do
         Enum.join(
           [
             "#{file}: line 1: `#{String.duplicate("z", 60)}…` is no input point of `plant`",
-            "#{file}: line 2: `#{String.duplicate("z", 60)}…` is forced on line 1 already",
-            # Decision 600 (RV-34): each problem of a line told, its name's after the
-            # line forced already, where the line forced already was told alone.
+            # RV-34's second host lane's review: a name that is no input point is told
+            # so alone, line 1 having forced nothing, where the line was told forced on line
+            # 1 already, and since decision 600 that too.
             "#{file}: line 2: `#{String.duplicate("z", 60)}…` is no input point of `plant`",
             "#{file}: line 3: `level` is a dint, forced to an integer from -2147483648 to " <>
               "2147483647, got: #{String.duplicate("7", 60)}…",
@@ -665,7 +665,8 @@ defmodule Logex.ForceTest do
             "#{file}: line 5: `x` is forced on line 3 already",
             "#{file}: line 5: `x` is a bool, forced to 0 or 1, got: 1.5",
             "#{file}: line 6: `levle` is no input point of `plant` — did you mean `level`?",
-            "#{file}: line 7: `levle` is forced on line 6 already",
+            # RV-34's second host lane's review: a name that is no input point is
+            # told so alone, line 6 having forced nothing.
             "#{file}: line 7: `levle` is no input point of `plant` — did you mean `level`?",
             "#{file}: line 8: `level` is forced on line 1 already"
           ],
@@ -754,8 +755,9 @@ defmodule Logex.ForceTest do
             "#{file}: line 11: `e` is forced on line 10 already",
             "#{file}: line 12: `seen` is no input point of `plant`",
             "#{file}: line 13: `level` is forced on line 5 already",
-            "#{file}: line 14: `levle` is forced on line 1 already",
-            # Decision 600 (RV-34): and its name's problem after it.
+            # RV-34's second host lane's review: a name that is no input point is told
+            # so alone, line 1 having forced nothing, where it was told forced on line 1
+            # already, and since decision 600 that too.
             "#{file}: line 14: `levle` is no input point of `plant` — did you mean `level`?",
             # A comment or a tab after the value, which the lexer passes over, is no part of
             # a force (M5-11's review): the line holds the number's text alone.

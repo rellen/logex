@@ -26178,8 +26178,9 @@ now takes 624, 626, 629 and 630, beside 596's review item and 597 to 607. The or
 here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
 
 - **RV-34 — the behaviours DOC-1's close found** (decisions 596 to 607, 624, 626, 629 and
-  630). *(Built 2026-11-26 and 27 in three lanes, merged, reviewed and its review mended
-  on branch `rv34`, "RV-34 as built" and "RV-34 reviewed" below; not yet on `main`.)* The
+  630). *(Built 2026-11-26 and 27 in three lanes, merged, reviewed and its reviews mended
+  on branch `rv34`, the second host lane's review and its mends among them, "RV-34 as
+  built" and "RV-34 reviewed" below; not yet on `main`.)* The
   review item decision 596 makes, of question 8's findings in three of its
   groups, each run again on `main`, then mended with a test that fails when the mend is
   reverted, or put to the maintainer where its mend would choose a rule (596):
@@ -26301,19 +26302,59 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
     641. 605: the de-energised `ote`'s own test, the toolchain's five pins held to one
     version, `trip_test.exs`'s 220 ms root-caused and the test named for what it holds.
     606: `examples/line_device.exs` waiting 200 ms and 250 ms under the runner's 510 ms.
-  - *The second host lane* (`backup/rv34-host2`, `6c12ba1` to `72ac173`, over `31993be`).
-    600: `status/1`'s `forces_unknown_sets`, every set a cut write held, newest first;
-    each problem of a force line told; a linked helper's reason kept in the trip. 603: the
-    warm match and a cold start's judge of the store within `write_limit:`, `{:error,
-    {:retain, :timeout}}` past it, the runner's documentation giving the measured times
-    and the stretched period. 604: `logex retain 4`, a `digest <md5>` line of the value
-    lines before the end line, a hand edit that does not mend it refused with the way out
-    (provisional). Its tests re-sized for load, each root-caused, in `72ac173`.
+  - *The second host lane* (`backup/rv34-host2`, `6c12ba1` to `72ac173` over `31993be`,
+    its review's mends `8bfe237` and `ac21545`; "The second host lane reviewed", below).
+    Each run again on `main` first: after two cut force writes `forces_unknown` named the
+    newest set alone, and the disk then landed the first's, `eye_1 1`, named nowhere; a
+    force line whose point was forced already was told that alone, its misfit, `zone_t[4]
+    1.0e39`, or its unknown name hidden; a helper `init/3` linked that ended before
+    `init/3` answered tripped `{:io, "panel", {:down, :noproc}}`, 20 runs of 20 for each
+    reason on both clocks; 32,768 retained timers, the runner's stated plant, started
+    warm in 9.9 s in the caller, unlimited, and 327,680 in 171 s; and an end line added
+    to a store cut short read the lost values at their initial values, `dropped: []`, as
+    a value line removed with its count lowered did. 600: `status/1`'s `forces_unknown`
+    a list of every set a cut write held, newest first and each once, `[]` where none
+    stands (as first built a key `forces_unknown_sets` beside it, gone with the mend);
+    each problem of a force line told, under the refusal's fifty and a count, a name
+    that is no input point told so alone; a linked helper's reason kept in the trip. 603:
+    the warm match and a cold start's judge of the store within `write_limit:`, the
+    store's read and its match each limited by it, so that a start waits up to twice it,
+    `{:error, {:retain, :timeout}}` past it, no device opened and the store as it was, a
+    cold judge past it copying the store first; the runner's documentation giving the
+    measured times and the stretched period, the changelog naming the plant that no
+    longer starts with the default limit. 604: `logex retain 4`, a `digest <md5>` line of
+    the value lines before the end line, a hand edit that does not mend it refused at
+    that line, told the digest the lines give and the way out; a digest mistyped told
+    the same; a store of version 4 with no digest line refused at its header, told that
+    its end may have been lost and the way out alone, no digest offered (provisional).
+    Its tests sized for load, each root-caused, in `72ac173`. Gated `6c12ba1` 4,444,
+    `6bf3150` 4,446, `5e9d3fe` and `72ac173` 4,451, `8bfe237` 4,452 and `ac21545`
+    4,452, each GATE-OK, and DOCS-OK where a page or a module's text changed, CI and
+    Docs green on each. Its tests against `31993be`, lines added and removed:
+    `api_contract_test.exs` 90 and 34, `force_test.exs` 38 and 2, `io_test.exs` 113 and 0,
+    `located_array_test.exs` 49 and 0, `retain_store_test.exs` 496 and 56,
+    `runner_test.exs` 3 and 2 and `stalled_disk_test.exs` 178 and 27; each line removed a
+    pin its decisions or its review's mends change (the store's header and version
+    pins, a hand edit given its digest, the `status/1` pins made a list, three "forced
+    on line N already" lines for a name that is no input point, the three digest
+    refusals' words, decision 455's trip test sized again), no test, walk or oracle
+    deleted.
   - *The merge* (`9020bfe`, `7eb88a7`, `0eb9909`): both first lanes merged with no
     textual conflict, the helper once; the changelog's group "The language" named;
     `0eb9909` gated 4,473. The second host lane was left out by that merge, which the
     review found (F1 below), and is merged by the review's mend (`ad3bb72`, GATE-OK 4,484,
-    DOCS-OK, `origin/main` unmoved at `516afd7`).
+    DOCS-OK, `origin/main` unmoved at `516afd7`), as it stood at `72ac173`; its own
+    review's mends, `backup/rv34-host2` at `ac21545`, are merged by RV-34's close, the
+    merge that carries this record (GATE-OK, 4,492 tests, DOCS-OK, `origin/main` unmoved
+    at `516afd7`), two conflicts, each the lane's first shape recorded here against its
+    mended one: `CHANGELOG.md`, the lane's "What no longer compiles, loads or starts"
+    beside the merge's "The language", both kept, in the order the changelog's head
+    gives; and `docs/organisation.md`'s landed notes of 600, 603 and 604, the mended
+    notes kept, each naming both merges. §4.11 and §4.13 there, CLAUDE.md's lines for
+    `Logex.Retain` and the store's two test files, this entry and the questions below
+    were then made to say the mended state: `forces_unknown` a list and no key beside
+    it, the store `logex retain 4`, its refusals of no digest line and of a digest
+    mistyped, the read and the match each limited.
 
   **RV-34 reviewed** (2026-11-27, of `0eb9909`, by two reviewers, behaviour and tests,
   each in its own clone; their probes under `scratchpad/rv34/probes/` and
@@ -26322,7 +26363,8 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   1. *600, 603 and 604 not on `rv34`* (both reviews, F1). Mended: `backup/rv34-host2` at
      `72ac173` merged (`ad3bb72`), gated and built; its runner and store tests run under
      `scripts/load.sh` on the merge; §4.13 given 603 and 604. A review of that lane ran
-     beside this mend in another session; its findings are its own.
+     beside this mend in another session: "The second host lane reviewed", below, its
+     mends merged by RV-34's close.
   2. *A forged tag, or one missing a key* (behaviour F2): `%{__struct__: Logex.Tag}` and
      `Map.delete(tag, :type)` escaped `FunctionClauseError` at every door 639 names, and
      were taken in a held body. Mended: a value that is no whole `%Logex.Tag{}`, its
@@ -26398,43 +26440,271 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   of `ote w.N` and `move` 443,894 to 445,107, `print/1` 1,317 to 1,326, every other path
   the same. Load: `scripts/load.sh` over the second host lane's runner, forcing and store
   tests on the merge, beside another session's load runs on the same four cores
-  (`load-fix-merge.out`). The gate on `52e80d4` was GATE-OK, 4,490 tests, and DOCS-OK.
+  (`load-fix-merge.out`), 16 runs before the session ended, 15 passed; run 13 failed
+  decision 455's trip test, the store unread within its 150 ms, which is finding 5 of
+  the second host lane's review, root-caused and mended there. The gate on `52e80d4`
+  was GATE-OK, 4,490 tests, and DOCS-OK.
 
-  The questions of the lanes, the merge and the review, the recommended option first,
-  each provisional where it is built (`PLAN.md`'s RV-34):
-  1. *The lists capped at ten* (the merge): keep decisions 239's and 243's ten and a
-     count; or tell them a hundred and ", not listed" as 636 does.
-  2. *A did-you-mean for a conversion logex lacks* (the language lane), `int_to_bool`
-     offered `int_to_lword`: keep it; none for a word shaped as a conversion; or the
-     conversions from the source type listed.
-  3. *A did-you-mean for a mnemonic of three letters* (the review, F7), `otx` offered
-     nothing: the mnemonic one edit away, the coils first; or decision 520's search as
-     built.
-  4. *A `cal`'s coil and a `move`* (626, the lane and the review): warned as a coil's, as
-     built; or a `cal` and a `move` left quiet as two `move`s are.
-  5. *The golden record's generator changed for a source alone* (the review, F6): as
-     built, under `frontend_golden_test.exs`'s moduledoc, a curated source added and the
-     record regenerated in a commit that changes no language; or CLAUDE.md's rule read to
-     its letter, the source held by a test beside the record.
-  6. *A ring of block files* (the mend): its load grows faster than its files, on `main`
-     too; left to the item that owns the loader's cost; or made linear here.
-  7. *A key of the tag table that is no name* (the review, F9), `:total` taken into the
-     env beside the runtime's own keys: refused by `instance/1`, a line a key, as 630
-     refuses a value; or left outside the contract.
-  8. *The first host lane's eight*: the count's words; a retained array with one element
-     out of range; the copy an earlier start made; a public function for the files'
-     digests; `child_spec/1`; a host's state with no timer; `with` and `&&` in the clauses
-     check; the parser's three `case`s, each as that lane's report puts it.
-  9. *The second host lane's fourteen*: `forces_unknown_sets` or a list in
-     `forces_unknown`; fifty problems or a hundred; which earlier line a line forcing
-     several points names; one limit for the read and the match; a cold judge past the
-     limit copying or refusing; the default limit for a plant of the stated size; `logex
-     retain 4` and its digest line; the lines the digest covers; the refusal giving the
-     digest; the digest told last; a store naming no program left at version 2; §4.13
-     (made here); the digest's cost in reductions; the limit over the resource's start.
-  10. *The language lane's four readings*: two `cal`s on one tag; a block's warnings once
-      a type; an unbuilt instance's far end checked as a name alone; a block's warnings
-      after the program's own.
+  **The second host lane reviewed** (2026-11-27, of `72ac173`, by one reviewer in a clone
+  of its own while RV-34's review was mended; its probes under
+  `scratchpad/rv34/rh2-probes/`, the lane's record `scratchpad/rv34/host2-record.md`).
+  The three decisions were built, and each finding of the close reproduced on `516afd7`
+  and was mended on the branch, through the public API. Each finding of the review and
+  its mend (`8bfe237`, GATE-OK 4,452, DOCS-OK, CI and Docs green):
+
+  1. *A store cut short still read with its losses unreported* (F1, decision 604). The
+     refusal of a store of version 4 with no digest line offered the digest its lines
+     give: written as told into the runner's own store cut after line 20, an end line
+     added by hand, the store started, `dropped: []`, `t2.boxes.cu` and `t2.t.en` back at
+     0. Of 736 cuts with an end line added, `main` read 52 with their losses unreported;
+     the branch refused 188 for no digest line, each refusal offering the digest that
+     makes the loss silent. And `recover-a-refused-store.md` advised `logex retain 3`
+     for a store with no digest line, which reads a value edited by hand. Mended: the
+     refusal tells that the store's end was lost, or its digest line taken away, that the
+     values after its last line may be lost, and the way out alone, no digest;
+     `retain_store_test.exs` pins it whole, the store cut and given an end line among
+     them, and holds that it carries no digest; the advice is gone from the page.
+     Questions 27 and 28.
+  2. *Decision 600's `forces_unknown` built as a new key* (F2), `forces_unknown_sets`
+     beside a `forces_unknown` that stayed the newest set, where the record words
+     `forces_unknown` itself naming every set; and the contract's walk cut one write
+     alone, so that one test held the rule of several. Mended: `forces_unknown` is the
+     list, `[]` where none stands, and the key beside it is gone; the walk cuts one or
+     two writes before its restart, its oracle the sets cut, newest first and each once,
+     its reach `:two_writes_cut`.
+  3. *Decision 603's plant and the changelog* (F3). 32,768 retained timers under load:
+     `main` started warm in 16,909 ms, the caller held; the branch answered `{:error,
+     {:retain, :timeout}}` at 5,065 ms, no device read and the store unchanged, and
+     started with `write_limit: 900_000`. The time limit is what 603 asks; but the
+     changelog told it under "The host's API" alone, and the pages told one limit where
+     the read and the match each have it. Mended: the plant that no longer starts with
+     the default limit, and the store edited by hand without its digest mended, stand
+     under "What no longer compiles, loads or starts"; `runner.md` and the runner's
+     moduledoc say a warm start waits up to twice `write_limit:`. Question 21.
+  4. *Decision 600's own case untested* (F4): an `init/3` that links a helper and waits
+     for its end tripped `{:down, :noproc}` on `main`, 20 runs of 20 for `:boom`,
+     `{:shutdown, :card}`, `:kill` and `:noproc` on both clocks, and the lane's test
+     acted out a race in its place. Mended: `io_test.exs`'s "a helper init/3 linked that
+     ended before init/3 answered keeps its reason in the trip", that adapter itself,
+     three reasons, failing each with `main`'s rule.
+  5. *A load failure, decision 455's trip test, 1 run of 30* (F5): its one limit of 150 ms
+     held the store's read, the match and the trip's write, the last alone its subject,
+     and under a load average near 25 the read ran past it. Root-caused, not given time:
+     the test runs 65,536 timers at the file's 1010 ms over a store of three lines, the
+     match some 115 ms and the trip's text some 3.4 s, about 30 times either side of the
+     limit. The review's own mend, the file server held around the write, was not taken:
+     a held file server cuts a write whatever its size, and the test would no longer
+     hold that the text's making is counted in the limit (m14, below).
+  6. *`forcing.md`'s "A line can have 2 problems"* (F6), where the lane's own pin tells
+     three: reworded, the point forced already first, then each value or name.
+  7. *`store.md`'s row for version 3* (F7), "read as a store of `logex retain 4` with no
+     digest", which the same page refuses: "read by each rule of version 4 but the
+     digest, which it holds none of".
+  8. *A digest mistyped given no way out* (F8, decision 604): `digest AAEE…` or one of 31
+     digits was told its form alone. Mended: told its form, the digest the lines give
+     and the way out, where nothing else is wrong; its form alone beside another
+     problem; a good digest line after it does not take its place. Question 26.
+  9. *A name that is no input point, written twice* (F9, decision 600): the second line
+     was told that `nope` is forced on line 1 already, which forced nothing, and then
+     that it is no input point. Mended: told no input point alone; three pins of
+     `force_test.exs` lose that line. Question 18.
+  10. *Flakes under the review's mutation run* (F10), a load average near 25, none the
+      lane's: the growth bounds of `io_test.exs:1677` (20.5 times against 20) and `:1709`
+      and of `configuration_test.exs:7308`, and three tests past ExUnit's 60 s
+      (`pictures_test.exs:32`, `release_test.exs:421`, `configuration_test.exs:1582`).
+      Recorded, none loosened; left to the item that owns the suite's flakes.
+
+  The lane's mutation tables, each mutant judged by the full suite. The build's
+  (`scratchpad/rv34/mut-h2/table.md`), 13 of 13 killed: the sets newest only or doubled,
+  no further problem of a force line told, the exit left `:noproc`, the match and the
+  cold judge unlimited, a cold timeout making no copy, the digest not waiting, unchecked,
+  a store with none read, the naming lines digested, a digest read in any version, and
+  version 4 naming no program. The review's (`rh2-mut/table.md`), 18 of 18 killed. The
+  mend's (`h2fix-mut/`, tables 1 to 3), 14, 13 killed as they stood and one that
+  survived the first table: a second digest line that does not read taking the first's
+  place (m06), killed since by two cases added to `retain_store_test.exs`'s "no digest
+  line, one that does not read, two, or one in a store of version 3" (`ac21545`, tests
+  alone). The thirteen: the no-digest refusal offering the digest again, its last line
+  always the header's, a digest mistyped given no way out, dropped beside another
+  problem, or its place taken by a good line after it (m01 to m05,
+  `retain_store_test.exs` and the store's pages' examples); `forces_unknown` the newest
+  set alone, oldest first, kept by a write that fails or lands, a set doubled (m07 to
+  m11, `stalled_disk_test.exs` and the runner's walks); a name that is no input point
+  told forced already too (m12, `force_test.exs`); the device's exit taken only where
+  it is the clock's (m13, `io_test.exs`, both helper tests); and the store's text made
+  in the caller, outside the limit (m14, four tests of `stalled_disk_test.exs`,
+  decision 455's trip test among them). Under m11 the 0018 example of
+  `record-runs-file-work.md` failed too, its last start answering `{:retain,
+  :timeout}` at its limit of 300 ms of real time: that example's own flake, seen once
+  before under the first host lane's gate of `93bfdb1`, which holds none of decision
+  603: a start in real time held to 300 ms, in a VM of its own, while the suite runs
+  every page's example so on the machine's four cores. Not traced further; left, with
+  the flakes of finding 12 above, to the item that owns the suite's flakes.
+
+  Cost: nothing on a round's path. `forces_unknown`'s list is made at a cut write alone,
+  over the sets already cut; a refusal computes the lines' digest once, where it
+  refuses. At 32,768 timers the store's making and its reading are some 11 and 10 times
+  the reductions of `516afd7` (`:erlang.md5`, about 40 a byte), 15 to 65 ms of time
+  (question 31), and a warm start gains one process and the resource's copy out of it,
+  2 to 4 ms. Decision 455's trip test takes some 4.6 s a run, where it took 0.6 s.
+
+  Load (`scripts/load.sh`, 4 busy loops on the machine's 4 cores). The lane, before its
+  review: decision 455's trip test refused in 3 runs of 11 at 50 ms, the cold judge's
+  copy cut in 3 of 50 at 100 ms and 2 of 50 at 300 ms, and RV-5's refusal of a
+  100,000-line store answered `{:retain, :timeout}` in 2 of 24, each root-caused in
+  `72ac173`, then 50 runs of 50 each. The review: 29 runs of 30, the one failure finding
+  5. The mend's own runner tests (the two helper tests of `io_test.exs`, the three
+  refusals of `force_test.exs`, eight tests of `stalled_disk_test.exs`, `status/1`'s pin
+  and the runner's walk): 2 runs of 2 on the lane's clone, stopped there to give the
+  machine's cores to the merge; their fifty runs, and thirty of every runner, forcing
+  and store test the lane changed, are run on the merged tree, whose runner, store and
+  forcing code and tests are the lane's to the line, and recorded by the commit after
+  the merge.
+
+  The questions of the lanes, the merge and the reviews, whole, the recommended option
+  first, each provisional where it is built (`PLAN.md`'s RV-34); "as built" says the
+  recommended option is the code's, "needs building" that it is not:
+  1. *The lists capped at ten* (the merge). A conveyor's instance writes 50 elements of
+     `speeds` that another instance writes too. (a) Keep decisions 239's and 243's ten and
+     a count: the programmer sees ten elements "and 40 more"; (b) tell them a hundred and
+     ", not listed" as 636 does, pins of three test files changing. IEC and Logix word no
+     such message. As built.
+  2. *A did-you-mean for a conversion logex lacks* (the language lane). A lamp panel's
+     programmer types `int_to_bool` and is offered `int_to_lword`. (a) Keep it; (b) none
+     for a word shaped as a conversion; (c) the conversions from the source type listed.
+     IEC names the conversions and words no message; Logix's editor shows the
+     instructions that exist. As built.
+  3. *A did-you-mean for a mnemonic of three letters* (the review, F7). A fan's
+     programmer types `xic run otx fan` and is offered nothing. (a) The mnemonic one edit
+     away, the coils first, "did you mean `ote`?"; (b) decision 520's search as built,
+     which offers nothing at that length. IEC is silent; Logix's editor refuses the word
+     and suggests none. Needs building.
+  4. *A `cal`'s coil and a `move`* (626, the lane and the review). A conveyor's `cal s1
+     jog belt` beside `move 0 belt`. (a) Warned as a coil's, "the last one in the scan
+     decides it"; (b) left quiet, as two `move`s are. Logix's verify tells duplicate
+     destructive bits of an OTE alone; IEC is silent. As built.
+  5. *The golden record's generator changed for a source alone* (the review, F6). (a) A
+     curated source added and the record regenerated in a commit that changes no
+     language, under `frontend_golden_test.exs`'s moduledoc; (b) CLAUDE.md's rule read to
+     its letter, the source held by a test beside the record. A contributor sees a diff
+     of one line in both. As built.
+  6. *A ring of block files* (the mend). A box counter's library of 4,000 block files,
+     each holding the next, takes 3 s to refuse, its load growing faster than its files,
+     on `main` too. (a) Left to the item that owns the loader's cost; (b) made linear
+     here. As built.
+  7. *A key of the tag table that is no name* (the review, F9). A box counter's host
+     builds its program in Elixir with `:total` for a key, taken into the env beside the
+     runtime's own keys. (a) `instance/1` refuses it, a line a key, as 630 refuses a
+     value; (b) left outside the contract. In Logix a program is downloaded whole and
+     checked. Needs building.
+
+  The first host lane's eight:
+  8. *The count's words.* A fan has 10,000 var_inputs and its host sends a key no tag
+     has. (a) `and 9900 more, not listed`, the noun left to the line; (b) `and 9900 more
+     names, not listed`. As built.
+  9. *A retained array with one element out of range.* A box counter's stored
+     `counts[3]` holds 300 in a `sint`. (a) The whole array starts at its initial values,
+     reported dropped; (b) the elements that fit kept, the one that does not dropped and
+     reported. Logix keeps a tag's values in the controller and reads no file; IEC states
+     no store. As built.
+  10. *The copy an earlier start made.* An operator's panel shows the `.dropped` copy
+      this start made alone. (a) Left, the copies' numbered names on disk telling the
+      rest; (b) a key of `status/1` that lists every copy. As built.
+  11. *The files' digests.* (a) No public function, as built; (b) one that gives the
+      digests of the store and the forces file. As built.
+  12. *`child_spec/1` given an option `start_link/1` refuses.* A conveyor's supervisor
+      is given `io: :none`. (a) The spec made and the start refusing the option, as
+      `child_spec/1`'s documentation has it; (b) refused at the call. As built.
+  13. *A host's state with no timer in it.* A conveyor's `ton t 5000`, `t` missing from
+      the state its host hands in, is done after 10 ms, its preset read as 0. (a) Such a
+      state refused, a pinned `ArgumentError`; (b) the missing instance started from its
+      declared values, as `instance/1` would; (c) left, as the host contract's page
+      documents it. Needs building; (c) is the code's.
+  14. *`with` and `&&` in the clauses check.* (a) Caught in `lib/`, the oracles, the
+      harness, `scripts/page.exs` and the examples, 3 in the runner, some 50 elsewhere
+      rewritten; (b) caught everywhere; (c) CLAUDE.md's four forms left. Needs building;
+      (c) is the code's.
+  15. *The parser's three `case`s.* (a) Kept, each with its reason in a comment; (b)
+      rewritten as clauses. As built.
+
+  The second host lane's, as its mends left them. Settled since that lane's report:
+  `forces_unknown` is itself the list, as decision 600 words it, the key
+  `forces_unknown_sets` gone (the lane's question 1, its review's C), and §4.13 holds
+  603 and 604 (its question 12). Open:
+  16. *How many problems a refusal of the forces file tells.* A fan's forces file holds
+      60 bad lines. (a) The first 50 and a count, as the store's refusal does; (b) the
+      first hundred, as a list of names is told since 629. As built.
+  17. *Which earlier line a line forcing several points names.* A fan's line forces
+      three points, two of them forced on earlier lines. (a) The first of them; (b) each.
+      As built.
+  18. *A name that is no input point, written twice* (the lane's review, F9). A lamp
+      panel's file holds `lmap 1` on lines 1 and 2. (a) Each line told that `lmap` is no
+      input point, alone; (b) the second told too that `lmap` is forced on line 1
+      already, which forced nothing. As built.
+  19. *The limit of a warm start's read and of its match.* A box counter's store reads
+      in 1 s and matches in 7 s. (a) One option, `write_limit:`, each of the two limited
+      by it, so a start waits up to twice it; (b) one limit over both together; (c) an
+      option of the match's own. As built.
+  20. *A cold start whose judge of the store runs past the limit.* (a) The store copied
+      before the new one is written over it, and the start goes on; (b) the start
+      refused. As built.
+  21. *A plant of the size the runner's documentation states, at the default limit.* A
+      plant of 32,768 retained timers took 7 to 17 s to start warm on a busy machine and
+      no longer starts with the default 5000 ms: its host sees `{:error, {:retain,
+      :timeout}}`. (a) The host passes a larger `write_limit:`, documented, the changelog
+      naming it under "What no longer compiles, loads or starts"; (b) the default
+      raised; (c) the default sized from the plant. As built.
+  22. *Whether the limit covers the resource's own start.* `Logex.Runtime.start/2`
+      starts the resource inside the limited match. (a) Kept, the limit sized to the
+      plant; (b) the resource started outside the limit and its image alone laid within
+      it, a new internal function of the runtime. As built.
+  23. *The store's version for the digest.* (a) `logex retain 4`, a line `digest <md5>`
+      before the end line, counted by it; (b) the digest in the end line; (c) the digest
+      in version 3. An older logex refuses version 4 for its version first. As built.
+  24. *The lines the digest covers.* (a) Every line after the configuration's but the
+      naming lines, the digest's and the end line; (b) every line but the header and the
+      end line. As built.
+  25. *A wrong digest's refusal giving the right one.* A maintenance person changes a
+      lamp's count in the store on purpose. (a) The refusal tells the digest the lines
+      give, so the edit is kept by writing it; (b) it tells none, and the store is
+      started cold. As built.
+  26. *A digest mistyped* (the lane's review, D). A fan plant's digest line is typed one
+      digit short. (a) Told the digest the lines give and the way out, where nothing else
+      is wrong; (b) told its form alone. As built.
+  27. *A store of version 4 with no digest line* (the lane's review, A). A box counter's
+      store is cut by a power loss, its digest line lost, and a person adds an end line.
+      (a) Refused, told that its end was lost and the values after its last line may be,
+      the way out alone; (b) the digest offered "to keep them", which reads the cut
+      store with its lost values at their initial values, nothing reported; (c) the
+      digest offered with that warning. As built.
+  28. *A store relabelled `logex retain 3`, its digest line taken out* (the lane's
+      review, B). A lamp panel's store is so edited, and a value in it changed. (a) Read,
+      `status/1` telling that no digest was checked; (b) read with nothing told, as every
+      store of version 3 is; (c) a header of version 3 refused. Needs building; (b) is
+      the code's, and no page advises the relabelling now.
+  29. *When the digest is told.* (a) Once the store has no other problem; (b) beside the
+      others. As built.
+  30. *A store that names no program.* (a) Written as version 2, no digest; (b) as
+      version 4. As built.
+  31. *The digest's cost.* `:erlang.md5` makes the store's making and reading some 11
+      and 10 times the reductions at 32,768 timers, 15 to 65 ms of time. (a) Kept; (b)
+      `:crypto.hash/2`, some 150 times fewer reductions and the `crypto` application
+      added. As built.
+
+  For 16 to 31: IEC 61131-3 states `RETAIN` and no store or forces file; Logix keeps its
+  tags' values and its forces in the controller, no file a person edits.
+
+  The language lane's four readings:
+  32. *Two `cal`s on one tag.* A conveyor's `cal s1 a b belt` and `cal s2 c d belt`. (a)
+      Warned as two `ote`s are; (b) quiet. As built.
+  33. *A block's warnings in a configuration.* A fan block two program types hold. (a)
+      Told once a program type; (b) once a configuration. As built.
+  34. *An instance of a program type that does not compile.* A lamp panel's instance
+      connects `pb` to `pbb`. (a) Its far end checked as a global's or a location's name
+      alone, constants, uses and drives unchecked; (b) nothing checked until the type
+      compiles. As built.
+  35. *Where a block's warnings stand.* (a) After the program's own, in its table's
+      order; (b) at their lines among them. As built.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

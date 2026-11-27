@@ -169,9 +169,9 @@ own documentation holds:
   through, plain data.
 - `lib/logex/image.ex` — `Logex.Image`, internal: the retained image, taken out of an
   instance or a resource, checked, and laid over a new one by name and type.
-- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 3` to
-  its end line, 2 and 1 read too, encoded and decoded, and the atomic write it shares with
-  the forces file.
+- `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 4` to
+  its digest line and its end line, 3, 2 and 1 read too, encoded and decoded, and the
+  atomic write it shares with the forces file.
 - `lib/logex/refusal.ex` — `Logex.Refusal`, internal: a refusal of the store or the forces
   file, its problems capped and counted, each line and each text it quotes bounded and
   printable.
@@ -293,12 +293,12 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/retain_configuration_test.exs` — retained globals.
 - `test/logex/retain_image_test.exs` — the retained image and its matching.
 - `test/logex/retain_store_test.exs` — the store on the manual clock at every end and
-  start.
+  start, and the digest of its value lines.
 - `test/logex/retain_period_test.exs` — the store's periodic writer.
 - `test/logex/retain_edit_test.exs` — an online edit of a qualifier.
 - `test/logex/stalled_disk_test.exs` — every file write the runner makes on a stalled
-  disk, the file server held, a fresh start's store read and copy, and each write's `.tmp`
-  its own.
+  disk, the file server held, a fresh start's store read, match and copy, and each
+  write's `.tmp` its own.
 - `test/logex/clock_test.exs` — the two clocks.
 - `test/logex/io_test.exs` — `Logex.IO.Sim`, `Logex.IO.points/1` and `bind!/2`.
 - `test/logex/runner_test.exs` — the runner on the manual clock, and on the real clock

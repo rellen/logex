@@ -64,8 +64,9 @@ defmodule Logex.Retain do
   # every line after the configuration's but the naming lines and itself, each ended by
   # LF, so that a hand edit that does not mend it is refused at the next fresh start, told
   # the digest its lines give and the way out, its version `logex retain 4`, a store of
-  # version 3, 2 or 1, which holds none, read as before and one of 4 with none refused
-  # (seal/2, unsealed/3; provisional, `PLAN.md`'s RV-34).
+  # version 3, 2 or 1, which holds none, read as before and one of 4 with none refused,
+  # told that its end may have been lost and the way out alone (seal/2, unsealed/3;
+  # provisional, `PLAN.md`'s RV-34).
   #
   # The end line (decision 355): a store's last line is `end <count> lines`, its count of
   # lines, the header and the end line among them, as `wc -l` counts a file whose last
@@ -113,7 +114,9 @@ defmodule Logex.Retain do
   # every refusal of the naming lines ends with too since decision 540 (RV-28), and since
   # decision 545 (RV-29) the renamed configuration's, where it said nothing of the copy,
   # told from one place (`@way_out`, told_once/1), once a refusal; a refusal for what a hand
-  # can mend, a junk line, a digest mistyped or a miscount, tells none (decision 545).
+  # can mend, a junk line, a naming line's digest mistyped or a miscount, tells none
+  # (decision 545), and since RV-34's second host lane's review a digest line mistyped
+  # tells it where nothing else is wrong, with the digest its lines give (unsealed/3).
 
   alias Logex.{Array, Declarations, Image, Real, Refusal}
 
@@ -637,12 +640,17 @@ defmodule Logex.Retain do
   # told of a store, so that a store cut short, miscounted or holding a line that does not
   # read is told that alone, as the naming lines wait for the count (naming/3): one whose
   # digest is not its lines', a value line a hand edited, added or removed, its count
-  # mended or not, and the digest not mended to it, is refused
-  # at its digest line, told the digest its lines give, so that an edit meant is kept by
-  # writing it there, and the way out; one with no digest line is refused at its header,
-  # told the same; and one whose digest line does not read is told that line alone
-  # (provisional, `PLAN.md`'s RV-34). A store of version 3, 2 or 1 holds none and is read
-  # as before.
+  # mended or not, and the digest not mended to it, is refused at its digest line, told the
+  # digest its lines give, so that an edit meant is kept by writing it there, and the way
+  # out; since RV-34's second host lane's review one whose digest line does not read,
+  # a digest mistyped, is told so the same, where it was told that line alone, no way out
+  # and no digest, and is so still beside another problem; and one with no digest line is
+  # refused at its header, told that its end may have been lost and the values after its
+  # last line with it, and the way out alone, since that review offering no digest,
+  # where it offered the digest its lines give and so turned a store cut short, an end line
+  # written after the cut, into one read with the values the cut took at their initial
+  # values, nothing reported (provisional, `PLAN.md`'s RV-34). A store of version 3, 2 or 1
+  # holds none and is read as before.
   defp unsealed(%{sealed: true, digest: nil, problems: []} = acc, [], values),
     do:
       problem(
@@ -650,17 +658,35 @@ defmodule Logex.Retain do
         1,
         way_out(
           "`#{@header}` heads a store that holds the digest of its value lines, and the " <>
-            "store holds no `digest` line: its value lines' digest is " <>
-            "`#{lines_digest(values)}`, so to keep them write `digest " <>
-            "#{lines_digest(values)}` just before the end line, counted in it, and to start " <>
-            "anyway"
+            "store holds no `digest` line: its end was lost, the store cut short and an end " <>
+            "line written after the cut, or its `digest` line was taken away, so the values " <>
+            "that stood after line #{last_line(values)} may be lost and the store is not " <>
+            "read; to start anyway"
         )
       )
+
+  defp unsealed(%{sealed: true, digest: {:unread, n, message}, problems: []} = acc, [], values),
+    do:
+      problem(
+        acc,
+        n,
+        way_out(
+          "#{message}, and the store's value lines' digest is `#{lines_digest(values)}`: to " <>
+            "keep them write `digest #{lines_digest(values)}` in its place, and to start anyway"
+        )
+      )
+
+  defp unsealed(%{digest: {:unread, n, message}} = acc, _ending, _values),
+    do: problem(acc, n, message)
 
   defp unsealed(%{sealed: true, digest: {given, n}, problems: []} = acc, [], values),
     do: sealed_by(lines_digest(values), given, n, acc)
 
   defp unsealed(acc, _ending, _values), do: acc
+
+  # The store's last line before its end line, its configuration's where it holds no other.
+  defp last_line([]), do: 2
+  defp last_line(values), do: values |> List.last() |> elem(1)
 
   defp sealed_by(same, same, _n, acc), do: acc
 
@@ -1039,12 +1065,7 @@ defmodule Logex.Retain do
     do: sealed_entered(digested(digest), at, acc)
 
   defp line(["digest" | _words], {text, n}, %{sealed: true} = acc),
-    do:
-      problem(
-        %{acc | digest: :unread},
-        n,
-        "#{quoted(text)} is no digest's line: it is `digest <digest>`"
-      )
+    do: unread_digest(acc, n, "#{quoted(text)} is no digest's line: it is `digest <digest>`")
 
   defp line(["digest" | _words], {text, n}, acc),
     do:
@@ -1345,11 +1366,21 @@ defmodule Logex.Retain do
   defp no_digest(digest),
     do: {:error, "#{quoted(digest)} is no digest: a store's is 32 lowercase hexadecimal digits"}
 
-  defp sealed_entered({:error, message}, {_text, n}, acc),
-    do: problem(%{acc | digest: :unread}, n, message)
+  defp sealed_entered({:error, message}, {_text, n}, acc), do: unread_digest(acc, n, message)
+
+  defp sealed_entered({:ok, _digest}, at, %{digest: {:unread, _n, _message}} = acc),
+    do: once(acc, :digest, at, & &1)
 
   defp sealed_entered({:ok, digest}, {_text, n} = at, acc),
     do: once(acc, :digest, at, &%{&1 | digest: {digest, n}})
+
+  # Decision 604 (RV-34), since RV-34's second host lane's review: the first digest
+  # line that does not read, kept to be told once the store's other lines are judged
+  # (unsealed/3), with the digest its lines give and the way out where nothing else is
+  # wrong, a digest line that reads after it kept from taking its place; one after another
+  # digest line told as itself at once.
+  defp unread_digest(%{digest: nil} = acc, n, message), do: %{acc | digest: {:unread, n, message}}
+  defp unread_digest(acc, n, message), do: problem(acc, n, message)
 
   defp by_entered({:error, message}, key, {_text, n}, acc),
     do: problem(unread_by(acc, by_kind(key)), n, message)

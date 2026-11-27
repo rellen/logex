@@ -678,10 +678,10 @@ defmodule Logex.Runner do
   held, `forces_unknown`, until a later write of the file lands or fails, and since
   decision 502 (RV-19) a restart's read of the file leaves it so, the cut write able to
   land after the read, where the read made it known, and since decision 440 the key
-  always there, nil where no such write stands; since decision 600 (RV-34) a second cut
-  write's set leaves the first's named, `forces_unknown_sets` listing every set a cut
-  write held, newest first and each once, `forces_unknown` the newest of them as before,
-  the file holding one of them or the runner's `forces` (provisional, `PLAN.md`'s RV-34).
+  always there; since decision 600 (RV-34) a second cut write's set leaves the first's
+  named, `forces_unknown` a list of every set a cut write held, newest first and each
+  once, `[]` where no such write stands, the file holding one of them or the runner's
+  `forces`, where it was the newest set alone, or nil (provisional, `PLAN.md`'s RV-34).
   Every start reads it, `start_link/1` in
   the caller, after the configuration and the bindings, and `restart/2` before it
   releases anything,
@@ -1001,7 +1001,10 @@ defmodule Logex.Runner do
   1.5 s and matched in 7.7 to 9.4 s, a warm fresh start of it 7.2 s given the time, past
   the 5000 ms of the default `write_limit:`, which it then answers `{:error, {:retain,
   :timeout}}`, and one of 327,680, ten times it, 36 MB, is so answered in 5.6 s, where
-  it was matched in the caller in 171 s; a period shorter than a write is stretched to
+  it was matched in the caller in 171 s, the read and the match each limited to
+  `write_limit:` of its own, so that a warm start waits for its store up to twice the
+  limit before it answers, its read of the forces file before them limited too (RV-34's
+  second host lane's review); a period shorter than a write is stretched to
   the write, the next write begun only once the one in progress ends (latest wins,
   above), so that the 32,768 timers' store given a 1000 ms period was replaced every
   3.5 to 4.4 s; and an edit's test step over an array of timers in 150 ms at
@@ -1114,8 +1117,7 @@ defmodule Logex.Runner do
           overlaps: %{optional(String.t()) => non_neg_integer},
           forces: %{optional(String.t()) => Runtime.value()},
           forces_unread: {String.t(), reason :: term} | nil,
-          forces_unknown: %{optional(String.t()) => Runtime.value()} | nil,
-          forces_unknown_sets: [%{optional(String.t()) => Runtime.value()}],
+          forces_unknown: [%{optional(String.t()) => Runtime.value()}],
           forcing: %{optional(String.t()) => Runtime.value()} | nil,
           edit: Edit.stage() | nil,
           runs: %{optional(String.t() | :none) => {non_neg_integer, pos_integer}},
@@ -1422,10 +1424,10 @@ defmodule Logex.Runner do
   always there, nil where the file was read; since decision 391 `forces_unknown`, where a
   force's write ran past its limit and may yet land, the set it held, until a later write
   of the file lands or fails, a restart's read leaving it since decision 502 (the cut
-  write may land after the read), and since decision 440 always there,
-  nil where no such write stands, and since decision 600 `forces_unknown_sets`, every set
-  such a write held, newest first and each once, `forces_unknown` the first of them, `[]`
-  where none stands, as long as `forces_unknown` stands; since decision 466 `forcing`, the set the write of the
+  write may land after the read), and since decision 440 always there, and since
+  decision 600 a list, every set such a write held, newest first and each once, `[]`
+  where none stands, where it was the newest set alone, or nil; since decision 466
+  `forcing`, the set the write of the
   forces file that is out holds, the forces as they will be once it lands, the requests
   joined into it among them (decision 465), always there as the other keys are, nil where
   no write is out, so that a force on its way shows before it is in effect; `edit`, the
@@ -2836,23 +2838,20 @@ defmodule Logex.Runner do
   # later write that ends by itself, landed or failed, has had every call of the file
   # system made before its own answered, the cut one's among them, and clears it.
   # Decision 600 (RV-34): every cut write's set is one the file may hold, so each is named,
-  # newest first and each once, `forces_unknown_sets`, `forces_unknown` the newest of them
-  # as before, where a second cut write's set took the place of the first's, which the
-  # disk could still land (provisional, `PLAN.md`'s RV-34).
+  # `forces_unknown` the list of them, newest first and each once, where a second cut
+  # write's set took the place of the first's, which the disk could still land
+  # (provisional, `PLAN.md`'s RV-34).
   defp taken({:error, :timeout}, forces, _names, state),
     do:
       {{:error, {:forces, :timeout}},
        %{
          state
-         | forces_unknown: forces,
-           forces_unknown_sets: [forces | List.delete(state.forces_unknown_sets, forces)],
+         | forces_unknown: [forces | List.delete(state.forces_unknown, forces)],
            forces_cut: true
        }}
 
   defp taken({:error, reason}, _forces, _names, state),
-    do:
-      {{:error, {:forces, reason}},
-       %{state | forces_unknown: nil, forces_unknown_sets: [], forces_cut: false}}
+    do: {{:error, {:forces, reason}}, %{state | forces_unknown: [], forces_cut: false}}
 
   defp taken(:ok, forces, names, state) do
     before = Enum.map(names, &seen(&1, state))
@@ -2864,8 +2863,7 @@ defmodule Logex.Runner do
       state
       | forces: forces,
         forces_unread: nil,
-        forces_unknown: nil,
-        forces_unknown_sets: [],
+        forces_unknown: [],
         forces_cut: false,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     }
@@ -3029,10 +3027,13 @@ defmodule Logex.Runner do
         force_problem(point, name, value, written(text))
       )
 
-  # A point forced twice is told so before its value is judged, as before decision 241,
-  # and since decision 600 its name's problem after it.
-  defp read_point({:error, message}, {name, _value, _text}, line, acc),
-    do: once(first_line([name], acc), [name], line, acc, [message])
+  # A name that is no input point is told so alone, and forces nothing that a later line
+  # could be told it forces again: since RV-34's second host lane's review a second
+  # `nope 1` is told that `nope` is no input point and not that it is forced on line 1
+  # already, which forced nothing, where both were told since decision 600, and that
+  # alone before it (provisional, `PLAN.md`'s RV-34).
+  defp read_point({:error, message}, _point, line, {forces, lines, problems}),
+    do: {forces, lines, [{line, message} | problems]}
 
   # M5-14's review: each value as the line writes it, after its name, which a misfit
   # quotes as decision 202 quotes a literal, `2#10` and `1.0e-400` as written, and since
@@ -3161,8 +3162,8 @@ defmodule Logex.Runner do
   defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
 
   # Decision 440 (RV-16): `forces_unread` and `forces_unknown` always in the report, nil
-  # where nothing stands, as decision 412 has the store's `copy`, where each was a key
-  # only while it stood.
+  # where nothing stands, since decision 600 (RV-34) `forces_unknown` [], as decision 412
+  # has the store's `copy`, where each was a key only while it stood.
   defp status_of(state),
     do: %{
       status: state.status,
@@ -3173,7 +3174,6 @@ defmodule Logex.Runner do
       forces: state.forces,
       forces_unread: state.forces_unread,
       forces_unknown: state.forces_unknown,
-      forces_unknown_sets: state.forces_unknown_sets,
       forcing: forcing_of(state.writing),
       edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
@@ -3342,8 +3342,8 @@ defmodule Logex.Runner do
   # at a start, kept by a restart whose read fails, and since decision 502 (RV-19) by one
   # that reads the file or finds none, the cut write able to land after its read, where
   # such a restart set it nil; a round, a trip and an edit's step leave it as it is; since
-  # decision 600 (RV-34) `forces_unknown_sets`, every set such a write held, newest first
-  # and each once, [] at a start and set and kept with `forces_unknown`; and the
+  # decision 600 (RV-34) a list, every set such a write held, newest first and each once,
+  # each cut write's set put first and [] where it was nil; and the
   # store's `unknown`, under `retain`, set by a write over the store or its copy past its
   # limit and gone once a later write lands or fails, a start having none; a round, an
   # edit's step and a restart refused write nothing of their own, and a trip's, a stop's
@@ -5205,8 +5205,7 @@ defmodule Logex.Runner do
     {%{
        forces: forces,
        forces_unread: unread,
-       forces_unknown: nil,
-       forces_unknown_sets: [],
+       forces_unknown: [],
        retain: retain,
        at: at,
        copy: copy,

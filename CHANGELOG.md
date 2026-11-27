@@ -119,6 +119,27 @@ API".
   and a poll period trips the line whatever the runner's lateness. Look for: plants on a
   loaded or virtual machine.
 
+### What no longer compiles, loads or starts
+
+- **A warm start whose store takes longer than `write_limit:` to match no longer
+  starts** (decision 603): `Logex.Runner.start_link/1` answers `{:error, {:retain,
+  :timeout}}`, no device opened and the store as it was, where it matched in the caller
+  with no limit and started. A plant of 32,768 retained timers, the size the runner's
+  documentation states, took 7.2 to 9.9 s on a busy machine and so no longer starts with
+  the default 5000 ms; the store's read and its match each have the limit, so a start
+  waits up to twice it. Write instead: a `write_limit:` the plant's warm start fits in,
+  with room for a busy machine. Provisional (`PLAN.md`'s RV-34).
+- **A store of `logex retain 4` edited by hand without its digest mended no longer
+  starts warm** (decision 604): a value line changed, added or removed, its count mended
+  or not, is refused at the `digest` line, told the digest the lines give; a digest line
+  mistyped is told so and the same digest; and a store with no `digest` line, one cut
+  short with an end line written after the cut among them, is refused at its header,
+  told that the values after its last line may be lost, with no digest offered. Each is
+  told the way out, `start: :cold`, which copies the store first. Write instead: the
+  digest the refusal gives, in the `digest` line, where the edit is meant and each value
+  known; else start cold. A store an older logex wrote, of version 3, 2 or 1, is read as
+  before. Provisional (`PLAN.md`'s RV-34).
+
 ### The language
 
 - **A write beside a coil is warned as a second coil is** (decision 626), "the last one in
@@ -387,21 +408,24 @@ API".
   keys or holds one more, `%{__struct__: Logex.Tag}` or `Map.delete(tag, :type)`, which
   passed for a tag. Look for: a `rescue` of `FunctionClauseError` around those calls.
 
-- **`Logex.Runner.status/1` names every set a cut write of the forces file held**
-  (decision 600), a key `forces_unknown_sets`, a list of those sets, newest first and each
-  once, `[]` where none stands, beside `forces_unknown`, which still gives the newest set
-  or `nil`: an operator's panel whose writes of `eye` and then `estop` are both cut
-  shows both sets, where `forces_unknown` named the second's alone and the disk then
-  landed the first's, `eye` forced in the file and named nowhere. A write that lands or
-  fails empties the list as it clears `forces_unknown`; a restart keeps both. Provisional
-  (`PLAN.md`'s RV-34). Look for: code that pins status/1's map whole.
+- **`Logex.Runner.status/1`'s `forces_unknown` is a list of every set a cut write of the
+  forces file held** (decision 600), newest first and each once, `[]` where none stands,
+  where it was the newest set alone, or `nil`: an operator's panel whose writes of `eye`
+  and then `estop` are both cut shows both sets, where `forces_unknown` named the
+  second's alone and the disk then landed the first's, `eye` forced in the file and
+  named nowhere. A write that lands or fails empties the list; a restart keeps it.
+  Provisional (`PLAN.md`'s RV-34). Look for: code that reads `forces_unknown` as a map or
+  matches it against `nil`.
 - **A refusal of the forces file tells each problem of a line** (decision 600), a line
   each: a point forced on an earlier line, and then its value that does not fit or its
   name that names no input point, where the line forced already was told alone: an oven's
   file of `zone_t 1 2 3` and then `zone_t[4] 1.0e39` is told that `zone_t[4]`
   is forced on line 1 already and that 1.0e39 does not fit a real. A line with one
   problem is told as before; the refusal still tells its first 50 problems and a count.
-  Look for: code that counts the lines of such a refusal.
+  A name that is no input point, `nope`, is told so alone on each line that names it,
+  where a second line naming it was told that `nope` is forced on line 1 already, which
+  forced nothing (RV-34's second host lane's review). Look for: code that counts the
+  lines of such a refusal.
 - **A trip names the reason a linked helper took its device down with** (decision 600),
   `{:io, device, {:down, reason}}` as `Logex.IO` documents it, where a round's write that
   found the device gone before the runner took its exit, a helper of `init/3`'s that
@@ -425,8 +449,12 @@ API".
   mending it, told the digest the lines give and the way out, once every other line of
   it reads: a box counter's `t1.boxes.cv dint 4` edited to `dint 7`, or a line removed and
   the count lowered, where it was read and its tag given its initial value unreported. A
-  store of version 4 with no digest line is refused at its header; a store of version 3,
-  2 or 1 is read as before, and the next write makes it version 4. An older logex refuses
+  digest line mistyped is told the digest the lines give and the way out too. A store of
+  version 4 with no digest line, one cut short and an end line written after the cut
+  among them, is refused at its header, told that the values after its last line may be
+  lost and the way out alone, no digest offered, so that no cut store is read with its
+  lost values at their initial values; a store of version 3, 2 or 1 is read as before,
+  and the next write makes it version 4. An older logex refuses
   version 4 and starts it only cold. Provisional (`PLAN.md`'s RV-34). Look for: a script
   that edits the store, which now writes the digest, and code that matches the header
   `logex retain 3` or the count of the end line.

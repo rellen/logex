@@ -1106,6 +1106,29 @@ defmodule Logex.IOTest do
     defp answered(answer, _agent), do: answer
   end
 
+  # An adapter whose init/3 links a helper that ends at once, `reason:` its reason, and
+  # waits for it to have ended before it answers, as DOC-1's close's adapter did: the
+  # device's process holds the helper's exit when init/3 answers (decision 600).
+  defmodule EndedInInit do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts) do
+      reason = Keyword.fetch!(opts, :reason)
+      ref = Process.monitor(spawn_link(fn -> exit(reason) end))
+      receive(do: ({:DOWN, ^ref, :process, _pid, _reason} -> {:ok, nil}))
+    end
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, state), do: {:ok, state}
+
+    @impl true
+    def close(_state), do: :ok
+  end
+
   @scripted """
   task fast interval 10 priority 1
   var_global x bool at panel.i.0
@@ -1275,10 +1298,58 @@ defmodule Logex.IOTest do
 
       assert Runner.stop(runner) == :ok
     end
+
+    # Decision 600 (RV-34), DOC-1's close's case itself: a helper init/3 linked that ends
+    # before init/3 answers takes the device down with its reason once the device runs,
+    # and the trip keeps that reason, where the round's write found the device gone and
+    # the trip read `{:down, :noproc}`, on 516afd7 in 20 of 20 runs a reason
+    # (`PLAN.md`'s RV-34, its second host lane's review). Each reason three times.
+    test "a helper init/3 linked that ended before init/3 answered keeps its reason in " <>
+           "the trip" do
+      {:ok, blink} = Logex.compile("var_output out bool\nxio out ote out", name: "blink")
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global y bool at panel.q.0\n" <>
+            "program b blink with fast\n  b.out y\n",
+          %{"blink" => blink}
+        )
+
+      for reason <- [:boom, {:shutdown, :card}, :kill], _run <- 1..3 do
+        {:ok, clock} = Manual.start_link()
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"panel" => {EndedInInit, reason: reason}},
+            clock: {Manual, clock},
+            poll: 10,
+            idle: 5_000
+          )
+
+        Manual.advance(clock, 10)
+        Manual.advance(clock, 10)
+        assert {:io, "panel", {:down, ^reason}} = tripped(runner, 500)
+        assert Runner.stop(runner) == :ok
+      end
+    end
   end
 
   defp error_of({:error, reason, nil}, agent), do: {:error, reason, agent}
+
   defp error_of(:raise, _agent), do: :raise
+
+  # The runner's trip once it has one, its status asked every 10 ms up to `tries` times: the
+  # trip of a device gone as the runner starts can come before a test could subscribe.
+  defp tripped(runner, tries), do: tripped(Runner.status(runner), runner, tries)
+  defp tripped(%{status: :tripped, trip: trip}, _runner, _tries), do: trip
+  defp tripped(status, _runner, 0), do: status
+
+  defp tripped(_status, runner, tries) do
+    Process.sleep(10)
+    tripped(runner, tries - 1)
+  end
 
   # The runner's one device's process, among its links.
   defp device_of(runner) do
