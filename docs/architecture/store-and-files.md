@@ -163,8 +163,8 @@ for each problem.
 ```text
 logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
-resource 013cc059392445fdcc1e84c9b0de6118
-program tally bd882e28a8159d8e8a4ea56ade7b36b6
+resource md5 013cc059392445fdcc1e84c9b0de6118
+program tally md5 bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 2
 instance t1 tally
 t1.boxes ctu
@@ -175,7 +175,7 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-digest 18a0b2493864f5e730cd41029aeaf91c
+digest md5 18a0b2493864f5e730cd41029aeaf91c
 end 16 lines
 ```
 
@@ -185,14 +185,14 @@ Each line has 1 of these forms:
 |---|---|---|
 | Header | `logex retain 4` | Line 1 |
 | Configuration | `configuration <name> written <time>` | Line 2 |
-| Resource | `resource <digest>` | Line 3 |
-| Program type | `program <type> <digest>` | By the name of the type |
+| Resource | `resource <scheme> <digest>` | Line 3 |
+| Program type | `program <type> <scheme> <digest>` | By the name of the type |
 | Global | `global <name> <type> <value>` | By name |
 | Sample of a trigger | `trigger <name> <sample>` | By name |
 | Instance | `instance <name> <program type>` | By name |
 | Instance on the path | `<instance>.<path> <kind>` | After its instance, in path order |
 | Value | `<instance>.<path> <type> <value>` | After its instance, in path order |
-| Digest | `digest <digest>`, the MD5 of the value lines | Before the end line |
+| Digest | `digest <scheme> <digest>`, the MD5 of the value lines after the word `md5` | Before the end line |
 | End line | `end <count> lines` | Last |
 
 - The time is the wall clock of the host in UTC, to the second. The runner gets it from
@@ -208,6 +208,9 @@ Each line has 1 of these forms:
 - The value lines are each line after the `configuration` line, except the naming lines,
   the `digest` line and the end line. Each has LF at its end in the digest, whatever its
   line end in the file.
+- Each digest comes after the word of its scheme, `md5`. The schemes are 1 table,
+  `schemes/0` of `retain.ex`. [How a start reads the store](store-reading.md#the-schemes)
+  gives the rules.
 - The runner ends each line with LF. The reader also takes CRLF and a lone CR.
 
 ## Example
@@ -287,8 +290,8 @@ IO.inspect(Enum.sort(Path.wildcard("box.retain*")), label: "files")
 $ mix run store-and-files.exs
 logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
-resource 013cc059392445fdcc1e84c9b0de6118
-program tally bd882e28a8159d8e8a4ea56ade7b36b6
+resource md5 013cc059392445fdcc1e84c9b0de6118
+program tally md5 bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 2
 instance t1 tally
 t1.boxes ctu
@@ -299,13 +302,13 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-digest 18a0b2493864f5e730cd41029aeaf91c
+digest md5 18a0b2493864f5e730cd41029aeaf91c
 end 16 lines
-box.retain: line 15: `digest 18a0b2` is the store's last
-line, and no end line: a store of `logex retain 4` ends
-with `end <count> lines`, its count of lines, so this
-one was cut short, and a store cut short is not read:
-start it with start: :cold to start over it, which
+box.retain: line 15: `digest md5 18a0b2` is the store's
+last line, and no end line: a store of `logex retain 4`
+ends with `end <count> lines`, its count of lines, so
+this one was cut short, and a store cut short is not
+read: start it with start: :cold to start over it, which
 copies it first to the next `.dropped.<n>` beside it and
 then writes a new store over it
 copy: "box.retain.dropped.1"
@@ -330,7 +333,8 @@ that document.
 - **Text a person can read.** Decision 276 makes the store text, as the forces file is
   (decision 140). Decision 284 lets a person repair a value by hand while the runner does
   not run. Decision 604 adds the `digest` line, so that a hand edit must mend it. Its
-  header `logex retain 4` is provisional (PLAN.md's RV-34).
+  header `logex retain 4` is provisional (PLAN.md's RV-34). Decision 641 puts the word of
+  its scheme before each digest, so that a later logex can change the scheme.
 
 ## How to change it
 

@@ -58,7 +58,7 @@ words:
 | The backup | The copy of the refused store that you make in step 2, `tally.retain.bak` |
 | A numbered copy | A file `<store>.dropped.<n>` that the runner writes beside the store, for example `tally.retain.dropped.1`. It holds a store that a start did not read whole. [The numbered copies](../reference/store.md#the-numbered-copies) gives the rules. |
 | The end line | The last line of the store, for example `end 16 lines`. Its count includes each line of the store, the end line also. |
-| A digest | The 32 lowercase hexadecimal digits after `resource` or after `program <type>`. A warm start compares them with its configuration and [program](../reference/glossary.md#program). |
+| A digest | The 32 lowercase hexadecimal digits after `resource md5` or after `program <type> md5`. A warm start compares them with its configuration and [program](../reference/glossary.md#program). |
 
 ## Steps
 
@@ -104,10 +104,10 @@ Figure: the decisions of this guide, after step 3. A message that starts with
 | `` comes before any `instance` line `` | Move the line under the line of its instance, or remove it. |
 | `names what line <n> names already` | Remove 1 of the 2 lines. Keep the line with the correct value. |
 | `the store's end line counts` | Find the line that is new, lost or doubled, and mend it. Then write the number of lines in the end line. |
-| `is not the digest of the store's value lines` | A value line changed. If you know each value, write the digest that the message gives on the `digest` line. Else go to step 7. |
+| `is not the digest of the store's value lines` | A value line changed. If you know each value, write the `digest` line that the message gives. Else go to step 7. |
 | `is no number` | Write the value as a decimal number, for example `3`. |
 | `is no type of a retained value` | Write the [type](../reference/glossary.md#type) of the [tag](../reference/glossary.md#tag), as its [declaration](../reference/glossary.md#declaration) gives it, for example `dint`. |
-| `is no digest` | On a `digest` line, write the digest that the message gives, if you know each value. On a `resource` or `program` line, copy the line from an earlier store of the same files. Else go to step 7. |
+| `lowercase hexadecimal digits` | On a `digest` line, do as for `is not the digest of the store's value lines`. On a naming line, copy the line from an earlier store of the same files. Else go to step 7. |
 | `is no store's header` | Line 1 has a typing error. Write `logex retain 4` on line 1. |
 | `is an end line, which a store whose first line is` | Mend line 1, as for `is no store's header`. |
 | `the store is of version` | A different version of logex wrote the store. Start the store with that version, or go to step 7. |
@@ -134,6 +134,7 @@ Figure: the decisions of this guide, after step 3. A message that starts with
 | Part of the message | Cause and mend |
 |---|---|
 | `holds no \`digest\` line` | The store was cut short and given an end line, or lost its `digest` line. Values after the line that the message names can be lost. Go to step 7. |
+| `names the scheme` | A later logex wrote it. Go to step 7. |
 | `is the store's last line, and no end line` | The store lost its last lines. The cut can be inside the last line, for example `t1.boxes.cv dint 1` from `dint 12`. Mend the last line, add each lost line, then add the end line. Do this only if you know each value. |
 | `heads a store that names the program that wrote it, and the store names none` | A person removed the `resource` line and the `program` lines. Copy the lines from an earlier store of the same files, for example a numbered copy. |
 | `names the resource of the store's writer, and the store names no program type` | A person removed the `program` lines. Copy them from an earlier store of the same files. |

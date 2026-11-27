@@ -170,8 +170,9 @@ own documentation holds:
 - `lib/logex/image.ex` — `Logex.Image`, internal: the retained image, taken out of an
   instance or a resource, checked, and laid over a new one by name and type.
 - `lib/logex/retain.ex` — `Logex.Retain`, internal: the store's text, `logex retain 4` to
-  its digest line and its end line, 3, 2 and 1 read too, encoded and decoded, and the
-  atomic write it shares with the forces file.
+  its digest line and its end line, 3, 2 and 1 read too, encoded and decoded, the one
+  table of the schemes its digests name (`schemes/0`), and the atomic write it shares
+  with the forces file.
 - `lib/logex/refusal.ex` — `Logex.Refusal`, internal: a refusal of the store or the forces
   file, its problems capped and counted, each line and each text it quotes bounded and
   printable.
@@ -293,7 +294,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
 - `test/logex/retain_configuration_test.exs` — retained globals.
 - `test/logex/retain_image_test.exs` — the retained image and its matching.
 - `test/logex/retain_store_test.exs` — the store on the manual clock at every end and
-  start, and the digest of its value lines.
+  start, the digest of its value lines, and the scheme each digest names, `Logex.Retain`
+  compiled with a row added to read a store of another scheme.
 - `test/logex/retain_period_test.exs` — the store's periodic writer.
 - `test/logex/retain_edit_test.exs` — an online edit of a qualifier.
 - `test/logex/stalled_disk_test.exs` — every file write the runner makes on a stalled
@@ -326,8 +328,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   language the suite compares with nothing (`CONTRIBUTING.md`, "Landing work stales the
   plan"); `--only reading:<page>` reads one page's blocks and marks with no script run,
   `--only page:<page>` runs its examples too; and the member tables of
-  `guides/reference/function-blocks.md` held to `Logex.FbType.builtins/0`, the uses of
-  logex on README and `guides/explanation/what-logex-is.md` to each other.
+  `guides/reference/function-blocks.md` held to `Logex.FbType.builtins/0`, the store
+  reference's table of schemes to `Logex.Retain.schemes/0`, the uses of logex on README
+  and `guides/explanation/what-logex-is.md` to each other.
 - `test/logex/page_test.exs` — `scripts/page.exs`: a page cut into prose and blocks as
   GitHub cuts it, what it cannot take given as a problem with its line and never raised,
   a page's name in the site, a mark and an example's run.

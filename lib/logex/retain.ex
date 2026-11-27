@@ -9,12 +9,13 @@ defmodule Logex.Retain do
   # 284 has it, to edit by hand, since decision 355 (RV-5) of version 2 and since decision
   # 530 (RV-26), as every store the runner writes names its program, of version 3, and
   # since decision 604 (RV-34), as every one it writes holds the digest of its value lines,
-  # of version 4:
+  # of version 4, each digest after the word of its scheme since decision 641 (RV-34), built
+  # before version 4 landed, so that none is without it:
   #
   #     logex retain 4
   #     configuration plant written 2026-10-27T14:00:00Z
-  #     resource 3c59dc048e8850243be8079a5c74d079
-  #     program motor 7d793037a0760186574b0282f2f435e7
+  #     resource md5 3c59dc048e8850243be8079a5c74d079
+  #     program motor md5 7d793037a0760186574b0282f2f435e7
   #     global total_boxes dint 41
   #     trigger arm 0
   #     instance m1 motor
@@ -22,14 +23,16 @@ defmodule Logex.Retain do
   #     m1.boxes.cu bool 1
   #     m1.boxes.cv dint 41
   #     m1.weights int[8] 0 0 12 14 0 0 0 0
-  #     digest 9e107d9d372bb6826bd81d3542a419d6
+  #     digest md5 9e107d9d372bb6826bd81d3542a419d6
   #     end 13 lines
   #
   # a header, `logex retain 4`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
-  # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
-  # of each program type's text, in name order, since decision 527 (RV-26) as
+  # `resource <scheme> <digest>`, of the configuration's own lines, and `program <type>
+  # <scheme> <digest>`, of each program type's text, in name order, the scheme's word a row
+  # of schemes/0 (decision 641; a store of version 3 or 2 gives each digest alone, MD5's),
+  # since decision 527 (RV-26) as
   # `Logex.Printer` prints it and since decision 532 (RV-27) with each word logex reads in
   # any case lowercased and a literal bit number in brackets the plain bit, `XIC` and
   # `w.[4]` read as `xic` and `w.4` (written_by/1), which a warm fresh start lays beside the
@@ -60,10 +63,11 @@ defmodule Logex.Retain do
   # subscripts' values (decision 312). An integer and a bool are written in decimal, a real
   # in the shortest text that reads back to it, a single's for a `real` (`Logex.Real.
   # spelled/2`), and a timer's `last` never (decision 273); and since decision 604 (RV-34)
-  # the digest of the value lines, `digest <md5>`, just before the end line, the MD5 of
-  # every line after the configuration's but the naming lines and itself, each ended by
-  # LF, so that a hand edit that does not mend it is refused at the next fresh start, told
-  # the digest its lines give and the way out, its version `logex retain 4`, a store of
+  # the digest of the value lines, `digest <scheme> <digest>`, just before the end line,
+  # the MD5 of every line after the configuration's but the naming lines and itself, each
+  # ended by LF, so that a hand edit that does not mend it is refused at the next fresh
+  # start, told what to write, the scheme's word and the digest its lines give, and the
+  # way out, its version `logex retain 4`, a store of
   # version 3, 2 or 1, which holds none, read as before and one of 4 with none refused,
   # told that its end may have been lost and the way out alone (seal/2, unsealed/3;
   # provisional, `PLAN.md`'s RV-34).
@@ -148,6 +152,27 @@ defmodule Logex.Retain do
   # Each elementary type by its word, as a declaration's type word is read.
   @words Map.new(Declarations.elementary(), &{Declarations.word(&1), &1})
 
+  # Decision 641 (RV-34): the schemes, the one table of them, a row a scheme, `{word,
+  # function, digits}`: the word a line names it by, written lowercase and read in any
+  # case; its function, of a text as iodata, the digest's bytes; and its digest's form, so
+  # many lowercase hexadecimal digits. In a store of `logex retain 4` every digest stands
+  # after its scheme's word, `digest md5 <digest>`, `resource md5 <digest>` and `program
+  # <type> md5 <digest>`, each line naming its own, so that the scheme can change one day
+  # and a store written before the change still be read: the writer writes the first
+  # row's (written/0), the reader reads any row's (scheme/1) and refuses a line naming a
+  # scheme that is no row, naming it and the rows (unread_scheme/2), and each message that
+  # gives a digest's form reads it here. Another scheme is a row here and a decision of
+  # `docs/organisation.md` §7, and nothing else of the reader or the writer names one:
+  # `retain_store_test.exs` compiles this module with a row added and reads a store of
+  # that row's. MD5 by `:erlang.md5/1`, which needs no `crypto` application, finds a hand
+  # edit that was not mended; it guards nothing against a person who mends it, and no
+  # scheme without a key would (decision 604).
+  def schemes, do: [{"md5", &:erlang.md5/1, 32}]
+
+  # The scheme of the digests of a store of version 3 or 2, which name none: its row stays
+  # while those versions are read.
+  @unschemed "md5"
+
   # ---- written ------------------------------------------------------------------------
 
   # A resource's retained image as the store's text, written at `at`, a UTC DateTime, its
@@ -186,24 +211,30 @@ defmodule Logex.Retain do
   end
 
   # Decision 604 (RV-34): a store that names its program, every store the runner writes,
-  # holds the digest of its value lines, `digest <md5>` just before its end line, the MD5
-  # of every line after the configuration's but the naming lines, each ended by LF, in 32
-  # lowercase hexadecimal digits, so that a hand edit that does not mend it is told at the
-  # next fresh start; a store that names none, encode/2's, holds none, as before
+  # holds the digest of its value lines, `digest md5 <digest>` just before its end line,
+  # the MD5 of every line after the configuration's but the naming lines, each ended by LF,
+  # in 32 lowercase hexadecimal digits, after the word of its scheme (decision 641), the
+  # writer's, the first row of schemes/0, so that a hand edit that does not mend it is told
+  # at the next fresh start; a store that names none, encode/2's, holds none, as before
   # (provisional, its version `logex retain 4`, `PLAN.md`'s RV-34).
   defp seal([], _values), do: []
-  defp seal(_by, values), do: ["digest #{digest(values)}\n"]
+  defp seal(_by, values), do: ["digest #{word(written())} #{digest(values)}\n"]
 
   defp header_of([]), do: @unnamed
   defp header_of(_by), do: @header
 
   defp by_lines(nil), do: []
 
-  defp by_lines(%{resource: resource, programs: programs}),
-    do: [
-      "resource #{resource}\n"
-      | for({name, digest} <- Enum.sort(programs), do: "program #{name} #{digest}\n")
+  # Decision 641 (RV-34): each digest after its scheme's word, the writer's (written/0),
+  # which written_by/1 digests by.
+  defp by_lines(%{resource: resource, programs: programs}) do
+    scheme = word(written())
+
+    [
+      "resource #{scheme} #{resource}\n"
+      | for({name, digest} <- Enum.sort(programs), do: "program #{name} #{scheme} #{digest}\n")
     ]
+  end
 
   # Decision 517 (c), RV-21, and decision 527 (RV-26): the program a configuration runs, as
   # a store names it, `%{resource: digest, programs: %{type => digest}}`, each digest the
@@ -234,7 +265,7 @@ defmodule Logex.Retain do
   # its own process at a step (`Logex.Runner`'s state).
   def written_by(%Logex.Configuration{programs: programs} = configuration),
     do: %{
-      resource: digest(Logex.Configuration.Text.print(unlined(configuration))),
+      resource: digest(resource_text(configuration)),
       programs:
         Map.new(programs, fn {name, program} -> {name, digest(texts(program, :canonical))} end)
     }
@@ -246,14 +277,52 @@ defmodule Logex.Retain do
   # RV-21's logex would have, where every type's printed digest would differ from its
   # bytes' and warn of every program once; a store of version 3 names its program printed
   # (written_by/1), which `by` is.
-  def compared(%{bytes: true}, by, %Logex.Configuration{programs: programs}),
-    do: %{
-      by
-      | programs:
-          Map.new(programs, fn {name, program} -> {name, digest(texts(program, :bytes))} end)
-    }
+  def compared(
+        %{bytes: true} = stored,
+        by,
+        %Logex.Configuration{programs: programs} = configuration
+      ),
+      do:
+        under(
+          stored,
+          %{
+            by
+            | programs:
+                Map.new(programs, fn {name, program} ->
+                  {name, digest(texts(program, :bytes))}
+                end)
+          },
+          :bytes,
+          configuration
+        )
 
-  def compared(_stored, by, _configuration), do: by
+  def compared(stored, by, configuration), do: under(stored, by, :canonical, configuration)
+
+  # Decision 641 (RV-34): a line of the store that names a scheme other than the writer's,
+  # which decoded!/2 marks, `schemes: %{line => word}`, is laid beside the start's text
+  # digested by that scheme, the same text in the same form, so that a store a logex of
+  # another first row wrote warns of what differs and of nothing else; a store whose lines
+  # all name the writer's scheme, every store this logex writes, carries no mark and costs
+  # no digest here. A program type the start does not run is left to warning/3, which
+  # tells it as not in this start.
+  defp under(%{schemes: schemes}, by, form, configuration),
+    do: Enum.reduce(schemes, by, &under_scheme(&1, &2, form, configuration))
+
+  defp under(_stored, by, _form, _configuration), do: by
+
+  defp under_scheme({:resource, word}, by, _form, configuration),
+    do: %{by | resource: digest(scheme(word), resource_text(configuration))}
+
+  defp under_scheme({{:program, name}, word}, by, form, %{programs: programs}),
+    do: program_under(Map.fetch(programs, name), name, scheme(word), form, by)
+
+  defp program_under({:ok, program}, name, row, form, by),
+    do: %{by | programs: Map.put(by.programs, name, digest(row, texts(program, form)))}
+
+  defp program_under(:error, _name, _row, _form, by), do: by
+
+  defp resource_text(configuration),
+    do: Logex.Configuration.Text.print(unlined(configuration))
 
   defp unlined(configuration),
     do:
@@ -376,7 +445,24 @@ defmodule Logex.Retain do
   defp heading(true, name), do: String.downcase(name)
   defp heading(false, name), do: name
 
-  defp digest(text), do: Base.encode16(:erlang.md5(text), case: :lower)
+  # Decision 641 (RV-34): a text's digest by a scheme's row, its function's bytes in
+  # lowercase hexadecimal digits; the writer's row is the table's first, and a word names
+  # a row in any case, as the store's type words are read.
+  defp digest(text), do: digest(written(), text)
+
+  defp digest({_word, function, _digits}, text),
+    do: Base.encode16(function.(text), case: :lower)
+
+  defp written, do: hd(schemes())
+
+  # A word as the writer writes it is found as it stands, and only another looked for in
+  # lowercase, so that a store the runner wrote pays no lowercasing a line.
+  defp scheme(word), do: any_case(List.keyfind(schemes(), word, 0), word)
+
+  defp any_case(nil, word), do: List.keyfind(schemes(), String.downcase(word), 0)
+  defp any_case(row, _word), do: row
+
+  defp word({word, _function, _digits}), do: word
 
   defp instance(name, %{program: program, kinds: kinds, values: values}) do
     lines =
@@ -548,7 +634,9 @@ defmodule Logex.Retain do
       ended: last != nil,
       unread_by: %{},
       sealed: match?([{@header, 1} | _rest], lines),
-      digest: nil
+      digest: nil,
+      naming: naming_forms(lines),
+      schemed: %{}
     }
 
     values = Enum.drop(body, 2)
@@ -564,7 +652,7 @@ defmodule Logex.Retain do
       path
     )
 
-    {acc.image, written_at, versioned(acc.by, lines)}
+    {acc.image, written_at, versioned(acc.by, lines, acc.schemed)}
   end
 
   # Decisions 538 (RV-27) and 544 (RV-29): the one place the naming lines wait. A store
@@ -577,7 +665,7 @@ defmodule Logex.Retain do
   # An empty line after an end line whose count reads, told as itself, holds them back no
   # longer (RV-28's review), the count read, where it held them to the next try. A store of
   # `logex retain 1`, which has no end line, waits for nothing (ended/1).
-  defp naming(acc, lines, []), do: acc |> resourced() |> owed(lines)
+  defp naming(acc, lines, []), do: acc |> resourced(lines) |> owed(lines)
   defp naming(acc, _lines, _ending), do: acc
 
   # Decision 535 (RV-27): a store of `logex retain 3` is one that names the program that
@@ -598,7 +686,8 @@ defmodule Logex.Retain do
            1,
            unnamed(
              "`#{header}` heads a store that names the program that wrote it, and the " <>
-               "store names none"
+               "store names none",
+             acc.naming
            )
          )
 
@@ -619,7 +708,7 @@ defmodule Logex.Retain do
   # back only by a line of the kind it says is missing.
   defp owed(
          %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
-         [{header, 1} | _rest]
+         [{header, 1} | _rest] = lines
        )
        when is_binary(resource) and map_size(programs) == 0 and not is_map_key(unread, :program) and
               header in @naming,
@@ -628,12 +717,17 @@ defmodule Logex.Retain do
            acc,
            Map.fetch!(acc.seen, :resource),
            unnamed(
-             "#{quoted("resource #{resource}")} names the resource of the store's writer, " <>
-               "and the store names no program type"
+             "#{quoted(text_at(lines, Map.fetch!(acc.seen, :resource)))} names the resource " <>
+               "of the store's writer, and the store names no program type",
+             acc.naming
            )
          )
 
   defp owed(acc, _lines), do: acc
+
+  # A line's own text, by its number: what a naming refusal quotes, the line as the store
+  # holds it, its scheme's word among it in a store of `logex retain 4` (decision 641).
+  defp text_at(lines, n), do: lines |> List.keyfind(n, 1) |> elem(0)
 
   # Decision 604 (RV-34): a store of `logex retain 4` holds the digest of its value lines
   # (seal/2), judged once its count reads and every other line of it does, the last thing
@@ -665,53 +759,65 @@ defmodule Logex.Retain do
         )
       )
 
-  defp unsealed(%{sealed: true, digest: {:unread, n, message}, problems: []} = acc, [], values),
-    do:
-      problem(
-        acc,
-        n,
-        way_out(
-          "#{message}, and the store's value lines' digest is `#{lines_digest(values)}`: to " <>
-            "keep them write `digest #{lines_digest(values)}` in its place, and to start anyway"
-        )
-      )
+  defp unsealed(
+         %{sealed: true, digest: {:unread, n, message, row}, problems: []} = acc,
+         [],
+         values
+       ),
+       do: problem(acc, n, kept(message, "#{word(row)} #{lines_digest(row, values)}"))
 
-  defp unsealed(%{digest: {:unread, n, message}} = acc, _ending, _values),
+  defp unsealed(%{digest: {:unread, n, message, _row}} = acc, _ending, _values),
     do: problem(acc, n, message)
 
-  defp unsealed(%{sealed: true, digest: {given, n}, problems: []} = acc, [], values),
-    do: sealed_by(lines_digest(values), given, n, acc)
+  defp unsealed(%{sealed: true, digest: {:read, read, at}, problems: []} = acc, [], values),
+    do: sealed_by(lines_digest(elem(read, 0), values), read, at, acc)
 
   defp unsealed(acc, _ending, _values), do: acc
+
+  # Decision 641 (RV-34): what to write in a digest line's place, whole, the scheme's word
+  # and the digest, by the scheme the line names where this logex reads it and by the
+  # writer's where the line names none.
+  defp kept(message, whole),
+    do:
+      way_out(
+        "#{message}, and the store's value lines' digest is `#{whole}`: to keep them write " <>
+          "`digest #{whole}` in its place, and to start anyway"
+      )
 
   # The store's last line before its end line, its configuration's where it holds no other.
   defp last_line([]), do: 2
   defp last_line(values), do: values |> List.last() |> elem(1)
 
-  defp sealed_by(same, same, _n, acc), do: acc
+  defp sealed_by(same, {_row, same}, _at, acc), do: acc
 
-  defp sealed_by(digest, given, n, acc),
+  defp sealed_by(digest, {row, _given}, {text, n}, acc),
     do:
       problem(
         acc,
         n,
         way_out(
-          "`digest #{given}` is not the digest of the store's value lines, which is " <>
-            "`#{digest}`: a value line was edited, added or removed by hand and the digest " <>
-            "not mended, so the store is not read; to keep the edit write `digest #{digest}` " <>
-            "in its place, and to start anyway"
+          "#{quoted(text)} is not the digest of the store's value lines, which is " <>
+            "`#{word(row)} #{digest}`: a value line was edited, added or removed by hand " <>
+            "and the digest not mended, so the store is not read; to keep the edit write " <>
+            "`digest #{word(row)} #{digest}` in its place, and to start anyway"
         )
       )
 
   # The value lines as seal/2 digests them: every line after the configuration's but a
   # `resource`, a `program` and a `digest` line, as read, each ended by LF, whatever line
-  # end the store holds (decision 410).
-  defp lines_digest(values),
-    do: digest(for({text, _n} <- values, not sealing?(text), do: [text, ?\n]))
+  # end the store holds (decision 410), by the scheme the digest line names (decision
+  # 641).
+  defp lines_digest(row, values),
+    do: digest(row, for({text, _n} <- values, not sealing?(text), do: [text, ?\n]))
 
   defp sealing?("resource " <> _rest), do: true
   defp sealing?("program " <> _rest), do: true
   defp sealing?("digest " <> _rest), do: true
+
+  # The word alone, a digest line that does not read (decision 641's build): no value
+  # line, so that the digest its refusal tells is of the lines without it and reads once
+  # written in its place, where the word was digested as a value line.
+  defp sealing?("digest"), do: true
   defp sealing?(_text), do: false
 
   # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
@@ -720,14 +826,43 @@ defmodule Logex.Retain do
   # every refused store is told, where 531's and 535's named the fault and the shape alone;
   # since decision 544 (RV-29) 531's waits for the count as 535's and 539's do (naming/3),
   # so no store is told one of them beside its cut, where 531's was, the way out twice.
-  defp unnamed(missing),
+  defp unnamed(missing, naming),
     do:
-      way_out(
-        missing <>
-          ": a store that names the program that wrote it gives `resource <digest>` " <>
-          "straight after its configuration's line, and then a `program <type> <digest>` a " <>
-          "type"
-      )
+      way_out(missing <> ": a store that names the program that wrote it gives " <> given(naming))
+
+  # Decision 641 (RV-34): the naming lines a store gives, by its header's forms (form/2),
+  # each sentence whole, so that its article stands before a line's form written out and
+  # never before an interpolation, which `type_table_test.exs` holds lib/ to.
+  defp given(:schemed),
+    do:
+      "`resource <scheme> <digest>` straight after its configuration's line, and then a " <>
+        "`program <type> <scheme> <digest>` a type"
+
+  defp given(_plain),
+    do:
+      "`resource <digest>` straight after its configuration's line, and then a `program " <>
+        "<type> <digest>` a type"
+
+  # Decision 641 (RV-34): the naming lines' and the digest line's forms, as a store of
+  # `logex retain 4` holds them, `:schemed`, each digest after its scheme's word, and as
+  # one of version 3 or 2, whose digests name none, holds the naming lines, each message
+  # that gives a form reading it here but the naming refusals' sentence (given/1).
+  defp form(:schemed, "resource"), do: "resource <scheme> <digest>"
+  defp form(:schemed, "program"), do: "program <type> <scheme> <digest>"
+  defp form(:schemed, "digest"), do: "digest <scheme> <digest>"
+  defp form(_plain, "resource"), do: "resource <digest>"
+  defp form(_plain, "program"), do: "program <type> <digest>"
+
+  # Decision 641 (RV-34): how a store's naming lines give their digests, by its header: of
+  # `logex retain 4` after the scheme's word, `:schemed`; of version 3, 2 or 1 alone,
+  # `:plain`, as they were written; and under a header this logex does not read, a later
+  # version's or one mistyped, `:either`, each form read and a line that is neither told
+  # as before, the header's refusal the one that counts, so that a store of version 4
+  # whose header a hand mistyped is not told also that its naming lines are none.
+  defp naming_forms([{@header, 1} | _rest]), do: :schemed
+  defp naming_forms([{header, 1} | _rest]) when header in @headers, do: :plain
+  defp naming_forms([]), do: :plain
+  defp naming_forms(_unread), do: :either
 
   # Decisions 540 (RV-28) and 545 (RV-29): a refusal that tells the way to start over a
   # store, the cut-short store's (ending/4), each of the naming lines' (unnamed/1) and since
@@ -757,9 +892,18 @@ defmodule Logex.Retain do
   # Decision 530 (RV-26): the program a store names, as a store of version 3 names it,
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
   # digested by its bytes (compared/3).
-  defp versioned(nil, _lines), do: nil
-  defp versioned(by, [{header, 1} | _rest]) when header in @naming, do: by
-  defp versioned(by, _lines), do: Map.put(by, :bytes, true)
+  defp versioned(nil, _lines, _schemed), do: nil
+
+  defp versioned(by, [{header, 1} | _rest], schemed) when header in @naming,
+    do: otherwise_schemed(by, schemed)
+
+  defp versioned(by, _lines, schemed), do: otherwise_schemed(Map.put(by, :bytes, true), schemed)
+
+  # Decision 641 (RV-34): the lines that name a scheme other than the writer's, marked for
+  # compared/3; a store whose lines all name the writer's is given as written_by/1 gives
+  # one.
+  defp otherwise_schemed(by, schemed) when map_size(schemed) == 0, do: by
+  defp otherwise_schemed(by, schemed), do: Map.put(by, :schemes, schemed)
 
   # Decision 517 (c), RV-21, and decision 527 (RV-26): what a warm fresh start warns of,
   # nil where the store names no program, written before RV-21, or the very program the
@@ -1055,17 +1199,27 @@ defmodule Logex.Retain do
   # names a program type names its resource too (resourced/1), so that a store whose
   # `resource` line a hand edit took away is refused, where it was read and warned that the
   # configuration's lines differed, which nothing said.
-  defp line(["resource", digest], at, acc), do: by_entered(digested(digest), :resource, at, acc)
+  # Decision 641 (RV-34): in a store of `logex retain 4` each digest stands after its
+  # scheme's word, a row of schemes/0 read in any case (schemed/2); in one of version 3 or
+  # 2 it stands alone, MD5's, as it was written (unschemed/1). A line of the other
+  # version's form is told as one that is no line of its store's (no_line/3), in a store
+  # of version 4 with the form that names the scheme and what the writer writes; under a
+  # header this logex does not read, either form is read (naming_forms/1).
+  defp line(["resource", scheme, digest], at, %{naming: naming} = acc) when naming != :plain,
+    do: by_entered(schemed(scheme, digest), :resource, at, acc)
+
+  defp line(["resource", digest], at, %{naming: naming} = acc) when naming != :schemed,
+    do: by_entered(unschemed(digest), :resource, at, acc)
 
   # Decision 604 (RV-34): the digest of a store of `logex retain 4`'s value lines, read
   # wherever it stands, once, as the naming lines are; one that does not read told as
   # itself, and the store not told also that it holds none; one in a store of another
   # version told so, which holds none.
-  defp line(["digest", digest], at, %{sealed: true} = acc),
-    do: sealed_entered(digested(digest), at, acc)
+  defp line(["digest", scheme, digest], at, %{sealed: true} = acc),
+    do: sealed_entered(schemed(scheme, digest), at, acc)
 
   defp line(["digest" | _words], {text, n}, %{sealed: true} = acc),
-    do: unread_digest(acc, n, "#{quoted(text)} is no digest's line: it is `digest <digest>`")
+    do: unread_digest(acc, n, no_line(text, "digest", :schemed), written())
 
   defp line(["digest" | _words], {text, n}, acc),
     do:
@@ -1076,30 +1230,31 @@ defmodule Logex.Retain do
           "holds, and this store's first line is not"
       )
 
-  defp line(["program", name, digest], {_text, n} = at, acc),
-    do:
-      by_entered(
-        digested(digest),
-        {:program, name},
-        at,
-        named_problem(acc, name, n, "program type")
-      )
+  defp line(["program", name, scheme, digest], {_text, n} = at, %{naming: naming} = acc)
+       when naming != :plain,
+       do:
+         by_entered(
+           schemed(scheme, digest),
+           {:program, name},
+           at,
+           named_problem(acc, name, n, "program type")
+         )
+
+  defp line(["program", name, digest], {_text, n} = at, %{naming: naming} = acc)
+       when naming != :schemed,
+       do:
+         by_entered(
+           unschemed(digest),
+           {:program, name},
+           at,
+           named_problem(acc, name, n, "program type")
+         )
 
   defp line(["resource" | _words], {text, n}, acc),
-    do:
-      problem(
-        unread_by(acc, :resource),
-        n,
-        "#{quoted(text)} is no resource's line: it is `resource <digest>`"
-      )
+    do: problem(unread_by(acc, :resource), n, no_line(text, "resource", acc.naming))
 
   defp line(["program" | _words], {text, n}, acc),
-    do:
-      problem(
-        unread_by(acc, :program),
-        n,
-        "#{quoted(text)} is no program's line: it is `program <type> <digest>`"
-      )
+    do: problem(unread_by(acc, :program), n, no_line(text, "program", acc.naming))
 
   # Decision 355: an end line anywhere but last, which no path is, having no `.`; and since
   # RV-5's review one in a store not judged by version 2's rule, its header not `logex
@@ -1140,9 +1295,38 @@ defmodule Logex.Retain do
         acc,
         n,
         "#{quoted(text)} is no line of a store: a line is `global <name> <type> <value>`, " <>
-          "`trigger <name> <sample>`, `resource <digest>`, `program <type> <digest>`, " <>
+          "`trigger <name> <sample>`, `#{form(acc.naming, "resource")}`, " <>
+          "`#{form(acc.naming, "program")}`, " <>
           "`instance <name> <program type>`, `<path> <kind>` or `<path> <type> <value>`"
       )
+
+  # A `resource`, a `program` or a `digest` line that is not its form, the form its store's
+  # version gives (form/2): and since decision 641 (RV-34), in a store of `logex retain 4`,
+  # told that each digest names its scheme, with the line as the writer writes it, so that
+  # a line of version 3's form, `resource <digest>`, a hand's or a script's, is told what
+  # to add.
+  defp no_line(text, kind, :schemed),
+    do:
+      "#{quoted(text)} is no #{kind}'s line of a store of `#{@header}`, which names each " <>
+        "digest's scheme: it is `#{form(:schemed, kind)}`, as " <>
+        "`#{written_form(kind, written())}`"
+
+  defp no_line(text, kind, plain),
+    do: "#{quoted(text)} is no #{kind}'s line: it is `#{form(plain, kind)}`"
+
+  defp written_form("program", row), do: "program <type> #{digest_form(row)}"
+  defp written_form(kind, row), do: "#{kind} #{digest_form(row)}"
+
+  defp digest_form({word, _function, digits}),
+    do: "#{word} <#{digits} lowercase hexadecimal digits>"
+
+  # Decision 641 (RV-34): a line whose scheme is no row of schemes/0, a later logex's or a
+  # word mistyped, told the scheme it names and those this logex reads, and the way out,
+  # since no hand gives the digest of a scheme logex does not hold.
+  defp unread_scheme(text, word),
+    do:
+      "#{quoted(text)} names the scheme #{quoted(word)}, which this logex does not read: " <>
+        "it reads #{Enum.map_join(schemes(), ", ", &"`#{word(&1)}`")}"
 
   defp problem(acc, n, message), do: %{acc | problems: [{n, message} | acc.problems]}
 
@@ -1158,22 +1342,23 @@ defmodule Logex.Retain do
   # once the count reads. A `resource` line that does not read holds it back, the line it
   # says is missing perhaps that one mistyped; a second `program` line that does not read,
   # beside one that does, does not (RV-28's review).
-  defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc), do: acc
+  defp resourced(%{by: %{resource: nil}, unread_by: %{resource: true}} = acc, _lines), do: acc
 
-  defp resourced(%{by: %{resource: nil, programs: programs}} = acc) do
-    {name, n} = Enum.min_by(for({{:program, name}, n} <- acc.seen, do: {name, n}), &elem(&1, 1))
+  defp resourced(%{by: %{resource: nil}} = acc, lines) do
+    n = Enum.min(for({{:program, _name}, n} <- acc.seen, do: n))
 
     problem(
       acc,
       n,
       unnamed(
-        "#{quoted("program #{name} #{Map.fetch!(programs, name)}")} names a program type " <>
-          "of the store's writer, and the store names no resource"
+        "#{quoted(text_at(lines, n))} names a program type " <>
+          "of the store's writer, and the store names no resource",
+        acc.naming
       )
     )
   end
 
-  defp resourced(acc), do: acc
+  defp resourced(acc, _lines), do: acc
 
   defp instance(name, program, {_text, n} = at, acc) do
     acc =
@@ -1354,39 +1539,94 @@ defmodule Logex.Retain do
     once(acc, key, at, &put_entry(kind, name, entry, &1))
   end
 
-  # Decision 517 (c), RV-21: a digest, as encode/3 writes one.
-  defp digested(digest) when byte_size(digest) == 32,
-    do: hex(Base.decode16(digest, case: :lower), digest)
+  # Decision 517 (c), RV-21: a digest, as encode/3 writes one, and since decision 641
+  # (RV-34) by its scheme's row, so many lowercase hexadecimal digits, `{row, digest}`.
+  defp digested({_word, _function, digits} = row, digest) when byte_size(digest) == digits,
+    do: hex(Base.decode16(digest, case: :lower), row, digest)
 
-  defp digested(digest), do: no_digest(digest)
+  defp digested(_row, _digest), do: :error
 
-  defp hex({:ok, _bytes}, digest), do: {:ok, digest}
-  defp hex(:error, digest), do: no_digest(digest)
+  defp hex({:ok, _bytes}, row, digest), do: {:ok, {row, digest}}
+  defp hex(:error, _row, _digest), do: :error
 
-  defp no_digest(digest),
-    do: {:error, "#{quoted(digest)} is no digest: a store's is 32 lowercase hexadecimal digits"}
+  # Decision 641 (RV-34): a digest after its scheme's word, the word read in any case; one
+  # whose scheme is no row, `{:unknown, word}`; and one that is not its scheme's form told
+  # the form its row gives, with the row, by which a digest line mistyped is told the
+  # digest its lines give (unsealed/3).
+  defp schemed(word, digest), do: schemed_by(scheme(word), word, digest)
 
-  defp sealed_entered({:error, message}, {_text, n}, acc), do: unread_digest(acc, n, message)
+  defp schemed_by(nil, word, _digest), do: {:unknown, word}
+  defp schemed_by(row, _word, digest), do: named_digest(digested(row, digest), row, digest)
 
-  defp sealed_entered({:ok, _digest}, at, %{digest: {:unread, _n, _message}} = acc),
+  defp named_digest(:error, {word, _function, digits} = row, digest),
+    do:
+      {:error,
+       "#{quoted(digest)} is no `#{word}` digest: one is #{digits} lowercase hexadecimal " <>
+         "digits", row}
+
+  defp named_digest(read, _row, _digest), do: read
+
+  # A digest of a store of version 3 or 2, which names no scheme: MD5's, told as it was.
+  defp unschemed(digest), do: plain_digest(List.keyfind(schemes(), @unschemed, 0), digest)
+
+  defp plain_digest(row, digest), do: plain_read(digested(row, digest), row, digest)
+
+  defp plain_read(:error, {_word, _function, digits} = row, digest),
+    do:
+      {:error,
+       "#{quoted(digest)} is no digest: a store's is #{digits} lowercase hexadecimal digits", row}
+
+  defp plain_read(read, _row, _digest), do: read
+
+  defp sealed_entered({:error, message, row}, {_text, n}, acc),
+    do: unread_digest(acc, n, message, row)
+
+  # Decision 641 (RV-34): a digest line whose scheme this logex does not read, told so at
+  # once, with the way out and no digest offered, since its lines cannot be judged by a
+  # scheme logex does not hold; a store so told has a problem, and so is not told also
+  # that it holds no digest line, nor what its lines' digest is (unsealed/3).
+  defp sealed_entered({:unknown, word}, {text, n}, acc),
+    do: problem(acc, n, way_out(unread_scheme(text, word)))
+
+  defp sealed_entered({:ok, _read}, at, %{digest: {:unread, _n, _message, _row}} = acc),
     do: once(acc, :digest, at, & &1)
 
-  defp sealed_entered({:ok, digest}, {_text, n} = at, acc),
-    do: once(acc, :digest, at, &%{&1 | digest: {digest, n}})
+  defp sealed_entered({:ok, read}, at, acc),
+    do: once(acc, :digest, at, &%{&1 | digest: {:read, read, at}})
 
   # Decision 604 (RV-34), since RV-34's second host lane's review: the first digest
   # line that does not read, kept to be told once the store's other lines are judged
   # (unsealed/3), with the digest its lines give and the way out where nothing else is
   # wrong, a digest line that reads after it kept from taking its place; one after another
   # digest line told as itself at once.
-  defp unread_digest(%{digest: nil} = acc, n, message), do: %{acc | digest: {:unread, n, message}}
-  defp unread_digest(acc, n, message), do: problem(acc, n, message)
+  defp unread_digest(%{digest: nil} = acc, n, message, row),
+    do: %{acc | digest: {:unread, n, message, row}}
 
-  defp by_entered({:error, message}, key, {_text, n}, acc),
+  defp unread_digest(acc, n, message, _row), do: problem(acc, n, message)
+
+  defp by_entered({:error, message, _row}, key, {_text, n}, acc),
     do: problem(unread_by(acc, by_kind(key)), n, message)
 
-  defp by_entered({:ok, digest}, key, at, acc),
-    do: once(acc, key, at, &%{&1 | by: put_by(key, digest, by_of(&1.by))})
+  # Decision 641 (RV-34): a naming line whose scheme this logex does not read, told so
+  # and the way out, as the naming refusals tell it (decision 540), and the store not told
+  # also that it names no resource or no program type, which the line may name.
+  defp by_entered({:unknown, word}, key, {text, n}, acc),
+    do: problem(unread_by(acc, by_kind(key)), n, way_out(unread_scheme(text, word)))
+
+  defp by_entered({:ok, {row, digest}}, key, at, acc),
+    do: once(acc, key, at, &noted(word(row), word(written()), key, digest, &1))
+
+  # Decision 641 (RV-34): a line of a scheme that is not the writer's, marked by its word;
+  # one of the writer's, every line of a store the runner wrote, entered as it was.
+  defp noted(written, written, key, digest, acc),
+    do: %{acc | by: put_by(key, digest, by_of(acc.by))}
+
+  defp noted(word, _written, key, digest, acc),
+    do: %{
+      acc
+      | by: put_by(key, digest, by_of(acc.by)),
+        schemed: Map.put(acc.schemed, key, word)
+    }
 
   # RV-27's review: a `resource` or `program` line that does not read, its digest none or
   # its words not the line's, told as itself, and the store not told also that it names

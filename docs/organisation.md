@@ -4815,7 +4815,22 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   judge of it, run within the store's write limit, the store's read and its match each
   limited by it, so that a start waits up to twice it, a warm one past it refused
   `{:retain, :timeout}` with no device open and the store as it was, a cold one copying
-  the store before it writes over it.)*
+  the store before it writes over it.)* *(Decision 641, RV-34, 2026-11-27, built before
+  RV-34 landed, so that no store of version 4 is without it: every digest of a store of
+  `logex retain 4` stands after the word of its scheme, `resource md5 <digest>`, `program
+  <type> md5 <digest>` and `digest md5 <digest>`, the lines above written before it
+  naming none. The schemes are one table, `Logex.Retain.schemes/0`, a row a scheme: its
+  word, read in any case and written lowercase; its function; and its digest's form, so
+  many lowercase hexadecimal digits. The writer writes the first row's, MD5 by
+  `:erlang.md5/1`; the reader reads any row's, each line naming its own, and refuses a
+  line whose scheme is no row, naming it and those it reads, with the way out; a line of
+  version 4 that names no scheme is refused and told the form that names one; and a store
+  of version 3 or 2, whose digests name none and are MD5's, is read as before. A refusal
+  that gives the digest of the value lines gives the scheme's word with it, what to write
+  whole; and a store whose naming lines name a scheme other than the writer's is laid
+  beside the start's program digested by that scheme, so that it warns of what differs
+  alone. The table, the any-case word and the refusals' forms are the builder's readings,
+  provisional, `PLAN.md`'s RV-34.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -17116,6 +17131,68 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      interface checked at each compile and no mark that hides a warning, are dropped.
      *(Landed with RV-34, 2026-11-27, `3625095`: record 0022's claim of a block's internal
      values cited to IEC, its two claims about the tools dropped.)*
+
+641. **The scheme of a digest (RV-34),** the maintainer's question of decision 604's
+     digests, "why MD5?", and then that the digest can change to another scheme one day. A
+     scheme is the method that makes a checksum, today MD5 by `:erlang.md5/1`, kept, which
+     needs no `crypto` application. A box counter's store of `logex retain 4` held `digest
+     8cfa2e4d3e860b659fe02173b2f9f18a`, 32 digits that do not say how they were made: a
+     logex that made them another way could tell its store from this one only by a new
+     version, and an older logex given that store would tell a wrong digest, and offer its
+     own in its place, where the truth is that it does not know the scheme.
+
+     **Taken: every digest names its scheme on its line, the naming lines too, and before
+     RV-34 lands** (the maintainer, 2026-11-27, three answers, each the option
+     recommended). (a) Every digest names its scheme on its line: the box counter's store
+     holds `digest md5 8cfa2e4d3e860b659fe02173b2f9f18a`. A later logex may write another
+     scheme and still read `md5`; a logex that meets a scheme it does not know refuses the
+     store and names the scheme. (b) One rule: the naming lines name their scheme too, a
+     store of version 4 writing `resource md5 <digest>` and `program <type> md5 <digest>`;
+     versions 1, 2 and 3 are read exactly as before. (c) It is built before RV-34 lands,
+     on its branch, so that version 4 is born with the scheme named and `main` never
+     writes a store of version 4 without it: there is no version 5, and no reading of a
+     store of version 4 whose lines name no scheme, since no release holds one. Not taken:
+     the scheme left unnamed, a change of it a new version of the store; the `digest` line
+     alone naming it; built after RV-34 lands, as version 5 beside a version 4 that names
+     none. The practice the maintainer was shown, each a digest that names its method
+     before its digits: a container image's digest, `sha256:…`, Subresource Integrity's
+     `sha256-…` and pip's `--hash=sha256:…` (as shown; this record did not read their
+     specifications). IEC 61131-3 has no store a person edits and no digest of one, and
+     Logix keeps user memory in the controller at power-down (1756-UM001Q pp.36 and 71–72,
+     as `docs/naming.md`'s `retain` stanza cites it). Decision 604 stays as
+     built beside it, each point put to the maintainer the same day: version 4 with the
+     digest on its own line before the end line; the digest of the value lines only; a
+     wrong digest's refusal giving the right one; a mistyped digest told the right one and
+     the way out where nothing else is wrong; a store of version 4 with no digest line
+     refused, no digest offered; the digest told only once the store has no other problem;
+     a store that names no program written as version 2 with no digest; `:erlang.md5/1`.
+     RV-34 builds it.
+
+     Where the decision is silent the builder read it so, each provisional (`PLAN.md`'s
+     RV-34, "Decision 641 as built"): the schemes are one table, `Logex.Retain.schemes/0`,
+     a row a scheme, its word, its function and its digest's form, which the writer, the
+     reader, every message that gives a digest's form and the store reference's table of
+     schemes read, the writer writing the first row's, so that another scheme is a row and
+     a decision here, and no second scheme lands with this one; a scheme's word is read in
+     any case and written lowercase, as the store's type words are read; a line of version
+     4 that is not its form, a digest with no scheme among them, is refused at that line
+     and told the form with the scheme, as the writer writes it; a scheme this logex does
+     not read is refused at its line, naming it and those it reads, with the way out
+     (decision 540), and for the `digest` line no digest offered, its lines not judged; a
+     scheme's word in a store of version 3 or 2 is refused as a line of that version that
+     does not read, its message as it was; every refusal that gives the digest of the
+     value lines gives the whole of what to write, the scheme's word and the digest, by
+     the scheme the `digest` line names where this logex reads it and by the writer's
+     where it names none; the lines of one store may each name their own scheme, and the
+     warning of a store another program wrote (decisions 517 (c) and 527) lays each
+     naming line beside the start's text digested by that line's scheme; under a header
+     this logex does not read, a later version's or one a hand mistyped, a naming line of
+     either form is read, with its scheme or without, so that such a store is told its
+     header and not also that its naming lines are none; and the store's words owe no
+     stanza of `docs/naming.md`, which holds the language's and the configuration file's
+     words, as `digest`, `resource` and `end` owe none. Found and mended with it: a line
+     that is the word `digest` alone was digested as a value line, so that the digest its
+     refusal told did not read once written in its place.
 
 ---
 

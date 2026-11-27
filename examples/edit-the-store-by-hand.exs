@@ -44,8 +44,9 @@ IO.write(File.read!("packer.retain"))
 text = File.read!("packer.retain")
 File.write!("packer.retain", String.replace(text, "s1.place dint 8\n", "s1.place dint 0\n"))
 
-# Step 7: start the runner from the store. The start refuses it and tells the digest of
-# its lines now: write that digest on the digest line, as a person does, and start again.
+# Step 7: start the runner from the store. The start refuses it and tells the digest line
+# to write, the word of the scheme and the digest of its lines now: write it in the place
+# of the digest line, as a person does, and start again.
 refused =
   try do
     Runner.start_link(opts)
@@ -54,9 +55,9 @@ refused =
   end
 
 IO.puts(refused)
-[_all, old, new] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, refused)
+[_all, old, new] = Regex.run(~r/`(digest \w+ \w+)` is not .* write `(digest \w+ \w+)`/U, refused)
 text = File.read!("packer.retain")
-File.write!("packer.retain", String.replace(text, "digest #{old}\n", "digest #{new}\n"))
+File.write!("packer.retain", String.replace(text, old <> "\n", new <> "\n"))
 {:ok, runner} = Runner.start_link(opts)
 
 # Step 8: check the value and dropped.

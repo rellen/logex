@@ -15114,10 +15114,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert_raise ArgumentError,
                  "#{w.store}: line 1: `logex retain 4` heads a store that names the program " <>
                    "that wrote it, and the store names none: a store that names the program " <>
-                   "that wrote it gives `resource <digest>` straight after its configuration's " <>
-                   "line, and then a `program <type> <digest>` a type: start it with start: " <>
-                   ":cold to start over it, which copies it first to the next `.dropped.<n>` " <>
-                   "beside it and then writes a new store over it",
+                   "that wrote it gives `resource <scheme> <digest>` straight after its " <>
+                   "configuration's line, and then a `program <type> <scheme> <digest>` a " <>
+                   "type: start it with start: :cold to start over it, which copies it first " <>
+                   "to the next `.dropped.<n>` beside it and then writes a new store over it",
                  fn -> Runner.start_link(opts) end
 
     assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==
@@ -15144,10 +15144,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert_raise ArgumentError,
                  "#{w.store}: line #{at}: `#{resource}` names the resource of the store's " <>
                    "writer, and the store names no program type: a store that names the " <>
-                   "program that wrote it gives `resource <digest>` straight after its " <>
-                   "configuration's line, and then a `program <type> <digest>` a type: start " <>
-                   "it with start: :cold to start over it, which copies it first to the next " <>
-                   "`.dropped.<n>` beside it and then writes a new store over it",
+                   "program that wrote it gives `resource <scheme> <digest>` straight after " <>
+                   "its configuration's line, and then a `program <type> <scheme> <digest>` a " <>
+                   "type: start it with start: :cold to start over it, which copies it first " <>
+                   "to the next `.dropped.<n>` beside it and then writes a new store over it",
                  fn -> Runner.start_link(opts) end
 
     assert for({_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}) ==
@@ -15253,6 +15253,60 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp named_drawn!(_draw, _w, _text, _opts), do: :ok
 
+  # Decision 641, restated (RV-34): of the warm fresh starts that read a version 4 store,
+  # one in two, by the store's own text, so that no draw is taken, is first given the store
+  # with its `digest` line naming a scheme this logex does not read, `sha256` and 64
+  # digits, as a later logex might write it, and is refused at that line, which names the
+  # scheme and the one this logex reads, `md5`, with the way out and no digest. The other
+  # is first given the store with the word of the scheme taken from its `digest` line,
+  # and is told the form that names the scheme and the line to write, the scheme's word
+  # and the digest of its value lines, which is the store's own, with the way out. Each
+  # with no device read or written, the store then put back.
+  defp scheme_refused!(%{life: false}, _text, _opts), do: :ok
+  defp scheme_refused!(%{start: :cold}, _text, _opts), do: :ok
+  defp scheme_refused!(_w, nil, _opts), do: :ok
+
+  defp scheme_refused!(w, text, opts),
+    do: scheme_drawn!(rem(:erlang.phash2({text, :scheme}), 2), w, text, opts)
+
+  defp scheme_drawn!(0, w, "logex retain 4\n" <> _ = text, opts) do
+    [_line, digest] = Regex.run(~r/^digest md5 ([0-9a-f]{32})$/m, text)
+    n = length(String.split(text, "\n")) - 2
+    later = "digest sha256 " <> String.duplicate("0", 64)
+
+    refused_so!(
+      w,
+      opts,
+      String.replace(text, "\ndigest md5 #{digest}\n", "\n#{later}\n"),
+      "#{w.store}: line #{n}: #{life_quoted(later)} names the scheme `sha256`, which this " <>
+        "logex does not read: it reads `md5`: " <> @life_way_out
+    )
+
+    File.write!(w.store, text)
+    reach(:life_scheme_unread, true)
+  end
+
+  defp scheme_drawn!(1, w, "logex retain 4\n" <> _ = text, opts) do
+    [_line, digest] = Regex.run(~r/^digest md5 ([0-9a-f]{32})$/m, text)
+    n = length(String.split(text, "\n")) - 2
+
+    refused_so!(
+      w,
+      opts,
+      String.replace(text, "\ndigest md5 #{digest}\n", "\ndigest #{digest}\n"),
+      "#{w.store}: line #{n}: `digest #{digest}` is no digest's line of a store of `logex " <>
+        "retain 4`, which names each digest's scheme: it is `digest <scheme> <digest>`, as " <>
+        "`digest md5 <32 lowercase hexadecimal digits>`, and the store's value lines' " <>
+        "digest is `md5 #{digest}`: to keep them write `digest md5 #{digest}` in its place, " <>
+        "and to start anyway: " <> @life_way_out
+    )
+
+    File.write!(w.store, text)
+    reach(:life_scheme_unnamed, true)
+  end
+
+  defp scheme_drawn!(_draw, _w, _text, _opts), do: :ok
+
   # The store given `edited`, a warm start refused with `message`, whole, no device read or
   # written.
   defp refused_so!(w, opts, edited, message) do
@@ -15294,8 +15348,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     "line #{at + 1}: `#{Enum.at(lines, at)}` names a program type of the store's writer, " <>
       "and the store names no resource: a store that names the program that wrote it " <>
-      "gives `resource <digest>` straight after its configuration's line, and then a " <>
-      "`program <type> <digest>` a type"
+      "gives `resource <scheme> <digest>` straight after its configuration's line, and " <>
+      "then a `program <type> <scheme> <digest>` a type"
   end
 
   # Decision 410, restated (RV-13): a store and a forces file saved with CRLF line ends,
@@ -15323,8 +15377,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp forces_ended!(nil, _ending), do: :ok
   defp forces_ended!(file, ending), do: forces_saved!(File.read(file), file, ending)
 
+  # The file's lines saved again with that line end, however they end as it stands: the
+  # runner writes the forces file only when a force changes, so the file an earlier start
+  # of the walk saved with CRLF may stand still, and its `\n` alone replaced again made
+  # `\r\r\n`, which decision 410 reads as a line left empty (found as decision 641
+  # changed the store's text, which chooses the line end, and two starts in a row over one
+  # forces file drew CRLF).
   defp forces_saved!({:ok, text}, file, ending) when text != "" do
-    File.write!(file, String.replace(text, "\n", ending))
+    File.write!(file, String.replace(text, ["\r\n", "\r", "\n"], ending))
     reach(:forces_crlf_read, ending == "\r\n")
   end
 
@@ -15721,6 +15781,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     cut_refused!(w, text, opts)
     unnamed_refused!(w, text, opts)
     named_refused!(w, text, opts)
+    scheme_refused!(w, text, opts)
     saved = line_ended!(w, text)
     w = %{w | saved: saved_as(saved, text)}
     cold = cold_cut!(w)
@@ -16870,7 +16931,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # and decision 545: a renamed configuration's store told the full way out, alone and
     # beside 531's refusal, once.
     :life_unresourced_counted,
-    :life_renamed_refused
+    :life_renamed_refused,
+    # Decision 641 (RV-34): a store whose `digest` line names a scheme this logex does not
+    # read, refused naming it, and one whose `digest` line names none, told the line to
+    # write.
+    :life_scheme_unread,
+    :life_scheme_unnamed
   ]
 
   # The life walk's body, which `Logex.ApiContractTest.LifeWalk`, below, runs in a module
@@ -17454,12 +17520,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Since decision 604 (RV-34) a hand edit mends the store's digest, as the store's pages
   # tell an operator to: the MD5 of every line after the configuration's but the naming
   # lines, the digest's and the end line, each ended by LF; a store of a version that holds
-  # no digest is left as it is.
+  # no digest is left as it is. Since decision 641 the digest stands after its scheme's
+  # word, `md5`.
   defp life_resealed(text) do
     [_header, _configuration | lines] = String.split(text, "\n", trim: true)
     unsealed = ["resource ", "program ", "digest ", "end "]
     values = for line <- lines, not String.starts_with?(line, unsealed), do: [line, ?\n]
-    Regex.replace(~r/^digest [0-9a-f]{32}$/m, text, "digest #{life_md5(values)}")
+    Regex.replace(~r/^digest md5 [0-9a-f]{32}$/m, text, "digest md5 #{life_md5(values)}")
   end
 
   # The model's last write as the hand edit left the store's text.
@@ -17552,11 +17619,12 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # configuration the resource ran at the model's last write (`life_by/1`), and since
   # decision 530 (RV-26) under the header `logex retain 3`, a store that names its program;
   # and since decision 604 (RV-34) under `logex retain 4`, the MD5 of its value lines, each
-  # after the program's lines ended by LF, just before the end line, counted.
+  # after the program's lines ended by LF, just before the end line, counted; and since
+  # decision 641 (RV-34) each digest after the word of its scheme, `md5`.
   defp life_body!(image, by, text) do
     [_text, body, digest, count] =
       Regex.run(
-        ~r/\Alogex retain 4\nconfiguration plant written \S+\n(.*)digest ([0-9a-f]{32})\nend (\d+) lines\n\z/s,
+        ~r/\Alogex retain 4\nconfiguration plant written \S+\n(.*)digest md5 ([0-9a-f]{32})\nend (\d+) lines\n\z/s,
         text
       )
 
@@ -17578,9 +17646,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # prints (`life_printed/1`).
   defp life_by(config),
     do:
-      "resource #{life_md5(life_lines(config))}\n" <>
+      "resource md5 #{life_md5(life_lines(config))}\n" <>
         Enum.map_join(Enum.sort(config.programs), fn {name, program} ->
-          "program #{name} #{life_md5(life_texts(program))}\n"
+          "program #{name} md5 #{life_md5(life_texts(program))}\n"
         end)
 
   defp life_md5(text), do: Base.encode16(:erlang.md5(text), case: :lower)
@@ -17714,19 +17782,24 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_rv21(w, text), do: life_rewritten(rem(:erlang.phash2({text, :rv21}), 2), w, text)
 
   # Since decision 604 (RV-34) made from the runner's version 4: its digest line, which
-  # version 2 never holds, taken away and the count lowered.
+  # version 2 never holds, taken away and the count lowered; and since decision 641 each
+  # naming line's digest alone, as version 2 wrote it, no scheme's word before it.
   defp life_rewritten(0, w, "logex retain 4\n" <> rest),
     do:
       "logex retain 2\n" <>
-        Regex.replace(~r/^program (\S+) [0-9a-f]{32}$/m, life_unsealed(rest), fn _line, name ->
-          "program #{name} #{life_md5(life_bytes(Map.fetch!(w.shelf_by.programs, name)))}"
-        end)
+        Regex.replace(
+          ~r/^program (\S+) md5 [0-9a-f]{32}$/m,
+          Regex.replace(~r/^resource md5 ([0-9a-f]{32})$/m, life_unsealed(rest), "resource \\1"),
+          fn _line, name ->
+            "program #{name} #{life_md5(life_bytes(Map.fetch!(w.shelf_by.programs, name)))}"
+          end
+        )
 
   defp life_rewritten(_draw, _w, text), do: text
 
   defp life_unsealed(rest) do
     [_text, body, count] =
-      Regex.run(~r/\A(.*)digest [0-9a-f]{32}\nend (\d+) lines\n\z/s, rest)
+      Regex.run(~r/\A(.*)digest md5 [0-9a-f]{32}\nend (\d+) lines\n\z/s, rest)
 
     body <> "end #{String.to_integer(count) - 1} lines\n"
   end

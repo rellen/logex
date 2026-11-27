@@ -311,8 +311,8 @@ last write: ~U[2026-10-30 14:00:04Z]
 runner: :killed
 logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
-resource 013cc059392445fdcc1e84c9b0de6118
-program tally bd882e28a8159d8e8a4ea56ade7b36b6
+resource md5 013cc059392445fdcc1e84c9b0de6118
+program tally md5 bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 2
 instance t1 tally
 t1.boxes ctu
@@ -323,7 +323,7 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-digest 18a0b2493864f5e730cd41029aeaf91c
+digest md5 18a0b2493864f5e730cd41029aeaf91c
 end 16 lines
 fresh start   total_boxes=2 t1.boxes.cv=2 case_full=0
 stop: :ok

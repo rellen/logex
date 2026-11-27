@@ -30,7 +30,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–640.
+Decisions: 1–641.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (waiting under decision 541, no release planned: its number, and whether its tag is
@@ -130,15 +130,18 @@ API".
   waits up to twice it. Write instead: a `write_limit:` the plant's warm start fits in,
   with room for a busy machine. Provisional (`PLAN.md`'s RV-34).
 - **A store of `logex retain 4` edited by hand without its digest mended no longer
-  starts warm** (decision 604): a value line changed, added or removed, its count mended
-  or not, is refused at the `digest` line, told the digest the lines give; a digest line
-  mistyped is told so and the same digest; and a store with no `digest` line, one cut
+  starts warm** (decisions 604 and 641): a value line changed, added or removed, its count
+  mended or not, is refused at the `digest` line, told the digest the lines give; a digest
+  line mistyped is told so and the same digest; and a store with no `digest` line, one cut
   short with an end line written after the cut among them, is refused at its header,
   told that the values after its last line may be lost, with no digest offered. Each is
-  told the way out, `start: :cold`, which copies the store first. Write instead: the
-  digest the refusal gives, in the `digest` line, where the edit is meant and each value
-  known; else start cold. A store an older logex wrote, of version 3, 2 or 1, is read as
-  before. Provisional (`PLAN.md`'s RV-34).
+  told the way out, `start: :cold`, which copies the store first. Each digest of version
+  4 stands after the word of its scheme, `digest md5 <digest>`, and a line that names
+  none, or a scheme this logex does not read, is refused at that line (decision 641).
+  Write instead: what the refusal gives, the scheme's word and the digest, in the
+  `digest` line, where the edit is meant and each value known; else start cold. A store
+  an older logex wrote, of version 3, 2 or 1, is read as before. Provisional (`PLAN.md`'s
+  RV-34).
 
 ### The language
 
@@ -442,9 +445,9 @@ API".
   held throughout. A cold start's judge of the store, the same match, past the limit
   copies the store before it writes over it. Provisional (`PLAN.md`'s RV-34). Look for: a
   plant whose store's warm start takes near 5000 ms, which needs `write_limit:` more.
-- **The store holds the digest of its value lines, as `logex retain 4`** (decision 604),
-  a line `digest <md5>` before the end line, the MD5 of every line after the
-  configuration's but the naming lines, the digest's and the end line, so that a fresh
+- **The store holds the digest of its value lines, as `logex retain 4`** (decisions 604
+  and 641), a line `digest md5 <digest>` before the end line, the MD5 of every line after
+  the configuration's but the naming lines, the digest's and the end line, so that a fresh
   start refuses a store whose value lines a hand changed, added or removed without
   mending it, told the digest the lines give and the way out, once every other line of
   it reads: a box counter's `t1.boxes.cv dint 4` edited to `dint 7`, or a line removed and
@@ -454,10 +457,16 @@ API".
   among them, is refused at its header, told that the values after its last line may be
   lost and the way out alone, no digest offered, so that no cut store is read with its
   lost values at their initial values; a store of version 3, 2 or 1 is read as before,
-  and the next write makes it version 4. An older logex refuses
+  and the next write makes it version 4. Every digest of version 4 names its scheme
+  before it, `resource md5 <digest>`, `program <type> md5 <digest>` and `digest md5
+  <digest>`, so that the scheme can change one day and a store written before the change
+  still be read: the schemes are one table, MD5 its one row, a line that names no scheme
+  is refused and told the form that names one, and a scheme this logex does not read is
+  refused by its name, with the way out (decision 641). An older logex refuses
   version 4 and starts it only cold. Provisional (`PLAN.md`'s RV-34). Look for: a script
-  that edits the store, which now writes the digest, and code that matches the header
-  `logex retain 3` or the count of the end line.
+  that edits the store, which now writes the digest and each scheme's word, and code that
+  matches the header `logex retain 3`, the count of the end line or a naming line's two or
+  three words.
 
 ### What it carries, by the work that built it
 

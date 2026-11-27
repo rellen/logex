@@ -21,15 +21,14 @@ gives the words of this record.
 ## Status
 
 Accepted. No later record replaces this record. Later decisions change parts of earlier
-decisions of this record, and the record states the rule of the later decision. For
-example, decision 418 replaces the 1 copy `<store>.dropped` of decision 360 with numbered
-copies. [The decisions that this record sums up](#the-decisions-that-this-record-sums-up)
+decisions of this record, and the record states the rule of the later decision.
+[The decisions that this record sums up](#the-decisions-that-this-record-sums-up)
 lists each change.
 
 ## Date
 
-2026-10-27, the date of decisions 276, 277 and 285. The last decision of the record, 574,
-is of 2026-11-16.
+2026-10-27, the date of decisions 276, 277 and 285. The last decision of the record, 641,
+is of 2026-11-27.
 
 ## Context
 
@@ -76,9 +75,8 @@ See that no refused store reaches a device.
 
 ### Text that a person can read
 
-The store is text, 1 value on each line (decision 276). The other option was
-`:erlang.term_to_binary/1`. A person cannot read that after an incident, or correct 1
-value in it. The words of a line are 1 space apart, in printable ASCII. The runner ends
+The store is text, 1 value on each line (decision 276). The words of a line are 1 space
+apart, in printable ASCII. The runner ends
 each line with LF, and the store reader also takes CRLF and a lone CR (decision 410). The
 time in the header is the wall clock of the host, for a person, never for a
 [timer](../../guides/reference/glossary.md#timer).
@@ -107,6 +105,9 @@ digest of the value lines, so that a hand edit that does not mend it is refused 
 604, provisional). With a new version, an
 older logex refuses the store for its version first, and then starts only cold. The store
 reader refuses an end line under a header that takes none (decision 536).
+
+Each digest of version 4 comes after the word of its scheme, `md5`, so that a later logex
+can change the scheme (decision 641).
 
 ### The program that wrote the store
 
@@ -146,8 +147,7 @@ first (decision 417). If the highest copy holds the same bytes, the start makes 
 (decisions 456 and 483).
 
 If the copy of a warm start fails, the copy is owed, and each later write makes it first
-(decision 416). Thus the dropped values are never lost. The page of the runs gives each
-case of the copy and the keys of `status/1`.
+(decision 416). Thus the dropped values are never lost.
 
 ### A refusal names each problem, and the way out
 
@@ -197,16 +197,18 @@ write over the store makes an owed copy first. `test/logex/retain_store_test.exs
 | 418 | 1 copy, replaced at each start that drops a value | A start of the good configuration before a person puts the copy back loses the copy |
 | 527 | Digests of the bytes of the files | A comment corrected in `tally.ld` gives a warning |
 | 530 | The naming lines under `logex retain 2` | An older logex names the place of the lines, not the version |
+| 641 | A digest that names no scheme | An older logex finds a wrong digest |
 
 Section 7 gives the other options of each decision.
 
 ## The decisions that this record sums up
 
-This record sums up 53 decisions of
+This record sums up 54 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):
 
 - 276, 307, 309, 410, 411 and 419: the text, the image and its line ends.
-- 355, 409, 530, 534, 536 and 604: the end line, the versions and the digest of the values.
+- 355, 409, 530, 534, 536, 604 and 641: the end line, the versions, the digest of the
+  values and its scheme.
 - 527, 528, 531, 533, 535, 537 to 539, 543 and 544: the naming lines and the warning.
 - 277, 308, 310 to 312, 320, 378, 389 and 425: the matching and the dropped values.
 - 360, 412, 416 to 418, 447 to 454, 456, 483 and 487: the copies.
@@ -215,7 +217,8 @@ This record sums up 53 decisions of
 Later decisions replace parts of the first decisions:
 
 - 355 replaces the header `logex retain 1` of 276 with `logex retain 2` and an end line,
-  and 530 makes it `logex retain 3`. 604 makes it `logex retain 4` with a `digest` line.
+  and 530 makes it `logex retain 3`. 604 makes it `logex retain 4` with a `digest` line,
+  and 641 names the scheme of each digest.
 - 418 replaces the 1 copy of 360 with numbered copies, and 456 makes no copy of the same
   bytes.
 - 417 replaces the warning of the refusal of a cut store with a copy that the cold start

@@ -312,11 +312,13 @@ defmodule Logex.Runner do
     `m1.boxes.cv dint 41`, an array's elements in the elements' order, `m1.weights int[8]
     0 0 12 14 0 0 0 0`, a real in the shortest text that reads back to it, and a timer's
     `last` never; since decision 517 (c) (RV-21), after the configuration's line, the
-    program the runner ran as it wrote the store, `resource <digest>`, the MD5 of the
+    program the runner ran as it wrote the store, `resource md5 <digest>`, the MD5 of the
     configuration's own lines, its tasks, globals, instances and connections as
     `Logex.Configuration.Text.print/1` prints them with no line of their own, and
-    `program <type> <digest>` a program type, in name order, the MD5 of its text, and of
-    each user block's after it where it holds one, each since decision 527 (RV-26) as
+    `program <type> md5 <digest>` a program type, in name order, the MD5 of its text, and
+    of each user block's after it where it holds one, each digest after the word of its
+    scheme since decision 641 (RV-34), `md5`, where a store of version 3 or 2 gives the
+    digest alone, each since decision 527 (RV-26) as
     `Logex.Printer` prints it, one rung a line, one space between its elements and each
     literal by its value, a number in a name too, a subscript, a bit's number or an
     array's size (RV-26's review), and since decision 532 (RV-27) each word logex reads
@@ -337,15 +339,23 @@ defmodule Logex.Runner do
     was not in the store, each of the three told only once the store's count reads, since
     decision 544 (RV-29) decision 531's too, a store miscounted or cut short told its end
     line alone, and a naming line that does not read is told as itself; and
-    since decision 604 (RV-34) the digest of its value lines, `digest <md5>`, just before
-    its end line, the MD5 of every line after the configuration's but the naming lines and
-    itself, each ended by LF, so that a hand edit that does not mend it, a value changed, a
-    line added or removed, its count mended or not, is refused at a fresh start, told the
-    digest its lines give and the way out, once every other line reads, and one of version
-    4 with none refused at its header, where an end line added to a store cut short or a
-    value line removed with the count lowered read the lost values at their initial values
+    since decision 604 (RV-34) the digest of its value lines, `digest md5 <digest>`, just
+    before its end line, the MD5 of every line after the configuration's but the naming
+    lines and itself, each ended by LF, so that a hand edit that does not mend it, a value
+    changed, a line added or removed, its count mended or not, is refused at a fresh
+    start, told what to write in its place, the scheme's word and the digest its lines
+    give, and the way out, once every other line reads, and one of version 4 with none
+    refused at its header, where an end line added to a store cut short or a value line
+    removed with the count lowered read the lost values at their initial values
     unreported; a store of version 3, 2 or 1, which holds none, read as before
-    (provisional, `PLAN.md`'s RV-34); and since decision 355 its end line,
+    (provisional, `PLAN.md`'s RV-34); since decision 641 (RV-34) every digest of a store
+    of version 4 names its scheme before it, so that the scheme can change one day and a
+    store written before the change still be read: the schemes are one table, MD5 by
+    `:erlang.md5/1` its one row, a scheme's word read in any case, each line naming its
+    own, a line of version 4 that names none refused and told the form that names one,
+    and a line whose scheme this logex does not read, a later logex's after a rollback,
+    refused naming the scheme and those it reads, with the way out (provisional,
+    `PLAN.md`'s RV-34); and since decision 355 its end line,
     `end 12 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store

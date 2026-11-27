@@ -94,9 +94,11 @@ refused.("7. A line added by hand, and the count not changed")
 edit.("t1.boxes.cv dint 0\n", "")
 message = refused.("8. The old line taken out, and the digest not mended")
 
-# The digest mended as the refusal gives it.
-[_, stored, digest] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, message)
-edit.("digest #{stored}", "digest #{digest}")
+# The digest line mended as the refusal gives it, the word of the scheme and the digest.
+[_, stored, digest] =
+  Regex.run(~r/`(digest \w+ \w+)` is not .* write `(digest \w+ \w+)`/U, message)
+
+edit.(stored, digest)
 edit.("\n", "\r\n")
 {:ok, runner} = Runner.start_link(opts)
 show.(runner, "9. The digest mended, the store saved with CRLF line ends")

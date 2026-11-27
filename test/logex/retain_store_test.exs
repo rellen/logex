@@ -218,23 +218,37 @@ defmodule Logex.RetainStoreTest do
     Enum.join([header, configuration | lines] ++ [ending, ""], "\n")
   end
 
-  defp resealed_line("digest " <> _digest, values), do: "digest #{sealed(values)}"
+  defp resealed_line("digest " <> _digest, values), do: "digest md5 #{sealed(values)}"
   defp resealed_line(line, _values), do: line
 
   # The same store as a logex of version 3 wrote it, before decision 604: its header
   # `logex retain 3`, no digest line and its count one less, which this logex reads as
   # before, so that each test of version 3's rules, written when the runner wrote it, holds
-  # them still.
+  # them still; and, before decision 641, each naming line's digest alone, no scheme's word
+  # before it.
   defp as_v3(text) do
     ["logex retain 4" | rest] = String.split(text, "\n")
     {lines, ["end " <> count, ""]} = Enum.split(rest, -2)
     [n, "lines"] = String.split(count, " ")
-    kept = Enum.reject(lines, &String.starts_with?(&1, "digest "))
+
+    kept =
+      for line <- lines, not String.starts_with?(line, "digest "), do: unschemed(line)
 
     Enum.join(
       ["logex retain 3" | kept] ++ ["end #{String.to_integer(n) - 1} lines", ""],
       "\n"
     )
+  end
+
+  # Decision 641 (RV-34): a naming line of version 4, its digest after the scheme's word,
+  # as version 3 and version 2 wrote it, the digest alone.
+  defp unschemed("resource md5 " <> digest), do: "resource " <> digest
+  defp unschemed("program " <> named), do: "program " <> unschemed_program(named)
+  defp unschemed(line), do: line
+
+  defp unschemed_program(named) do
+    [type, "md5", digest] = String.split(named, " ")
+    type <> " " <> digest
   end
 
   # Decision 527 (RV-26): a program's text as a store's digest reads it, restated from the
@@ -339,23 +353,34 @@ defmodule Logex.RetainStoreTest do
 
   # Decision 539 (RV-28): what a store of `logex retain 3` that names its resource and no
   # program type is told at its `resource` line, the line given, ending with decision
-  # 540's way out.
-  defp names_no_program(resource),
+  # 540's way out; and what one of `logex retain 4` is, the forms it gives naming each
+  # digest's scheme (decision 641).
+  defp names_no_program(resource, version \\ 3),
     do:
       "`#{resource}` names the resource of the store's writer, and the store names no " <>
-        "program type: a store that names the program that wrote it gives `resource " <>
-        "<digest>` straight after its configuration's line, and then a `program <type> " <>
-        "<digest>` a type: " <> @way_out
+        "program type: " <> gives(version) <> ": " <> @way_out
 
   # Decision 531: what a store of `logex retain 3` that names a program type and no
   # resource is told at its first `program` line, the line given, ending with decision
-  # 540's way out.
-  defp names_no_resource(program),
+  # 540's way out; and what one of `logex retain 4` is (decision 641).
+  defp names_no_resource(program, version \\ 3),
     do:
       "`#{program}` names a program type of the store's writer, and the store names no " <>
-        "resource: a store that names the program that wrote it gives `resource <digest>` " <>
-        "straight after its configuration's line, and then a `program <type> <digest>` a " <>
-        "type: " <> @way_out
+        "resource: " <> gives(version) <> ": " <> @way_out
+
+  # What each refusal of the naming lines says a store that names its program gives: in a
+  # store of version 3 each digest alone, and in one of version 4 after its scheme's word
+  # (decision 641).
+  defp gives(3),
+    do:
+      "a store that names the program that wrote it gives `resource <digest>` straight " <>
+        "after its configuration's line, and then a `program <type> <digest>` a type"
+
+  defp gives(4),
+    do:
+      "a store that names the program that wrote it gives `resource <scheme> <digest>` " <>
+        "straight after its configuration's line, and then a `program <type> <scheme> " <>
+        "<digest>` a type"
 
   # What a store of `logex retain 3` is told where its last line, `text`, is no end line.
   defp cut_short(text),
@@ -778,14 +803,14 @@ defmodule Logex.RetainStoreTest do
       assert text == """
              logex retain 4
              configuration plant written 2026-10-30T14:00:01Z
-             resource #{md5(@counted)}
-             program counting #{md5(printed(@counting))}
+             resource md5 #{md5(@counted)}
+             program counting md5 #{md5(printed(@counting))}
              global total dint 123557
              instance t1 counting
              t1.lamp bool 1
              t1.n dint 101
              t1.w real[3] 0.25 -2.5 3.4e38
-             digest #{sealed(values)}
+             digest md5 #{sealed(values)}
              end 11 lines
              """
 
@@ -1479,7 +1504,8 @@ defmodule Logex.RetainStoreTest do
   # lost, a warm restart starting from what the runner holds and tripping again, its trip
   # writing the value back, and a stop writing it over the edit as it stops.
   # Decision 604 (RV-34): every store the runner writes holds the digest of its value
-  # lines, `digest <md5>` just before its end line, and a fresh start refuses one whose
+  # lines, `digest md5 <digest>` just before its end line, its scheme's word before it
+  # since decision 641, and a fresh start refuses one whose
   # lines a hand edited, added or removed without mending it, at its digest line, told the
   # digest its lines give and the way out, where decision 355's end line, which guards a
   # cut, let a hand's edit pass: a value line removed and the count lowered read its tag
@@ -1504,16 +1530,16 @@ defmodule Logex.RetainStoreTest do
 
     defp mismatch(n, given, digest),
       do:
-        "s: line #{n}: `digest #{given}` is not the digest of the store's value lines, which " <>
-          "is `#{digest}`: a value line was edited, added or removed by hand and the digest " <>
-          "not mended, so the store is not read; to keep the edit write `digest #{digest}` in " <>
-          "its place, and to start anyway: " <> @way_out
+        "s: line #{n}: `digest md5 #{given}` is not the digest of the store's value lines, " <>
+          "which is `md5 #{digest}`: a value line was edited, added or removed by hand and " <>
+          "the digest not mended, so the store is not read; to keep the edit write `digest " <>
+          "md5 #{digest}` in its place, and to start anyway: " <> @way_out
 
     test "the store a runner writes holds the digest of its value lines, and reads back" do
       text = written_store()
       lines = sealed_lines(text)
       digest = sealed(lines)
-      assert List.last(lines) == "digest #{digest}"
+      assert List.last(lines) == "digest md5 #{digest}"
 
       assert {%{globals: %{"total_boxes" => {:dint, 41}}}, _at, _by} =
                Retain.decoded!(text, {"s", "plant"})
@@ -1530,14 +1556,14 @@ defmodule Logex.RetainStoreTest do
       text = written_store()
       lines = String.split(text, "\n")
       digest = sealed(sealed_lines(text))
-      n = Enum.find_index(lines, &(&1 == "digest #{digest}")) + 1
+      n = Enum.find_index(lines, &(&1 == "digest md5 #{digest}")) + 1
 
       edited = String.replace(text, "global total_boxes dint 41", "global total_boxes dint 42")
       new = sealed(sealed_lines(edited))
       raises(mismatch(n, digest, new), fn -> Retain.decoded!(edited, {"s", "plant"}) end)
 
       # Mended to the digest it was told, the edit is read.
-      mended = String.replace(edited, "digest #{digest}", "digest #{new}")
+      mended = String.replace(edited, "digest md5 #{digest}", "digest md5 #{new}")
 
       assert {%{globals: %{"total_boxes" => {:dint, 42}}}, _at, _by} =
                Retain.decoded!(mended, {"s", "plant"})
@@ -1560,7 +1586,9 @@ defmodule Logex.RetainStoreTest do
       # Cut after the global's line and an end line added: the instance's values were lost
       # at their initial values, `dropped: []`.
       {kept, _cut} = Enum.split_while(lines, &(not String.starts_with?(&1, "instance ")))
-      ended = Enum.join(kept ++ ["digest #{digest}", "end #{length(kept) + 2} lines", ""], "\n")
+
+      ended =
+        Enum.join(kept ++ ["digest md5 #{digest}", "end #{length(kept) + 2} lines", ""], "\n")
 
       raises(
         mismatch(length(kept) + 1, digest, sealed(sealed_lines(ended))),
@@ -1585,8 +1613,8 @@ defmodule Logex.RetainStoreTest do
 
     defp unread_digest(n, told, digest),
       do:
-        "s: line #{n}: #{told}, and the store's value lines' digest is `#{digest}`: to keep " <>
-          "them write `digest #{digest}` in its place, and to start anyway: " <> @way_out
+        "s: line #{n}: #{told}, and the store's value lines' digest is `md5 #{digest}`: to " <>
+          "keep them write `digest md5 #{digest}` in its place, and to start anyway: " <> @way_out
 
     test "no digest line, one that does not read, two, or one in a store of version 3" do
       text = written_store()
@@ -1596,7 +1624,7 @@ defmodule Logex.RetainStoreTest do
 
       none =
         lines
-        |> Enum.reject(&(&1 == "digest #{digest}"))
+        |> Enum.reject(&(&1 == "digest md5 #{digest}"))
         |> Enum.map(&String.replace(&1, "end #{count} lines", "end #{count - 1} lines"))
         |> Enum.join("\n")
 
@@ -1611,36 +1639,44 @@ defmodule Logex.RetainStoreTest do
       assert message == no_digest(length(kept))
       refute message =~ ~r/[0-9a-f]{32}/
 
-      unread = String.replace(text, "digest #{digest}", "digest #{String.upcase(digest)}")
+      unread =
+        String.replace(text, "digest md5 #{digest}", "digest md5 #{String.upcase(digest)}")
 
       raises(
         unread_digest(
           count - 1,
-          "`#{String.upcase(digest)}` is no digest: a store's is 32 lowercase hexadecimal " <>
+          "`#{String.upcase(digest)}` is no `md5` digest: one is 32 lowercase hexadecimal " <>
             "digits",
           digest
         ),
         fn -> Retain.decoded!(unread, {"s", "plant"}) end
       )
 
-      short = String.replace(text, "digest #{digest}", "digest #{binary_part(digest, 0, 31)}")
+      short =
+        String.replace(
+          text,
+          "digest md5 #{digest}",
+          "digest md5 #{binary_part(digest, 0, 31)}"
+        )
 
       raises(
         unread_digest(
           count - 1,
-          "`#{binary_part(digest, 0, 31)}` is no digest: a store's is 32 lowercase " <>
+          "`#{binary_part(digest, 0, 31)}` is no `md5` digest: one is 32 lowercase " <>
             "hexadecimal digits",
           digest
         ),
         fn -> Retain.decoded!(short, {"s", "plant"}) end
       )
 
-      worded = String.replace(text, "digest #{digest}", "digest #{digest} x")
+      worded = String.replace(text, "digest md5 #{digest}", "digest md5 #{digest} x")
 
       raises(
         unread_digest(
           count - 1,
-          "`digest #{digest} x` is no digest's line: it is `digest <digest>`",
+          "`digest md5 #{digest} x` is no digest's line of a store of `logex retain 4`, " <>
+            "which names each digest's scheme: it is `digest <scheme> <digest>`, as `digest " <>
+            "md5 <32 lowercase hexadecimal digits>`",
           digest
         ),
         fn -> Retain.decoded!(worded, {"s", "plant"}) end
@@ -1652,7 +1688,7 @@ defmodule Logex.RetainStoreTest do
 
       raises(
         "s: line 5: `x` is no number\n" <>
-          "s: line #{count - 1}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+          "s: line #{count - 1}: `#{String.upcase(digest)}` is no `md5` digest: one is 32 " <>
           "lowercase hexadecimal digits",
         fn -> Retain.decoded!(both, {"s", "plant"}) end
       )
@@ -1662,13 +1698,13 @@ defmodule Logex.RetainStoreTest do
         String.replace(
           unread,
           "\nend #{count} lines",
-          "\ndigest #{digest}\nend #{count + 1} lines"
+          "\ndigest md5 #{digest}\nend #{count + 1} lines"
         )
 
       raises(
         unread_digest(
           count - 1,
-          "`#{String.upcase(digest)}` is no digest: a store's is 32 lowercase hexadecimal " <>
+          "`#{String.upcase(digest)}` is no `md5` digest: one is 32 lowercase hexadecimal " <>
             "digits",
           digest
         ),
@@ -1682,11 +1718,11 @@ defmodule Logex.RetainStoreTest do
         String.replace(
           text,
           "\nend #{count} lines",
-          "\ndigest #{String.upcase(digest)}\nend #{count + 1} lines"
+          "\ndigest md5 #{String.upcase(digest)}\nend #{count + 1} lines"
         )
 
       raises(
-        "s: line #{count}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+        "s: line #{count}: `#{String.upcase(digest)}` is no `md5` digest: one is 32 " <>
           "lowercase hexadecimal digits",
         fn -> Retain.decoded!(read_then_unread, {"s", "plant"}) end
       )
@@ -1695,23 +1731,27 @@ defmodule Logex.RetainStoreTest do
         String.replace(
           unread,
           "\nend #{count} lines",
-          "\ndigest #{binary_part(digest, 0, 31)}\nend #{count + 1} lines"
+          "\ndigest md5 #{binary_part(digest, 0, 31)}\nend #{count + 1} lines"
         )
 
       raises(
-        "s: line #{count - 1}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+        "s: line #{count - 1}: `#{String.upcase(digest)}` is no `md5` digest: one is 32 " <>
           "lowercase hexadecimal digits\n" <>
-          "s: line #{count}: `#{binary_part(digest, 0, 31)}` is no digest: a store's is 32 " <>
+          "s: line #{count}: `#{binary_part(digest, 0, 31)}` is no `md5` digest: one is 32 " <>
           "lowercase hexadecimal digits",
         fn -> Retain.decoded!(unread_twice, {"s", "plant"}) end
       )
 
       twice =
-        String.replace(text, "digest #{digest}\n", "digest #{digest}\ndigest #{digest}\n")
+        String.replace(
+          text,
+          "digest md5 #{digest}\n",
+          "digest md5 #{digest}\ndigest md5 #{digest}\n"
+        )
         |> String.replace("end #{count} lines", "end #{count + 1} lines")
 
       raises(
-        "s: line #{count}: `digest #{digest}` names what line #{count - 1} names already",
+        "s: line #{count}: `digest md5 #{digest}` names what line #{count - 1} names already",
         fn -> Retain.decoded!(twice, {"s", "plant"}) end
       )
 
@@ -1772,7 +1812,7 @@ defmodule Logex.RetainStoreTest do
       message = refused(fn -> Runner.start_link(rig.opts) end)
 
       assert message =~
-               ~r/\A#{Regex.escape(rig.store)}: line \d+: `digest [0-9a-f]{32}` is not the digest of the store's value lines/
+               ~r/\A#{Regex.escape(rig.store)}: line \d+: `digest md5 [0-9a-f]{32}` is not the digest of the store's value lines/
 
       assert String.ends_with?(message, @way_out)
       assert Sim.reads(rig.panel) == reads
@@ -1790,6 +1830,775 @@ defmodule Logex.RetainStoreTest do
       {:ok, runner} = Runner.start_link(rig.opts)
       assert [_total, 7 | _] = values(runner)
       assert Runner.stop(runner) == :ok
+    end
+  end
+
+  # Decision 641 (RV-34): every digest of a store of `logex retain 4` stands after the word
+  # of its scheme, `resource md5 <digest>`, `program <type> md5 <digest>` and `digest md5
+  # <digest>`, so that the scheme can change one day and a store written before the change
+  # still be read. The schemes are one table, `Logex.Retain.schemes/0`, a row a scheme, its
+  # word, its function and its digest's form; the writer writes the first row's; the reader
+  # reads any row's, its word in any case, each line naming its own; a line of version 4
+  # that is not its form, one with no scheme among them, is refused at that line and told
+  # the form with the scheme; a scheme that is no row is refused at its line, naming it
+  # and the rows, with the way out; every refusal that gives the digest of the value lines
+  # gives the scheme's word with it, the whole of what to write; and a store of version 3,
+  # 2 or 1, whose digests name none, is read as before, a scheme's word in one refused as a
+  # line of that version that does not read.
+  describe "the scheme a digest names (decision 641)" do
+    # What a line of a store of version 4 that is not its form is told: the form that names
+    # the scheme, and the line as the writer writes it, restated.
+    defp no_line(text, "resource"),
+      do:
+        "`#{text}` is no resource's line of a store of `logex retain 4`, which names each " <>
+          "digest's scheme: it is `resource <scheme> <digest>`, as `resource md5 <32 " <>
+          "lowercase hexadecimal digits>`"
+
+    defp no_line(text, "program"),
+      do:
+        "`#{text}` is no program's line of a store of `logex retain 4`, which names each " <>
+          "digest's scheme: it is `program <type> <scheme> <digest>`, as `program <type> " <>
+          "md5 <32 lowercase hexadecimal digits>`"
+
+    defp no_line(text, "digest"),
+      do:
+        "`#{text}` is no digest's line of a store of `logex retain 4`, which names each " <>
+          "digest's scheme: it is `digest <scheme> <digest>`, as `digest md5 <32 lowercase " <>
+          "hexadecimal digits>`"
+
+    # What a line whose scheme this logex does not read is told, the line quoted as a
+    # refusal quotes a text, at most 60 bytes and then `…` (RV-5).
+    defp unread_scheme(text, scheme),
+      do:
+        "#{cut_at_60(text)} names the scheme #{cut_at_60(scheme)}, which this logex does " <>
+          "not read: it reads `md5`"
+
+    defp cut_at_60(<<shown::binary-size(60), _, _::binary>>), do: "`#{shown}…`"
+    defp cut_at_60(text), do: "`#{text}`"
+
+    # A line of the store, by its first words, replaced whole.
+    defp relined(text, starts, line) do
+      [found] = for l <- String.split(text, "\n"), String.starts_with?(l, starts), do: l
+      String.replace(text, "\n" <> found <> "\n", "\n" <> line <> "\n")
+    end
+
+    test "the schemes are one table, MD5 by :erlang.md5/1 its one row, each row's function " <>
+           "giving its digest's form" do
+      assert [{"md5", function, 32}] = Retain.schemes()
+      assert function.(["a", "bc"]) == :erlang.md5("abc")
+
+      for {word, function, digits} <- Retain.schemes() do
+        assert word =~ ~r/\A[a-z][a-z0-9]*\z/
+        assert digits == 2 * byte_size(function.(""))
+      end
+    end
+
+    test "every digest the writer writes stands after `md5`, and a scheme's word is read " <>
+           "in any case" do
+      text = written_store()
+      config = configured()
+      by = Retain.written_by(config)
+      lines = String.split(text, "\n")
+      assert Enum.at(lines, 2) == "resource md5 " <> md5(String.replace(@plant, "\n  ", "\n"))
+      assert Enum.at(lines, 3) == "program tally md5 " <> md5(printed(@tally))
+      assert Enum.at(lines, -3) == "digest md5 " <> sealed(sealed_lines(text))
+      assert {image, at, ^by} = Retain.decoded!(text, {"s", "plant"})
+      assert Enum.sort(Map.keys(by)) == [:programs, :resource]
+      assert Retain.warning(by, Retain.compared(by, by, config), "s") == nil
+
+      for word <- ["MD5", "Md5", "mD5"], line <- ["resource", "program tally", "digest"] do
+        cased = String.replace(text, "\n#{line} md5 ", "\n#{line} #{word} ")
+        refute cased == text
+        assert Retain.decoded!(cased, {"s", "plant"}) == {image, at, by}
+      end
+
+      assert Retain.decoded!(String.replace(text, " md5 ", " MD5 "), {"s", "plant"}) ==
+               {image, at, by}
+    end
+
+    test "a line of version 4 that names no scheme, or is not its form, is refused at that " <>
+           "line and told the form with the scheme" do
+      text = written_store()
+      lines = String.split(text, "\n")
+      [_, _, "resource md5 " <> resource, "program tally md5 " <> program | _] = lines
+      digest = sealed(sealed_lines(text))
+      count = length(lines) - 1
+
+      raises("s: line 3: " <> no_line("resource #{resource}", "resource"), fn ->
+        Retain.decoded!(String.replace(text, "resource md5 ", "resource "), {"s", "plant"})
+      end)
+
+      raises("s: line 4: " <> no_line("program tally #{program}", "program"), fn ->
+        Retain.decoded!(
+          String.replace(text, "program tally md5 ", "program tally "),
+          {"s", "plant"}
+        )
+      end)
+
+      # The digest line alone, nothing else wrong: told what to write, whole, and the way
+      # out, as a digest mistyped is.
+      raises(unread_digest(count - 1, no_line("digest #{digest}", "digest"), digest), fn ->
+        Retain.decoded!(String.replace(text, "digest md5 ", "digest "), {"s", "plant"})
+      end)
+
+      # The store as RV-34's logex wrote version 4 before decision 641, no line naming a
+      # scheme, which no release holds: each line told, the digest line its form alone.
+      raises(
+        "s: line 3: " <>
+          no_line("resource #{resource}", "resource") <>
+          "\ns: line 4: " <>
+          no_line("program tally #{program}", "program") <>
+          "\ns: line #{count - 1}: " <> no_line("digest #{digest}", "digest"),
+        fn -> Retain.decoded!(String.replace(text, " md5 ", " "), {"s", "plant"}) end
+      )
+
+      # A scheme's word with no digest after it, and a word more than the form's.
+      for {starts, line, n, kind} <- [
+            {"resource ", "resource md5", 3, "resource"},
+            {"resource ", "resource md5 #{resource} x", 3, "resource"},
+            {"resource ", "resource", 3, "resource"},
+            {"program ", "program tally md5", 4, "program"},
+            {"program ", "program tally md5 #{program} x", 4, "program"},
+            {"program ", "program md5", 4, "program"}
+          ] do
+        raises("s: line #{n}: " <> no_line(line, kind), fn ->
+          Retain.decoded!(relined(text, starts, line), {"s", "plant"})
+        end)
+      end
+
+      # The word alone among them, which is no value line either: the digest told is of
+      # the lines without it, so that written in its place it reads (at RV-34's build the
+      # word alone was digested as a value line, and the digest told did not read).
+      for line <- ["digest md5", "digest md5 #{digest} x", "digest"] do
+        raises(unread_digest(count - 1, no_line(line, "digest"), digest), fn ->
+          Retain.decoded!(relined(text, "digest ", line), {"s", "plant"})
+        end)
+      end
+
+      # Under a header this logex does not read, a later version's or one mistyped, the
+      # store is told its header, its digest line and its end line, as before, and not
+      # also that its naming lines are none: either form of them is read.
+      for {header, told} <- [
+            {"logex retain 5",
+             "the store is of version 5, which this logex does not read: it reads `logex " <>
+               "retain 4`, `logex retain 3`, `logex retain 2` and `logex retain 1`"},
+            {"logex  retain 4",
+             "`logex  retain 4` is no store's header: a store's first line is `logex retain 4`"}
+          ],
+          store <- [text, String.replace(text, ~r/^(resource|program tally) md5 /m, "\\1 ")] do
+        raises(
+          "s: line 1: #{told}\n" <>
+            "s: line #{count - 1}: `digest md5 #{digest}` is a digest line, which a store " <>
+            "whose first line is `logex retain 4` holds, and this store's first line is not\n" <>
+            "s: line #{count}: `end #{count} lines` is an end line, which a store whose first " <>
+            "line is `logex retain 4`, `logex retain 3` or `logex retain 2` ends with, and " <>
+            "this store's first line is none of them",
+          fn ->
+            Retain.decoded!(String.replace(store, "logex retain 4", header), {"s", "plant"})
+          end
+        )
+      end
+
+      # A line of no shape names the forms of its store's version.
+      raises(
+        "s: line 5: `global  total_boxes dint 41` is no line of a store: a line is `global " <>
+          "<name> <type> <value>`, `trigger <name> <sample>`, `resource <scheme> <digest>`, " <>
+          "`program <type> <scheme> <digest>`, `instance <name> <program type>`, `<path> " <>
+          "<kind>` or `<path> <type> <value>`",
+        fn ->
+          Retain.decoded!(String.replace(text, "global total", "global  total"), {"s", "plant"})
+        end
+      )
+    end
+
+    test "a digest that is not its scheme's form is told the form its scheme gives" do
+      text = written_store()
+
+      [_, _, "resource md5 " <> resource, "program tally md5 " <> program | _] =
+        String.split(text, "\n")
+
+      for {starts, line, n, shown} <- [
+            {"resource ", "resource md5 #{String.upcase(resource)}", 3, String.upcase(resource)},
+            {"resource ", "resource md5 #{binary_part(resource, 0, 31)}", 3,
+             binary_part(resource, 0, 31)},
+            {"program ", "program tally md5 #{program}0", 4, program <> "0"},
+            {"program ", "program tally md5 #{program}00", 4, program <> "00"},
+            {"program ", "program tally md5 #{binary_part(program, 0, 30)}", 4,
+             binary_part(program, 0, 30)},
+            {"program ", "program tally MD5 zz", 4, "zz"}
+          ] do
+        raises(
+          "s: line #{n}: `#{shown}` is no `md5` digest: one is 32 lowercase hexadecimal digits",
+          fn -> Retain.decoded!(relined(text, starts, line), {"s", "plant"}) end
+        )
+      end
+    end
+
+    test "a scheme this logex does not read is refused at its line, naming it and those it " <>
+           "reads, with the way out and no digest" do
+      text = written_store()
+      lines = String.split(text, "\n")
+      digest = sealed(sealed_lines(text))
+      count = length(lines) - 1
+      sha = String.duplicate("ab", 32)
+
+      unread = [
+        {"resource ", "resource sha256 #{sha}", 3},
+        {"program ", "program tally sha256 #{sha}", 4},
+        {"digest ", "digest sha256 #{sha}", count - 1}
+      ]
+
+      for {starts, line, n} <- unread do
+        message = refused(fn -> Retain.decoded!(relined(text, starts, line), {"s", "plant"}) end)
+        assert message == "s: line #{n}: " <> unread_scheme(line, "sha256") <> ": " <> @way_out
+        refute message =~ "to keep"
+      end
+
+      # Each line of one store: told each, the way out once, at the first, and not that the
+      # store names no resource, no program type or no digest.
+      all =
+        Enum.reduce(unread, text, fn {starts, line, _n}, text -> relined(text, starts, line) end)
+
+      raises(
+        Enum.map_join(unread, "\n", fn
+          {_starts, line, 3} -> "s: line 3: " <> unread_scheme(line, "sha256") <> ": " <> @way_out
+          {_starts, line, n} -> "s: line #{n}: " <> unread_scheme(line, "sha256")
+        end),
+        fn -> Retain.decoded!(all, {"s", "plant"}) end
+      )
+
+      # A short word, shown whole; a digest in the scheme's place, a word after it; and a
+      # word of 5,000 bytes, each quoted bounded, the way out kept whole.
+      raises(
+        "s: line #{count - 1}: " <>
+          unread_scheme("digest crc32 6f377247", "crc32") <> ": " <> @way_out,
+        fn ->
+          Retain.decoded!(relined(text, "digest ", "digest crc32 6f377247"), {"s", "plant"})
+        end
+      )
+
+      raises(
+        "s: line #{count - 1}: " <>
+          unread_scheme("digest #{digest} x", digest) <> ": " <> @way_out,
+        fn -> Retain.decoded!(relined(text, "digest ", "digest #{digest} x"), {"s", "plant"}) end
+      )
+
+      long = String.duplicate("s", 5000)
+
+      for {starts, line, n} <- [
+            {"resource ", "resource #{long} #{sha}", 3},
+            {"program ", "program tally #{long} #{sha}", 4},
+            {"digest ", "digest #{long} #{digest}", count - 1}
+          ] do
+        message = refused(fn -> Retain.decoded!(relined(text, starts, line), {"s", "plant"}) end)
+        assert message == "s: line #{n}: " <> unread_scheme(line, long) <> ": " <> @way_out
+        assert byte_size(message) < 500
+      end
+
+      # Beside a store cut short the way out is told once, at the line of the scheme.
+      cut =
+        relined(text, "resource ", "resource sha256 #{sha}")
+        |> String.replace(~r/end \d+ lines\n\z/, "")
+
+      raises(
+        "s: line 3: " <>
+          unread_scheme("resource sha256 #{sha}", "sha256") <>
+          ": " <>
+          @way_out <>
+          "\ns: line #{count - 1}: `digest md5 #{digest}` is the store's last line, and no " <>
+          "end line: a store of `logex retain 4` ends with `end <count> lines`, its count of " <>
+          "lines, so this one was cut short, and a store cut short is not read",
+        fn -> Retain.decoded!(cut, {"s", "plant"}) end
+      )
+
+      # A digest line that reads after one whose scheme does not is kept from taking its
+      # place; and one whose scheme does not read after one that reads is told at once.
+      unread_then_read =
+        relined(text, "digest ", "digest sha256 #{sha}\ndigest md5 #{digest}")
+        |> String.replace("end #{count} lines", "end #{count + 1} lines")
+
+      raises(
+        "s: line #{count - 1}: " <>
+          unread_scheme("digest sha256 #{sha}", "sha256") <> ": " <> @way_out,
+        fn -> Retain.decoded!(unread_then_read, {"s", "plant"}) end
+      )
+
+      read_then_unread =
+        relined(text, "digest ", "digest md5 #{digest}\ndigest sha256 #{sha}")
+        |> String.replace("end #{count} lines", "end #{count + 1} lines")
+
+      raises(
+        "s: line #{count}: " <>
+          unread_scheme("digest sha256 #{sha}", "sha256") <> ": " <> @way_out,
+        fn -> Retain.decoded!(read_then_unread, {"s", "plant"}) end
+      )
+    end
+
+    test "a refusal that gives the digest of the value lines gives the whole of what to " <>
+           "write, by the scheme the digest line names" do
+      text = written_store()
+      digest = sealed(sealed_lines(text))
+      n = length(String.split(text, "\n")) - 2
+      edited = String.replace(text, "global total_boxes dint 41", "global total_boxes dint 42")
+      new = sealed(sealed_lines(edited))
+
+      # Written as told, the scheme's word and the digest, the edit is read.
+      for wrong <- [
+            edited,
+            String.replace(edited, "digest md5 ", "digest "),
+            String.replace(edited, "digest md5 #{digest}", "digest md5 #{digest}0")
+          ] do
+        message = refused(fn -> Retain.decoded!(wrong, {"s", "plant"}) end)
+        assert [_whole, told] = Regex.run(~r/write `(digest [^`]+)` in its place/, message)
+        assert told == "digest md5 #{new}"
+        assert message =~ "which is `md5 #{new}`" or message =~ "digest is `md5 #{new}`"
+
+        assert {%{globals: %{"total_boxes" => {:dint, 42}}}, _at, _by} =
+                 Retain.decoded!(relined(wrong, "digest ", told), {"s", "plant"})
+      end
+
+      # The line quoted as the store holds it, its word in capitals; what to write, as the
+      # writer writes the word.
+      capitals = String.replace(edited, "digest md5 ", "digest MD5 ")
+
+      raises(
+        "s: line #{n}: `digest MD5 #{digest}` is not the digest of the store's value lines, " <>
+          "which is `md5 #{new}`: a value line was edited, added or removed by hand and " <>
+          "the digest not mended, so the store is not read; to keep the edit write `digest " <>
+          "md5 #{new}` in its place, and to start anyway: " <> @way_out,
+        fn -> Retain.decoded!(capitals, {"s", "plant"}) end
+      )
+    end
+
+    # The store of the plant above as `main`'s logex wrote it before RV-34 (`516afd7`),
+    # its bytes, of version 3, and the same naming no program, of version 2.
+    @main_v3 """
+    logex retain 3
+    configuration plant written 2026-10-30T14:00:00Z
+    resource c1bd01c26e75bdfb05a65062b9d70078
+    program tally c4a2b25778fd45fcec44f626d79bf38e
+    global total_boxes dint 41
+    instance t1 tally
+    t1.boxes ctu
+    t1.boxes.cu bool 0
+    t1.boxes.cv dint 0
+    t1.boxes.ov bool 0
+    t1.boxes.pv dint 1000
+    t1.boxes.q bool 0
+    t1.boxes.r bool 0
+    t1.lamp bool 0
+    end 15 lines
+    """
+
+    @main_v2 """
+    logex retain 2
+    configuration plant written 2026-10-30T14:00:00Z
+    global total_boxes dint 41
+    instance t1 tally
+    t1.boxes ctu
+    t1.boxes.cu bool 0
+    t1.boxes.cv dint 0
+    t1.boxes.ov bool 0
+    t1.boxes.pv dint 1000
+    t1.boxes.q bool 0
+    t1.boxes.r bool 0
+    t1.lamp bool 0
+    end 13 lines
+    """
+
+    test "a store an earlier logex wrote, of version 3, 2 or 1, reads as before, byte for " <>
+           "byte, and is written again naming md5",
+         %{tmp_dir: dir} do
+      config = configured()
+      by = Retain.written_by(config)
+
+      assert by == %{
+               resource: "c1bd01c26e75bdfb05a65062b9d70078",
+               programs: %{"tally" => "c4a2b25778fd45fcec44f626d79bf38e"}
+             }
+
+      at = ~U[2026-10-30 14:00:00Z]
+      assert {image, ^at, ^by} = Retain.decoded!(@main_v3, {"s", "plant"})
+      assert image.globals == %{"total_boxes" => {:dint, 41}}
+
+      assert image ==
+               put_in(Runtime.retained(Runtime.start(config)).globals["total_boxes"], {:dint, 41})
+
+      assert Retain.decoded!(@main_v2, {"s", "plant"}) == {image, at, nil}
+
+      v1 =
+        @main_v2
+        |> String.replace("logex retain 2", "logex retain 1")
+        |> String.replace("end 13 lines\n", "")
+
+      assert Retain.decoded!(v1, {"s", "plant"}) == {image, at, nil}
+
+      # RV-21's store, version 2 naming its program, each type's digest of its text's bytes.
+      rv21 =
+        @main_v3
+        |> String.replace("logex retain 3", "logex retain 2")
+        |> String.replace("c4a2b25778fd45fcec44f626d79bf38e", md5(@tally))
+
+      assert {^image, ^at, stored} = Retain.decoded!(rv21, {"s", "plant"})
+      assert stored == %{by | programs: %{"tally" => md5(@tally)}} |> Map.put(:bytes, true)
+      assert Retain.warning(stored, Retain.compared(stored, by, config), "s") == nil
+
+      # A scheme's word in one of them is a line of that version that does not read.
+      for version <- ["logex retain 3", "logex retain 2"] do
+        store = String.replace(@main_v3, "logex retain 3", version)
+
+        raises(
+          "s: line 3: `resource md5 #{by.resource}` is no resource's line: it is `resource " <>
+            "<digest>`",
+          fn ->
+            Retain.decoded!(String.replace(store, "resource ", "resource md5 "), {"s", "plant"})
+          end
+        )
+
+        raises(
+          "s: line 4: `program tally md5 #{by.programs["tally"]}` is no program's line: it " <>
+            "is `program <type> <digest>`",
+          fn ->
+            Retain.decoded!(
+              String.replace(store, "program tally ", "program tally md5 "),
+              {"s", "plant"}
+            )
+          end
+        )
+      end
+
+      digest = sealed(Enum.drop(String.split(@main_v3, "\n", trim: true), 2) |> Enum.drop(-1))
+
+      raises(
+        "s: line 15: `digest md5 #{digest}` is a digest line, which a store whose first line " <>
+          "is `logex retain 4` holds, and this store's first line is not",
+        fn ->
+          Retain.decoded!(
+            String.replace(@main_v3, "end 15 lines", "digest md5 #{digest}\nend 16 lines"),
+            {"s", "plant"}
+          )
+        end
+      )
+
+      # Through the runner: a warm start from the version 3 store warns of nothing, drops
+      # nothing and keeps the total, and its stop writes version 4, each digest after md5.
+      rig = rig(dir)
+      File.write!(rig.store, @main_v3)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: [], copy: nil} = Runner.status(runner).retain
+      assert [41 | _] = values(runner)
+      assert Runner.stop(runner) == :ok
+      written = File.read!(rig.store)
+
+      assert [
+               "logex retain 4",
+               "configuration plant written " <> _,
+               "resource md5 c1bd01c26e75bdfb05a65062b9d70078",
+               "program tally md5 c4a2b25778fd45fcec44f626d79bf38e"
+               | rest
+             ] = String.split(written, "\n")
+
+      assert ["digest md5 " <> _, "end 16 lines", ""] = Enum.take(rest, -3)
+    end
+
+    # Through the runner: a store whose scheme this logex does not read, a later logex's
+    # after a rollback, refuses a warm start, no device read and the store as it was; a
+    # cold start copies it first and writes a new store, naming md5; and a store whose
+    # words are in capitals starts warm and is written again in lowercase.
+    test "a warm start over a store of a scheme this logex does not read is refused, and " <>
+           "a cold start copies it first",
+         %{tmp_dir: dir} do
+      rig = rig(dir)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      pressed(rig, [1, 0, 1])
+      kept = values(runner)
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      text = File.read!(rig.store)
+      n = length(String.split(text, "\n")) - 2
+      later = relined(text, "digest ", "digest sha256 #{String.duplicate("0", 64)}")
+      File.write!(rig.store, later)
+      reads = Sim.reads(rig.panel)
+
+      raises(
+        "#{rig.store}: line #{n}: " <>
+          unread_scheme("digest sha256 #{String.duplicate("0", 64)}", "sha256") <>
+          ": " <> @way_out,
+        fn -> Runner.start_link(rig.opts) end
+      )
+
+      assert Sim.reads(rig.panel) == reads
+      assert File.read!(rig.store) == later
+
+      {:ok, runner} = Runner.start_link(rig.opts ++ [start: :cold])
+      copy = rig.store <> ".dropped.1"
+      assert Runner.status(runner).retain.copy == copy
+      assert File.read!(copy) == later
+      assert [0, 0 | _] = values(runner)
+      assert Runner.stop(runner) == :ok
+      opener_down(rig.panel)
+      assert named(rig.store) == named_by(@tally)
+
+      File.write!(rig.store, String.replace(text, " md5 ", " MD5 "))
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert %{warning: nil, dropped: []} = Runner.status(runner).retain
+      assert values(runner) == kept
+      assert Runner.stop(runner) == :ok
+      assert File.read!(rig.store) == text
+    end
+
+    # Another scheme is a row of the table and nothing else of the reader or the writer:
+    # `Logex.Retain` compiled here with a row added, the one line of its source that holds
+    # the table replaced, reads a store of that row's scheme, where this logex refuses it
+    # naming the scheme. The second scheme is CRC-32 by `:erlang.crc32/1`, 8 digits, no
+    # scheme for a store, only one the VM gives with no `crypto` application.
+    @one_row ~S|def schemes, do: [{"md5", &:erlang.md5/1, 32}]|
+    @md5_row ~S|{"md5", &:erlang.md5/1, 32}|
+    @crc32_row ~S|{"crc32", &<<:erlang.crc32(&1)::32>>, 8}|
+
+    defp with_rows(name, rows) do
+      source = File.read!(Path.expand("../../lib/logex/retain.ex", __DIR__))
+      assert [_before, _after] = String.split(source, @one_row)
+
+      source
+      |> String.replace("defmodule Logex.Retain do", "defmodule #{inspect(name)} do")
+      |> String.replace(@one_row, "def schemes, do: [#{Enum.join(rows, ", ")}]")
+      |> Code.compile_string("lib/logex/retain.ex")
+
+      name
+    end
+
+    # CRC-32 of a text as a store would hold it, restated: 8 lowercase hexadecimal digits.
+    defp crc32(text),
+      do:
+        :erlang.crc32(text)
+        |> Integer.to_string(16)
+        |> String.downcase()
+        |> String.pad_leading(8, "0")
+
+    # The store `text` as a logex whose first row is CRC-32 writes it, restated: each
+    # naming line's digest of the text it names, and the digest line's of the value lines.
+    defp as_crc32(text) do
+      values = for line <- sealed_lines(text), not sealing?(line), do: line <> "\n"
+
+      text
+      |> relined("resource ", "resource crc32 " <> crc32(String.replace(@plant, "\n  ", "\n")))
+      |> relined("program ", "program tally crc32 " <> crc32(printed(@tally)))
+      |> relined("digest ", "digest crc32 " <> crc32(values))
+    end
+
+    test "a row added to the table, and nothing else, reads a store of its scheme, which " <>
+           "this logex refuses naming it" do
+      reads = with_rows(Logex.RetainStoreTest.ReadsCrc32, [@md5_row, @crc32_row])
+      assert [{"md5", _md5, 32}, {"crc32", _crc32, 8}] = reads.schemes()
+      config = configured()
+      by = Retain.written_by(config)
+      text = written_store()
+      {image, at, ^by} = Retain.decoded!(text, {"s", "plant"})
+
+      # The writer writes the first row's, as before.
+      assert reads.written_by(config) == by
+      assert reads.encode(image, at, by) == text
+      assert reads.decoded!(text, {"s", "plant"}) == {image, at, by}
+
+      # A store of the row's scheme reads, its lines marked, and is laid beside the start's
+      # program digested by that scheme: the same program warns of nothing, an edited one
+      # of its text, a configuration changed of its lines.
+      crc = as_crc32(text)
+      marks = %{:resource => "crc32", {:program, "tally"} => "crc32"}
+
+      stored = %{
+        resource: crc32(String.replace(@plant, "\n  ", "\n")),
+        programs: %{"tally" => crc32(printed(@tally))},
+        schemes: marks
+      }
+
+      assert reads.decoded!(crc, {"s", "plant"}) == {image, at, stored}
+
+      assert reads.decoded!(String.replace(crc, "crc32", "CRC32"), {"s", "plant"}) ==
+               {image, at, stored}
+
+      assert reads.warning(stored, reads.compared(stored, by, config), "s") == nil
+
+      assert reads.warning(
+               stored,
+               reads.compared(stored, reads.written_by(edited()), edited()),
+               "s"
+             ) == warned("s")
+
+      rewired = configured(String.replace(@plant, "interval 10", "interval 20"))
+
+      assert reads.warning(
+               stored,
+               reads.compared(stored, reads.written_by(rewired), rewired),
+               "s"
+             ) ==
+               "s: the store was written by another program than the one this start was " <>
+                 "given: the configuration's tasks, globals, instances or connections " <>
+                 "differ; whether by a deploy of changed files, or an edit tested or " <>
+                 "assembled online that never reached the files, this start runs the " <>
+                 "program it was given, with the store's retained values laid over it by " <>
+                 "name and type"
+
+      # Each line names its own scheme: one line of the row's, the others md5's.
+      for {starts, mark} <- [{"resource ", :resource}, {"program ", {:program, "tally"}}] do
+        [line] = for l <- String.split(crc, "\n"), String.starts_with?(l, starts), do: l
+        {^image, ^at, mixed} = reads.decoded!(relined(text, starts, line), {"s", "plant"})
+        assert mixed.schemes == Map.take(marks, [mark])
+        assert reads.warning(mixed, reads.compared(mixed, by, config), "s") == nil
+      end
+
+      [digest_line] = for l <- String.split(crc, "\n"), String.starts_with?(l, "digest "), do: l
+
+      assert reads.decoded!(relined(text, "digest ", digest_line), {"s", "plant"}) ==
+               {image, at, by}
+
+      # A type of the row's scheme that the start does not run is told as not in it.
+      other =
+        crc
+        |> String.replace("\nglobal ", "\nprogram other crc32 00000000\nglobal ")
+        |> String.replace("end 16 lines", "end 17 lines")
+
+      {^image, ^at, more} = reads.decoded!(other, {"s", "plant"})
+
+      assert reads.warning(more, reads.compared(more, by, config), "s") =~
+               "start was given: `other` is not in this start; whether"
+
+      # The digest of the value lines is judged, and told, by the scheme its line names.
+      n = length(String.split(text, "\n")) - 2
+      edited = String.replace(crc, "global total_boxes dint 41", "global total_boxes dint 42")
+
+      "digest crc32 " <> new =
+        String.split(as_crc32(String.replace(text, "dint 41", "dint 42")), "\n") |> Enum.at(-3)
+
+      "digest crc32 " <> old = digest_line
+
+      assert refused(fn -> reads.decoded!(edited, {"s", "plant"}) end) ==
+               "s: line #{n}: `digest crc32 #{old}` is not the digest of the store's value " <>
+                 "lines, which is `crc32 #{new}`: a value line was edited, added or removed " <>
+                 "by hand and the digest not mended, so the store is not read; to keep the " <>
+                 "edit write `digest crc32 #{new}` in its place, and to start anyway: " <>
+                 @way_out
+
+      short = binary_part(old, 0, 7)
+
+      assert refused(fn ->
+               reads.decoded!(relined(crc, "digest ", "digest crc32 #{short}"), {"s", "plant"})
+             end) ==
+               "s: line #{n}: `#{short}` is no `crc32` digest: one is 8 lowercase hexadecimal " <>
+                 "digits, and the store's value lines' digest is `crc32 #{old}`: to keep " <>
+                 "them write `digest crc32 #{old}` in its place, and to start anyway: " <>
+                 @way_out
+
+      # A line that names no scheme is told the writer's, md5; one that names neither row,
+      # both.
+      md5_digest = sealed(sealed_lines(text))
+
+      assert refused(fn ->
+               reads.decoded!(relined(crc, "digest ", "digest #{old}"), {"s", "plant"})
+             end) == unread_digest(n, no_line("digest #{old}", "digest"), md5_digest)
+
+      assert refused(fn ->
+               reads.decoded!(relined(crc, "digest ", "digest sha1 #{old}"), {"s", "plant"})
+             end) ==
+               "s: line #{n}: `digest sha1 #{old}` names the scheme `sha1`, which this logex " <>
+                 "does not read: it reads `md5`, `crc32`: " <> @way_out
+
+      # This logex, whose table holds no such row, refuses the store, naming the scheme.
+      [_, _, resource_line, program_line | _] = String.split(crc, "\n")
+
+      raises(
+        "s: line 3: " <>
+          unread_scheme(resource_line, "crc32") <>
+          ": " <>
+          @way_out <>
+          "\ns: line 4: " <>
+          unread_scheme(program_line, "crc32") <>
+          "\ns: line #{n}: " <> unread_scheme(digest_line, "crc32"),
+        fn -> Retain.decoded!(crc, {"s", "plant"}) end
+      )
+    end
+
+    test "a row added first is the scheme the writer writes, md5 read still, a store of " <>
+           "version 3 or 2 among them" do
+      writes = with_rows(Logex.RetainStoreTest.WritesCrc32, [@crc32_row, @md5_row])
+      config = configured()
+      by = Retain.written_by(config)
+      text = written_store()
+      {image, at, ^by} = Retain.decoded!(text, {"s", "plant"})
+
+      own = %{
+        resource: crc32(String.replace(@plant, "\n  ", "\n")),
+        programs: %{"tally" => crc32(printed(@tally))}
+      }
+
+      assert writes.written_by(config) == own
+      crc = writes.encode(image, at, own)
+      assert crc == as_crc32(text)
+      assert writes.decoded!(crc, {"s", "plant"}) == {image, at, own}
+
+      # The store this logex writes, each line md5's, read and laid beside the start's
+      # program by md5.
+      marks = %{:resource => "md5", {:program, "tally"} => "md5"}
+      stored = Map.put(by, :schemes, marks)
+      assert writes.decoded!(text, {"s", "plant"}) == {image, at, stored}
+      assert writes.warning(stored, writes.compared(stored, own, config), "s") == nil
+
+      assert writes.warning(
+               stored,
+               writes.compared(stored, writes.written_by(edited()), edited()),
+               "s"
+             ) == warned("s")
+
+      # A store of version 3, whose digests name no scheme, is md5's; and RV-21's of
+      # version 2, each type's digest of its text's bytes, by md5.
+      assert writes.decoded!(@main_v3, {"s", "plant"}) == {image, at, stored}
+
+      rv21 =
+        @main_v3
+        |> String.replace("logex retain 3", "logex retain 2")
+        |> String.replace("c4a2b25778fd45fcec44f626d79bf38e", md5(@tally))
+
+      {^image, ^at, older} = writes.decoded!(rv21, {"s", "plant"})
+
+      assert older == %{
+               resource: by.resource,
+               programs: %{"tally" => md5(@tally)},
+               bytes: true,
+               schemes: marks
+             }
+
+      assert writes.warning(older, writes.compared(older, own, config), "s") == nil
+
+      assert writes.warning(
+               older,
+               writes.compared(older, writes.written_by(edited()), edited()),
+               "s"
+             ) == warned("s")
+
+      # A line that names no scheme is told the line as the writer writes it, and the
+      # digest of the value lines by the writer's scheme.
+      n = length(String.split(text, "\n")) - 2
+      "digest crc32 " <> crc_digest = String.split(crc, "\n") |> Enum.at(-3)
+
+      assert refused(fn ->
+               writes.decoded!(
+                 relined(crc, "resource ", "resource #{own.resource}"),
+                 {"s", "plant"}
+               )
+             end) ==
+               "s: line 3: `resource #{own.resource}` is no resource's line of a store of " <>
+                 "`logex retain 4`, which names each digest's scheme: it is `resource " <>
+                 "<scheme> <digest>`, as `resource crc32 <8 lowercase hexadecimal digits>`"
+
+      assert refused(fn ->
+               writes.decoded!(relined(crc, "digest ", "digest #{crc_digest}"), {"s", "plant"})
+             end) ==
+               "s: line #{n}: `digest #{crc_digest}` is no digest's line of a store of " <>
+                 "`logex retain 4`, which names each digest's scheme: it is `digest <scheme> " <>
+                 "<digest>`, as `digest crc32 <8 lowercase hexadecimal digits>`, and the " <>
+                 "store's value lines' digest is `crc32 #{crc_digest}`: to keep them write " <>
+                 "`digest crc32 #{crc_digest}` in its place, and to start anyway: " <> @way_out
     end
   end
 
@@ -3088,8 +3897,8 @@ defmodule Logex.RetainStoreTest do
     # comment or empty line, and the program type's text.
     defp named_by(tally),
       do: [
-        "resource " <> md5(String.replace(@plant, "\n  ", "\n")),
-        "program tally " <> md5(printed(tally))
+        "resource md5 " <> md5(String.replace(@plant, "\n  ", "\n")),
+        "program tally md5 " <> md5(printed(tally))
       ]
 
     test "every write names the program the resource runs, after the configuration's line",
@@ -3947,8 +4756,8 @@ defmodule Logex.RetainStoreTest do
       by = Retain.written_by(config)
       text = Retain.encode(Runtime.retained(Runtime.start(config)), at, by)
       [header, named, resource, program_end, program_ton | rest] = String.split(text, "\n")
-      assert program_end == "program end " <> by.programs["end"]
-      assert program_ton == "program ton " <> by.programs["ton"]
+      assert program_end == "program end md5 " <> by.programs["end"]
+      assert program_ton == "program ton md5 " <> by.programs["ton"]
       assert {_image, ^at, ^by} = Retain.decoded!(text, {"s", "plant"})
       assert Retain.warning(by, by, "s") == nil
 
@@ -3966,10 +4775,7 @@ defmodule Logex.RetainStoreTest do
         |> String.replace("end #{count} lines", "end #{String.to_integer(count) - 1} lines")
 
       raises(
-        "s: line 3: `#{program_end}` names a program type of the store's writer, and the " <>
-          "store names no resource: a store that names the program that wrote it gives " <>
-          "`resource <digest>` straight after its configuration's line, and then a `program " <>
-          "<type> <digest>` a type: " <> @way_out,
+        "s: line 3: #{names_no_resource(program_end, 4)}",
         fn -> Retain.decoded!(unresourced, {"s", "plant"}) end
       )
     end
@@ -4064,7 +4870,10 @@ defmodule Logex.RetainStoreTest do
       # Since decision 604 (RV-34) the store version 3 wrote, the runner's written as 4.
       whole = as_v3(File.read!(rig.store))
       [header, named, resource, program | rest] = String.split(whole, "\n")
-      assert {header, resource, program} == {"logex retain 3", hd(named(rig.store)), program}
+
+      assert {header, resource, program} ==
+               {"logex retain 3", unschemed(hd(named(rig.store))), program}
+
       count = length(String.split(whole, "\n", trim: true))
 
       none =
@@ -4328,7 +5137,7 @@ defmodule Logex.RetainStoreTest do
         Retain.decoded!(unmended, {"s", "plant"})
       end)
 
-      raises("s: line 3: #{names_no_resource(beta_line)}", fn ->
+      raises("s: line 3: #{names_no_resource(beta_line, 4)}", fn ->
         Retain.decoded!(Enum.join(lines, "\n") <> "\nend #{n} lines\n", {"s", "plant"})
       end)
 
@@ -4391,7 +5200,7 @@ defmodule Logex.RetainStoreTest do
 
       for {store, told, copy} <- [
             {unresourced, "line #{count - 1}: #{miscount.(count, count - 1)}", 1},
-            {mended, "line 3: #{names_no_resource(program)}", 2}
+            {mended, "line 3: #{names_no_resource(program, 4)}", 2}
           ] do
         File.write!(rig.store, store)
         opener_down(rig.panel)
@@ -6326,6 +7135,49 @@ defmodule Logex.RetainStoreTest do
 
       for at <- 0..2,
           do: assert(elem(large, at) < 5 * elem(small, at), inspect({at, small, large}))
+    end
+
+    # Decision 641 (RV-34): a naming line of version 4, its digest after the word of its
+    # scheme, reads for a word's few bytes more than the same line of version 3, whose
+    # digest stands alone: n program types that retain nothing, so that the store is its
+    # naming lines, and 4n, each store beside its twin of version 3 in the same run
+    # (decision 357), which makes every call it makes but the scheme's look-up. The
+    # difference of the two grows by what a line's look-up costs, 452 reductions over the
+    # 48 lines more as this was written, with half a reduction a line under a call a line
+    # more, the least regression: the word lowercased at every line, where one as the
+    # writer writes it is found as it stands, is 4 a line.
+    test "a naming line's scheme costs its look-up, against the same store of version 3" do
+      [small, large] =
+        for n <- [16, 64] do
+          programs =
+            Map.new(1..n, fn k ->
+              {:ok, program} =
+                Logex.compile("var_input i bool\nvar c dint\nxic i add c #{k} c", name: "p#{k}")
+
+              {"p#{k}", program}
+            end)
+
+          config =
+            configured(
+              "task fast interval 10 priority 1\nvar_global a bool\n" <>
+                Enum.map_join(1..n, &"program m#{&1} p#{&1} with fast\n  m#{&1}.i a\n"),
+              programs
+            )
+
+          image = Runtime.retained(Runtime.start(config))
+          by = Retain.written_by(config)
+          at = ~U[2026-10-30 14:00:00Z]
+          v4 = Retain.encode(image, at, by)
+          v3 = as_v3(v4)
+          assert length(String.split(v4, "\n", trim: true)) == n + 5
+          assert Retain.decoded!(v4, {"s", "plant"}) == {image, at, by}
+          assert Retain.decoded!(v3, {"s", "plant"}) == {image, at, by}
+
+          Enum.min(for _ <- 1..3, do: reductions(fn -> Retain.decoded!(v4, {"s", "plant"}) end)) -
+            Enum.min(for _ <- 1..3, do: reductions(fn -> Retain.decoded!(v3, {"s", "plant"}) end))
+        end
+
+      assert large - small <= 452 + div(48, 2), inspect({small, large})
     end
   end
 

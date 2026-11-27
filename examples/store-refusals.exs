@@ -43,13 +43,14 @@ end
 counted = fn text, lines -> String.replace(text, "end 16 lines", "end #{lines} lines") end
 
 # A value line edited, with the digest mended to match: the MD5 of every line after the
-# configuration's line, but the naming lines, the digest and the end line, each with LF.
+# configuration's line, but the naming lines, the digest and the end line, each with LF,
+# written after the word of its scheme, md5.
 sealed = fn text ->
   [_header, _configuration | lines] = String.split(text, "\n", trim: true)
   naming = ["resource ", "program ", "digest ", "end "]
   values = for line <- lines, not String.starts_with?(line, naming), do: [line, ?\n]
   digest = Base.encode16(:erlang.md5(values), case: :lower)
-  String.replace(text, ~r/^digest \w+$/m, "digest #{digest}")
+  String.replace(text, ~r/^digest md5 \w+$/m, "digest md5 #{digest}")
 end
 
 start.("1. the end line taken away", String.replace(good, "end 16 lines\n", ""))
@@ -97,7 +98,7 @@ start.(
 
 start.(
   "15. a digest with a wrong character",
-  String.replace(good, "resource 013cc", "resource 013cZ")
+  String.replace(good, "resource md5 013cc", "resource md5 013cZ")
 )
 
 start.(
@@ -132,15 +133,35 @@ start.(
 )
 
 start.(
-  "25. a store of version 3, which holds no digest",
+  "25. a store of version 3, which holds no digest and names no scheme",
   good
   |> String.replace("logex retain 4", "logex retain 3")
   |> String.replace(~r/^digest .*\n/m, "")
+  |> String.replace(" md5 ", " ")
   |> String.replace("cv dint 0", "cv dint 3")
   |> counted.(15)
 )
 
 start.(
   "26. a digest line with a digit lost",
-  String.replace(good, ~r/^digest (\w{31})\w$/m, "digest \\1")
+  String.replace(good, ~r/^digest md5 (\w{31})\w$/m, "digest md5 \\1")
 )
+
+start.("27. a digest line that names no scheme", String.replace(good, "digest md5 ", "digest "))
+
+start.(
+  "28. a digest line whose scheme this logex does not read",
+  String.replace(good, ~r/^digest md5 \w+$/m, "digest sha256 " <> String.duplicate("0", 64))
+)
+
+start.(
+  "29. a resource line that names no scheme",
+  String.replace(good, "resource md5 ", "resource ")
+)
+
+start.(
+  "30. a program line whose scheme this logex does not read",
+  String.replace(good, "program tally md5 ", "program tally sha1 ")
+)
+
+start.("31. the word of each scheme in capitals", String.replace(good, " md5 ", " MD5 "))

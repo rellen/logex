@@ -29,7 +29,7 @@ image](glossary.md#retained-image).
 | To find | Go to |
 |---|---|
 | The words of this page, such as a fresh start and an owed copy | [Words of this page](#words-of-this-page) |
-| The lines of the store, its digests and its versions | [The text of the store](#the-text-of-the-store) |
+| The lines of the store, its digests, its schemes and its versions | [The text of the store](#the-text-of-the-store) |
 | What a fresh start does with the store, and each refusal | [A fresh start](#a-fresh-start) |
 | The [warning](glossary.md#warning) that a different [program](glossary.md#program) wrote the store | [The warning of a different program](#the-warning-of-a-different-program) |
 | The files `tally.retain.dropped.1` and so on | [The numbered copies](#the-numbered-copies) |
@@ -61,7 +61,8 @@ command in that directory.
 | An owed copy | A copy whose write failed. The runner writes it before its next write over the store. |
 | A shutdown | A process ends the runner with the reason `:normal`, `:shutdown` or `{:shutdown, term}`. |
 | A crash | The runner ends for a different reason, or a process kills it. |
-| A digest | The MD5 of a text, as 32 lowercase hexadecimal digits |
+| A digest | The checksum of a text. The scheme `md5` gives 32 lowercase hexadecimal digits. |
+| A scheme | The method that makes a digest. Its word comes before the digest on a line of the store. [The schemes](#the-schemes) gives each scheme. |
 
 ## The files of the examples
 
@@ -181,8 +182,8 @@ four boxes    total_boxes=4 t1.boxes.cv=4 case_full=1
 stop: :ok
 logex retain 4
 configuration tally written 2026-10-30T14:00:08Z
-resource 013cc059392445fdcc1e84c9b0de6118
-program tally bd882e28a8159d8e8a4ea56ade7b36b6
+resource md5 013cc059392445fdcc1e84c9b0de6118
+program tally md5 bd882e28a8159d8e8a4ea56ade7b36b6
 global total_boxes dint 4
 instance t1 tally
 t1.boxes ctu
@@ -193,7 +194,7 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 1
 t1.boxes.r bool 0
 t1.full bool 1
-digest 8cfa2e4d3e860b659fe02173b2f9f18a
+digest md5 8cfa2e4d3e860b659fe02173b2f9f18a
 end 16 lines
 fresh start   total_boxes=4 t1.boxes.cv=4 case_full=1
 written_at: ~U[2026-10-30 14:00:08Z]
@@ -222,14 +223,14 @@ The store is text that a person can read. Its lines come in this sequence. The o
 |---|---|
 | The header, `logex retain 4` | The version of the store |
 | The `configuration` line | The name of the configuration, the word `written` and the time of the write, in UTC to the second |
-| The `resource` line | The digest of the lines of the configuration |
-| A `program` line | 1 line for each [program type](glossary.md#program-type), in name order: its name and the digest of its text |
+| The `resource` line, `resource md5 013cc…` | The word of the scheme, then the digest of the lines of the configuration |
+| A `program` line, `program tally md5 bd882…` | 1 line for each [program type](glossary.md#program-type), in name order: its name, the word of the scheme and the digest of its text |
 | A global, `global total_boxes dint 4` | Each retained global, in name order: its name, its [type](glossary.md#type) and its value |
 | A [trigger](glossary.md#trigger), `trigger arm 0` | Each retained `single`, with its last [sample](glossary.md#sample). A task with its own sample has a line with the name of the task. |
 | An instance, `instance t1 tally` | Each [instance](glossary.md#instance) whose program retains a value: its name and its program type |
 | An instance on a path, `t1.boxes ctu` | Each instance on the path to a value, with its kind. An array of instances is `m1.lane_t ton[4]`. |
 | A value, `t1.boxes.cv dint 4` | Each value, with its path and its type, in path order |
-| The `digest` line | The digest of the value lines. [The digest of the values](#the-digest-of-the-values) gives the rule. |
+| The `digest` line, `digest md5 8cfa2…` | The word of the scheme, then the digest of the value lines. [The digest of the values](#the-digest-of-the-values) gives the rule. |
 | The end line, `end 16 lines` | The count of the lines of the store. This count includes the header and the end line. |
 
 - The time comes from the wall clock of the [clock](glossary.md#clock) of the runner,
@@ -268,6 +269,33 @@ wrote the store. A warm start compares them with the program that it got.
 
 These digests are of the program, not of the store. The `digest` line is of the store.
 
+### The schemes
+
+A scheme is the method that makes a digest. In a store of `logex retain 4`, the word of
+the scheme comes before each digest. The store of `kept.exs` shows it on 3 lines:
+`resource md5 013cc…`, `program tally md5 bd882…` and `digest md5 8cfa2…`. Thus a later
+logex can use a different scheme, and it can still read a store that names `md5`.
+
+| Scheme | The digest |
+|---|---|
+| `md5` | The MD5 of the text, as 32 lowercase hexadecimal digits |
+
+- The runner writes the first scheme of the table.
+- A fresh start reads the word of a scheme in each case: `MD5` is `md5`. The next write
+  uses lowercase.
+- Each line names its own scheme.
+- A fresh start refuses a line whose scheme is not in the table. The refusal names the
+  scheme and the schemes that logex reads, and gives the way out. A store that a later
+  logex wrote can hold such a line after a rollback to this logex.
+- A fresh start refuses a line of `logex retain 4` that names no scheme. The refusal
+  gives the form of the line with the scheme.
+- A store of `logex retain 3` or `logex retain 2` names no scheme. Each digest of its
+  naming lines is an MD5. A fresh start refuses the word of a scheme in such a store.
+- The warning of a different program compares each naming line by the scheme of that
+  line.
+
+Cases 27 to 31 of [Example: refusals](#example-refusals) show these rules.
+
 ### The digest of the values
 
 The `digest` line holds the digest of the value lines of the store. A fresh start computes
@@ -277,7 +305,7 @@ edit that changes, adds or removes a value line must also change the `digest` li
 | Rule | What it is |
 |---|---|
 | The value lines | Each line after the `configuration` line, except the `resource` line, the `program` lines, the `digest` line and the end line |
-| The digest | The MD5 of the value lines as 32 lowercase hexadecimal digits. Each value line has LF at its end. |
+| The digest | The digest of the value lines, by the scheme that the `digest` line names. The runner writes `md5`. Each value line has LF at its end. |
 | Line ends | The digest is the same for a store with CRLF or CR line ends. |
 | A store that names no program | It holds no `digest` line, and its header is `logex retain 2`. |
 
@@ -285,14 +313,18 @@ A fresh start refuses these stores. Each refusal gives the way out.
 
 | The store | Refused at | The refusal | Case of [Example: refusals](#example-refusals) |
 |---|---|---|---|
-| A `digest` line that does not hold the digest of the value lines | The `digest` line | Gives the digest of the value lines, so that you can keep an edit | 22, 23 |
-| A `digest` line whose digest is not 32 lowercase hexadecimal digits | The `digest` line | Gives the digest of the value lines, so that you can keep an edit | 26 |
+| A `digest` line that does not hold the digest of the value lines | The `digest` line | Gives the line to write, the word of the scheme and the digest of the value lines, so that you can keep an edit | 22, 23 |
+| A `digest` line whose digest is not the form of its scheme, 32 lowercase hexadecimal digits for `md5` | The `digest` line | Gives the line to write, so that you can keep an edit | 26 |
+| A `digest` line that names no scheme, or that is not `digest <scheme> <digest>` | The `digest` line | Gives the form of the line and the line to write, so that you can keep an edit | 27 |
+| A `digest` line whose scheme logex does not read | The `digest` line | Names the scheme and the schemes that logex reads. It gives no digest, because logex cannot make a digest of that scheme. | 28 |
 | A store of `logex retain 4` with no `digest` line | Line 1 | Says that the end of the store can be lost, and the values after its last line. It gives no digest. | 24 |
 
 - The refusal of the digest comes only when the store has no other problem. If a line does
   not read, or the count is not correct, the refusal gives only those problems. A
-  `digest` line whose digest is not 32 lowercase hexadecimal digits is then 1 of the
-  problems, with no digest and no way out.
+  `digest` line that does not read is then 1 of the problems, with no digest and no way
+  out.
+- The line to write names the scheme of the `digest` line of the store. If that line names
+  no scheme, the line to write names the scheme that the runner writes.
 - A store with no `digest` line was cut short and given an end line, or a person removed
   its `digest` line. The refusal gives no digest. With a digest written, a start reads
   the values that the cut took at their initial values. Start it cold, which copies it
@@ -309,8 +341,8 @@ logex reads 4 versions of the store. Each write makes a store of `logex retain 4
 
 | Header | What the store holds |
 |---|---|
-| `logex retain 4` | The naming lines: 1 `resource` line, then the `program` lines. A `digest` line. An end line. The rules of this page apply. |
-| `logex retain 3` | The naming lines and an end line. No `digest` line. A start reads it by each rule of version 4 but the digest, which it holds none of. |
+| `logex retain 4` | The naming lines: 1 `resource` line, then the `program` lines. A `digest` line. An end line. Each digest comes after the word of its scheme. The rules of this page apply. |
+| `logex retain 3` | The naming lines and an end line. No `digest` line, and no word of a scheme: each digest is an MD5. A start reads it by each other rule of version 4. |
 | `logex retain 2` | An end line. The naming lines are possible. |
 | `logex retain 1` | No naming lines and no end line. A start warns of nothing. It cannot find a store that is cut short. |
 
@@ -337,8 +369,11 @@ line and at least 1 `program` line. A fresh start refuses each of these stores:
 - The refusal of a missing naming line comes only when the count of the store is correct.
   If the count is not correct, or the store is cut short, the refusal gives only that
   problem.
-- A `resource` or `program` line whose digest is not 32 lowercase hexadecimal digits gets
-  a different message, not the message of a missing line.
+- A `resource` or `program` line that does not read gets its own message, not the
+  message of a missing line. These are examples:
+  - a digest that is not the form of its scheme
+  - a line of `logex retain 4` that names no scheme
+  - a scheme that logex does not read
 
 ### The end line
 
@@ -454,7 +489,9 @@ The cases are in [Example: refusals](#example-refusals).
 | An end line under a store that has no end line | 10, 11 |
 | No `configuration` line | 12 |
 | A store of `logex retain 4` that does not name its program | 13, 14 |
-| A digest that is not 32 lowercase hexadecimal digits | 15 |
+| A digest that is not the form of its scheme, 32 lowercase hexadecimal digits for `md5` | 15 |
+| A line of `logex retain 4` that names no scheme | 27, 29 |
+| A scheme that logex does not read | 28, 30 |
 | A line that is no line of a store, or a line in the wrong place | 16 |
 | 2 lines that name 1 value | 3 |
 | A `digest` line that does not hold the digest of the value lines, a digest mistyped, or no `digest` line | 22 to 24, 26 |
@@ -478,17 +515,22 @@ These refusals give the way out:
 - a missing naming line
 - a store of a different configuration
 - a `digest` line that does not hold the digest of the values, or no `digest` line
-- a digest mistyped in a store with no other problem
+- a `digest` line that does not read, in a store with no other problem
+- a line whose scheme logex does not read
 
-A refusal of a problem that a person can repair by hand gives no way out. Examples are a
-bad line, a digest of a naming line with a wrong character and a count that is not
-correct.
+A refusal of a problem that a person can repair by hand gives no way out. These are
+examples:
+
+- a bad line
+- a digest of a naming line with a wrong character
+- a naming line that names no scheme
+- a count that is not correct
 
 ### Example: refusals
 
-`store-refusals.exs` writes a good store. Then it changes the store in 26 ways, and
-starts a runner on each. Cases 19 to 21 and 25 start. Cases 19 to 21 change a value, and
-mend the `digest` line with the function `sealed`.
+`store-refusals.exs` writes a good store. Then it changes the store in 31 ways, and
+starts a runner on each. Cases 19 to 21, 25 and 31 start. Cases 19 to 21 change a value,
+and mend the `digest` line with the function `sealed`.
 
 ```elixir
 alias Logex.IO.Sim
@@ -536,13 +578,14 @@ end
 counted = fn text, lines -> String.replace(text, "end 16 lines", "end #{lines} lines") end
 
 # A value line edited, with the digest mended to match: the MD5 of every line after the
-# configuration's line, but the naming lines, the digest and the end line, each with LF.
+# configuration's line, but the naming lines, the digest and the end line, each with LF,
+# written after the word of its scheme, md5.
 sealed = fn text ->
   [_header, _configuration | lines] = String.split(text, "\n", trim: true)
   naming = ["resource ", "program ", "digest ", "end "]
   values = for line <- lines, not String.starts_with?(line, naming), do: [line, ?\n]
   digest = Base.encode16(:erlang.md5(values), case: :lower)
-  String.replace(text, ~r/^digest \w+$/m, "digest #{digest}")
+  String.replace(text, ~r/^digest md5 \w+$/m, "digest md5 #{digest}")
 end
 
 start.("1. the end line taken away", String.replace(good, "end 16 lines\n", ""))
@@ -590,7 +633,7 @@ start.(
 
 start.(
   "15. a digest with a wrong character",
-  String.replace(good, "resource 013cc", "resource 013cZ")
+  String.replace(good, "resource md5 013cc", "resource md5 013cZ")
 )
 
 start.(
@@ -625,24 +668,44 @@ start.(
 )
 
 start.(
-  "25. a store of version 3, which holds no digest",
+  "25. a store of version 3, which holds no digest and names no scheme",
   good
   |> String.replace("logex retain 4", "logex retain 3")
   |> String.replace(~r/^digest .*\n/m, "")
+  |> String.replace(" md5 ", " ")
   |> String.replace("cv dint 0", "cv dint 3")
   |> counted.(15)
 )
 
 start.(
   "26. a digest line with a digit lost",
-  String.replace(good, ~r/^digest (\w{31})\w$/m, "digest \\1")
+  String.replace(good, ~r/^digest md5 (\w{31})\w$/m, "digest md5 \\1")
 )
+
+start.("27. a digest line that names no scheme", String.replace(good, "digest md5 ", "digest "))
+
+start.(
+  "28. a digest line whose scheme this logex does not read",
+  String.replace(good, ~r/^digest md5 \w+$/m, "digest sha256 " <> String.duplicate("0", 64))
+)
+
+start.(
+  "29. a resource line that names no scheme",
+  String.replace(good, "resource md5 ", "resource ")
+)
+
+start.(
+  "30. a program line whose scheme this logex does not read",
+  String.replace(good, "program tally md5 ", "program tally sha1 ")
+)
+
+start.("31. the word of each scheme in capitals", String.replace(good, " md5 ", " MD5 "))
 ```
 
 ```console
 $ mix run store-refusals.exs
 -- 1. the end line taken away
-tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is the store's last line, and no end line: a store of `logex retain 4` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 15: `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` is the store's last line, and no end line: a store of `logex retain 4` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 2. the file cut inside the end line
 tally.retain: line 16: `end 1` is the store's last line, and no end line: a store of `logex retain 4` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 3. a line doubled, the count kept
@@ -663,19 +726,19 @@ tally.retain: line 14: `t1.full\xC3\xA9 bool 0` holds the byte \xC3, which no st
 tally.retain: line 1: the store is empty: its first line is `logex retain 4`
 -- 10. version 5
 tally.retain: line 1: the store is of version 5, which this logex does not read: it reads `logex retain 4`, `logex retain 3`, `logex retain 2` and `logex retain 1`
-tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is a digest line, which a store whose first line is `logex retain 4` holds, and this store's first line is not
+tally.retain: line 15: `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` is a digest line, which a store whose first line is `logex retain 4` holds, and this store's first line is not
 tally.retain: line 16: `end 16 lines` is an end line, which a store whose first line is `logex retain 4`, `logex retain 3` or `logex retain 2` ends with, and this store's first line is none of them
 -- 11. an end line under logex retain 1
 tally.retain: line 13: `end 13 lines` is an end line, which a store whose first line is `logex retain 4`, `logex retain 3` or `logex retain 2` ends with, and this store's first line is none of them
 -- 12. no configuration line
-tally.retain: line 2: `resource 013cc059392445fdcc1e84c9b0de6118` names no configuration: a store's second line is `configuration <name> written <time>`
-tally.retain: line 3: `program tally bd882e28a8159d8e8a4ea56ade7b36b6` names a program type of the store's writer, and the store names no resource: a store that names the program that wrote it gives `resource <digest>` straight after its configuration's line, and then a `program <type> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 2: `resource md5 013cc059392445fdcc1e84c9b0de6118` names no configuration: a store's second line is `configuration <name> written <time>`
+tally.retain: line 3: `program tally md5 bd882e28a8159d8e8a4ea56ade7b36b6` names a program type of the store's writer, and the store names no resource: a store that names the program that wrote it gives `resource <scheme> <digest>` straight after its configuration's line, and then a `program <type> <scheme> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 13. no resource line and no program line
-tally.retain: line 1: `logex retain 4` heads a store that names the program that wrote it, and the store names none: a store that names the program that wrote it gives `resource <digest>` straight after its configuration's line, and then a `program <type> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 1: `logex retain 4` heads a store that names the program that wrote it, and the store names none: a store that names the program that wrote it gives `resource <scheme> <digest>` straight after its configuration's line, and then a `program <type> <scheme> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 14. a resource line and no program line
-tally.retain: line 3: `resource 013cc059392445fdcc1e84c9b0de6118` names the resource of the store's writer, and the store names no program type: a store that names the program that wrote it gives `resource <digest>` straight after its configuration's line, and then a `program <type> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 3: `resource md5 013cc059392445fdcc1e84c9b0de6118` names the resource of the store's writer, and the store names no program type: a store that names the program that wrote it gives `resource <scheme> <digest>` straight after its configuration's line, and then a `program <type> <scheme> <digest>` a type: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 15. a digest with a wrong character
-tally.retain: line 3: `013cZ059392445fdcc1e84c9b0de6118` is no digest: a store's is 32 lowercase hexadecimal digits
+tally.retain: line 3: `013cZ059392445fdcc1e84c9b0de6118` is no `md5` digest: one is 32 lowercase hexadecimal digits
 -- 16. a line before the first instance line
 tally.retain: line 6: `junk here` comes before any `instance` line: an instance's lines follow its own
 -- 17. a word that is no type
@@ -689,15 +752,25 @@ started, count 0, dropped [{"t1.boxes.cv", :misfit}]
 -- 21. CRLF line ends, a count of 7
 started, count 7, dropped []
 -- 22. a value changed, the digest kept
-tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `0658ecbf84fdd6a959bb479677fdb6e6`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest 0658ecbf84fdd6a959bb479677fdb6e6` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 15: `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `md5 0658ecbf84fdd6a959bb479677fdb6e6`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest md5 0658ecbf84fdd6a959bb479677fdb6e6` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 23. a line removed, its count mended, the digest kept
-tally.retain: line 14: `digest d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `4d3b92f4ff82f33a17a2631a878de836`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest 4d3b92f4ff82f33a17a2631a878de836` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 14: `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `md5 4d3b92f4ff82f33a17a2631a878de836`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest md5 4d3b92f4ff82f33a17a2631a878de836` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 24. no digest line, its count mended
 tally.retain: line 1: `logex retain 4` heads a store that holds the digest of its value lines, and the store holds no `digest` line: its end was lost, the store cut short and an end line written after the cut, or its `digest` line was taken away, so the values that stood after line 14 may be lost and the store is not read; to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
--- 25. a store of version 3, which holds no digest
+-- 25. a store of version 3, which holds no digest and names no scheme
 started, count 3, dropped []
 -- 26. a digest line with a digit lost
-tally.retain: line 15: `d1e15a92bd876216f0fa2e5bf5537c8` is no digest: a store's is 32 lowercase hexadecimal digits, and the store's value lines' digest is `d1e15a92bd876216f0fa2e5bf5537c82`: to keep them write `digest d1e15a92bd876216f0fa2e5bf5537c82` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 15: `d1e15a92bd876216f0fa2e5bf5537c8` is no `md5` digest: one is 32 lowercase hexadecimal digits, and the store's value lines' digest is `md5 d1e15a92bd876216f0fa2e5bf5537c82`: to keep them write `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+-- 27. a digest line that names no scheme
+tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is no digest's line of a store of `logex retain 4`, which names each digest's scheme: it is `digest <scheme> <digest>`, as `digest md5 <32 lowercase hexadecimal digits>`, and the store's value lines' digest is `md5 d1e15a92bd876216f0fa2e5bf5537c82`: to keep them write `digest md5 d1e15a92bd876216f0fa2e5bf5537c82` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+-- 28. a digest line whose scheme this logex does not read
+tally.retain: line 15: `digest sha256 0000000000000000000000000000000000000000000000…` names the scheme `sha256`, which this logex does not read: it reads `md5`: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+-- 29. a resource line that names no scheme
+tally.retain: line 3: `resource 013cc059392445fdcc1e84c9b0de6118` is no resource's line of a store of `logex retain 4`, which names each digest's scheme: it is `resource <scheme> <digest>`, as `resource md5 <32 lowercase hexadecimal digits>`
+-- 30. a program line whose scheme this logex does not read
+tally.retain: line 4: `program tally sha1 bd882e28a8159d8e8a4ea56ade7b36b6` names the scheme `sha1`, which this logex does not read: it reads `md5`: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+-- 31. the word of each scheme in capitals
+started, count 0, dropped []
 ```
 
 | Case | What the start does |
@@ -723,11 +796,16 @@ tally.retain: line 15: `d1e15a92bd876216f0fa2e5bf5537c8` is no digest: a store's
 | 19 | Starts, with the count 5 from `16#5`. |
 | 20 | Starts. It drops the value `5.0` as `:misfit`. |
 | 21 | Starts. It reads the CRLF line ends, and the count is 7. |
-| 22 | Refuses: the value changed, and the `digest` line did not. The message gives the digest of the values and the way out. |
+| 22 | Refuses: the value changed, and the `digest` line did not. The message gives the line to write, with the scheme and the digest of the values, and the way out. |
 | 23 | Refuses: a line removed. The count is correct, and the digest is not. |
 | 24 | Refuses: no `digest` line. The message says that values after line 14 can be lost, and gives the way out and no digest. |
-| 25 | Starts: a store of `logex retain 3` holds no `digest` line. The count is 3. |
-| 26 | Refuses: the digest has 31 digits. The message gives the digest of the values and the way out. |
+| 25 | Starts: a store of `logex retain 3` holds no `digest` line and names no scheme. The count is 3. |
+| 26 | Refuses: the digest has 31 digits. The message gives the line to write and the way out. |
+| 27 | Refuses: the `digest` line names no scheme. The message gives the form of the line, the line to write and the way out. |
+| 28 | Refuses: logex does not read the scheme `sha256`. The message names the scheme and `md5`, and gives the way out and no digest. |
+| 29 | Refuses: the `resource` line names no scheme. The message gives the form of the line. A person can repair the line, thus the message gives no way out. |
+| 30 | Refuses: logex does not read the scheme `sha1` of the `program` line. The message gives the way out. |
+| 31 | Starts: the word of each scheme is `MD5`. The count is 0. |
 
 ### The warning of a different program
 
@@ -1122,7 +1200,8 @@ start is a fresh start. It is warm unless the options give `start: :cold`.
 - An edit that changes a line in place keeps the count of lines.
 - An edit that adds or removes a line must change the end line also.
 - An edit that changes, adds or removes a value line must change the `digest` line also.
-  The refusal of a fresh start gives the digest to write.
+  The refusal of a fresh start gives the line to write, with the word of the scheme and
+  the digest.
 - The store holds no comment. The runner writes the whole store at each write.
 
 A retained value can trip the plant again at each warm restart and each warm start.

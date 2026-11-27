@@ -1602,6 +1602,41 @@ defmodule Logex.ReadmeTest.MemberTables do
   end
 end
 
+defmodule Logex.ReadmeTest.Schemes do
+  @moduledoc false
+  # The table of the schemes on the reference of the store, held to the one table of them,
+  # `Logex.Retain.schemes/0` (decision 641): a row a scheme, its word and the digits of its
+  # digest, in the table's sequence, so that a scheme added to the reader is on the page,
+  # and the page names none that the reader does not read.
+  use ExUnit.Case, async: true
+
+  @page Path.expand("../../guides/reference/store.md", __DIR__)
+
+  test "store.md's table of the schemes is the rows of `Logex.Retain.schemes/0`" do
+    [_, after_heading] = String.split(File.read!(@page), "\n### The schemes\n", parts: 2)
+    [section | _] = String.split(after_heading, "\n#")
+
+    [table] =
+      for part <- String.split(section, "\n\n"),
+          String.starts_with?(part, "| Scheme |"),
+          do: part
+
+    rows =
+      for row <- table |> String.split("\n", trim: true) |> Enum.drop(2) do
+        [_, word, digits] =
+          Regex.run(
+            ~r/\A\| `([a-z0-9]+)` \| .* (\d+) lowercase hexadecimal digits \|\z/,
+            row
+          )
+
+        {word, String.to_integer(digits)}
+      end
+
+    assert [_ | _] = rows
+    assert rows == for({word, _function, digits} <- Logex.Retain.schemes(), do: {word, digits})
+  end
+end
+
 defmodule Logex.ReadmeTest.Uses do
   @moduledoc false
   # The uses of logex, said in the same words on README and on what-logex-is.md (decision

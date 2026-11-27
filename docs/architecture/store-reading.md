@@ -79,6 +79,20 @@ than the one this start was given: `tally`'s text
 differs; ...
 ```
 
+### The schemes
+
+A scheme is the method that makes a digest. The schemes are 1 table, `schemes/0` of
+`retain.ex`. A row is a scheme: its word, its function and the number of digits of its
+digest. The 1 row is `md5`, `:erlang.md5/1` and 32, which needs no `crypto` application.
+
+| Part | Rule |
+|---|---|
+| The writer | Writes the word of the first row before each digest of version 4 |
+| The reader | Reads the word of each row, in each case. Each line names its own scheme. |
+| A line of version 4 with no scheme | Refused. The refusal gives the form with the scheme. |
+| A scheme that is no row | Refused. The refusal names the scheme and the rows, and gives the cold-start sentence. |
+| The warning | The start digests its program by the scheme of each naming line. |
+
 ### The versions
 
 The reader takes 4 headers. Each write that names a program makes a store of `logex retain
@@ -88,16 +102,16 @@ The reader takes 4 headers. Each write that names a program makes a store of `lo
   line. The line holds the MD5 of the value lines. The reader computes it again. It
   refuses a store whose `digest` line does not hold it or does not read, and a store with
   no `digest` line. The header is provisional (PLAN.md's RV-34).
-  - The refusal of a wrong digest, or of one that does not read, gives the digest of the
-    value lines and the cold-start sentence.
+  - The refusal of a wrong digest, or of one that does not read, gives the `digest`
+    line to write and the cold-start sentence.
   - The refusal of no `digest` line says that the end of the store can be lost. It gives
     the cold-start sentence and no digest. A digest written into a store that was cut
     short and given an end line reads the lost values at their initial values.
   - The digest waits for each other problem. For a store with another problem, the
     refusal gives that problem, and a `digest` line that does not read with no digest.
 - **`logex retain 3`** has an end line and names its program by printed digests. It has
-  no `digest` line. The reader refuses it, and a store of `logex retain 4`, in these 3
-  cases:
+  no `digest` line, and its digests name no scheme. The reader refuses it, and a store of
+  `logex retain 4`, in these 3 cases:
   - It names no program.
   - It names program types and no `resource`.
   - It names its `resource` and no program type.
@@ -177,6 +191,7 @@ These refusals give it:
 - a store of a different configuration
 - a store of `logex retain 4` whose `digest` line does not hold the digest of its value
   lines, or that has no `digest` line
+- a line whose scheme the reader does not read
 
 <!-- unchecked: the end of a refusal, from the run of the example of store-and-files.md, wrapped at 56 columns -->
 ```text
@@ -207,12 +222,18 @@ log.
   and 545 give the cold-start sentence.
 - **A hand edit.** Decision 604 adds the digest of the value lines. An end line added to
   a cut store, or a value line removed with its count mended, read as whole before it.
+- **A scheme that can change.** Decision 641 names the scheme of each digest of version
+  4.
 
 ## How to change it
 
 Follow the steps of [The architecture of the store and its files](store-and-files.md#how-to-change-it).
 A change of the text needs a new header if an earlier logex must refuse it.
 `retain_store_test.exs` fails on a wrong header, end line, digest or refusal.
+
+A new scheme is a decision of §7, a row of `schemes/0` and a row of the table of
+[The schemes](../../guides/reference/store.md#the-schemes). `retain_store_test.exs`
+reads a store of a second row. Keep the row `md5` for versions 3 and 2.
 
 ## See also
 
