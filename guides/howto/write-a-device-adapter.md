@@ -140,11 +140,11 @@ A box on the line of a process shows the callbacks that run in that process.
 > process of the device. Then logex writes no 0 to the output points of the device, and
 > `close/1` does not run.
 
-`LineDevice` does not obey this rule. It waits 1000 ms to connect and 1000 ms for each
-answer. The example runs on the manual [clock](../reference/glossary.md#clock), which
-does not move during a wait. On the clock of the computer, a card that does not answer
-trips the runner with `:timeout` after 510 ms. The output points of the card then stay
-as they were. In your adapter, make the sum of the waits of each callback less than its
+`LineDevice` obeys this rule. It waits at most 200 ms to connect and 250 ms for each
+answer. Thus a call that connects again waits at most 450 ms, less than 510 ms. A card that
+does not answer thus gives `{:error, :timeout, state}` before the time limit. The runner
+then trips with that reason, writes 0 to the output points of the card, and calls
+`close/1`. In your adapter, make the sum of the waits of each callback less than its
 time limit.
 
 ## Steps
@@ -164,6 +164,15 @@ defmodule LineDevice do
 
 The attribute `@connect` has the options of the TCP socket.
 
+<!-- part of: line_device.exs -->
+```elixir
+  @connect_ms 200
+  @answer_ms 250
+```
+
+The attributes `@connect_ms` and `@answer_ms` are the waits in ms, to connect and for
+each answer. Their sum is less than the time limit of a callback.
+
 2. **Write `init/3`.** Open the device, and return `{:ok, state}`. The value `state`
    is the data that each later callback gets.
 
@@ -182,7 +191,7 @@ The attribute `@connect` has the options of the TCP socket.
 <!-- part of: line_device.exs -->
 ```elixir
   defp connected(%{socket: nil} = state),
-    do: socket(:gen_tcp.connect(state.host, state.port, @connect, 1000), state)
+    do: socket(:gen_tcp.connect(state.host, state.port, @connect, @connect_ms), state)
 
   defp connected(state), do: {:ok, state}
 
@@ -266,7 +275,7 @@ in `connected/1`.
 
   defp asked(error, _line, _answer), do: error
 
-  defp sent(:ok, socket), do: :gen_tcp.recv(socket, 0, 1000)
+  defp sent(:ok, socket), do: :gen_tcp.recv(socket, 0, @answer_ms)
   defp sent(error, _socket), do: error
 
   defp answered({:ok, text}, answer, state), do: given_back(answer.(text), state)
@@ -303,7 +312,7 @@ warning.
 
   def close(%{socket: socket}) do
     _ = :gen_tcp.send(socket, "quit\n")
-    _ = :gen_tcp.recv(socket, 0, 1000)
+    _ = :gen_tcp.recv(socket, 0, @answer_ms)
     :gen_tcp.close(socket)
   end
 ```

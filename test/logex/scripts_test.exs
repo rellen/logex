@@ -1014,4 +1014,45 @@ defmodule Logex.ScriptsTest do
       assert File.read!(plt(dir)) == "kept"
     end
   end
+
+  describe "the toolchain's pins (decision 605)" do
+    # DOC-1's close (decision 605; RV-34): the five files that pin the toolchain, `mix.exs`,
+    # `examples/mix.exs`, `.tool-versions`, `shell.nix` and `flake.nix`, and the two
+    # workflows that set up CI's, name one Elixir and one Erlang/OTP (decision 359), so
+    # that a bump of one alone is red here, where it was found by reading.
+    defp pinned(file, pattern) do
+      text = File.read!(Path.join(@root, file))
+      {file, Regex.run(pattern, text, capture: :all_but_first)}
+    end
+
+    test "every pin names Elixir 1.20.4 on Erlang/OTP 28" do
+      assert [
+               pinned("mix.exs", ~r/elixir: "~> (\d+\.\d+)"/),
+               pinned("examples/mix.exs", ~r/elixir: "~> (\d+\.\d+)"/),
+               pinned(".tool-versions", ~r/^erlang (\d+)\.[\d.]+\nelixir ([\d.]+)-otp-(\d+)$/m),
+               pinned("shell.nix", ~r/erlang_(\d+);\n\s*elixir = beam\.elixir_(\d+)_(\d+);/),
+               pinned("flake.nix", ~r/devShells\.default = import (\.\/shell\.nix)/),
+               pinned(
+                 ".github/workflows/ci.yml",
+                 ~r/OTP_VERSION: "(\d+)"\n\s*ELIXIR_VERSION: "([\d.]+)"/
+               ),
+               pinned(
+                 ".github/workflows/docs.yml",
+                 ~r/OTP_VERSION: "(\d+)"\n\s*ELIXIR_VERSION: "([\d.]+)"/
+               )
+             ] == [
+               {"mix.exs", ["1.20"]},
+               {"examples/mix.exs", ["1.20"]},
+               {".tool-versions", ["28", "1.20.4", "28"]},
+               {"shell.nix", ["28", "1", "20"]},
+               {"flake.nix", ["./shell.nix"]},
+               {".github/workflows/ci.yml", ["28", "1.20.4"]},
+               {".github/workflows/docs.yml", ["28", "1.20.4"]}
+             ]
+    end
+
+    test "the toolchain running the suite is the one pinned" do
+      assert {System.version(), System.otp_release()} == {"1.20.4", "28"}
+    end
+  end
 end
