@@ -661,7 +661,8 @@ defmodule Logex.ReviewLowsTest do
         Logex.compile_files([Path.join(dir, "p1.ld"), Path.join([dir, "sub", "..", "p2.ld"])])
 
       unused = &Enum.count(&1.warnings, fn w -> w.message =~ "`unused` is declared" end)
-      assert {unused.(p1), unused.(p2)} == {1, 0}
+      # Decision 598 (RV-34): its warning in each program that holds it, once in each.
+      assert {unused.(p1), unused.(p2)} == {1, 1}
 
       # And compiled once: a block of 400 rungs reached by two spellings costs what it does
       # by one, where it was compiled again.

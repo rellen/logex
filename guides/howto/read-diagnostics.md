@@ -155,7 +155,7 @@ read-diagnostics/lamp.ld: line 3: warning: `spare` is declared but no rung uses 
 read-diagnostics/lamp.ld: line 6: warning: `lamp` already has an `ote` on line 5: the last one in the scan decides it
 broken.logex does not compile
 broken.logex: line 6: no task `fsat` — did you mean `fast`?
-broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.overtemp 0`
+broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global or a constant, as in `m1.overtemp 0`
 broken.logex: line 9: `pb_stop_1` is an input point (line 3): `m1.motor`, a var_output, cannot drive it
 broken.logex: line 10: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
 broken.logex: line 11: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`
@@ -314,7 +314,7 @@ Enum.each(diagnostics, editor)
 ```console
 $ mix run read-diagnostics-editor.exs
 broken.logex:6: error: no task `fsat` — did you mean `fast`?
-broken.logex:6: error: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.overtemp 0`
+broken.logex:6: error: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global or a constant, as in `m1.overtemp 0`
 broken.logex:9: error: `pb_stop_1` is an input point (line 3): `m1.motor`, a var_output, cannot drive it
 broken.logex:10: error: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
 broken.logex:11: error: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`

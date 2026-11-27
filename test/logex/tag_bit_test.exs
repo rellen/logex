@@ -554,10 +554,11 @@ defmodule Logex.TagBitTest do
                {5, "`w.3` already has an `ote` on line 4: the last one in the scan decides it"}
              ]
 
+      # Decision 597 (RV-34): the coil on a bit a tag numbers told as the one bit it writes.
       assert warnings(head <> "xic a ote w.[n]\nxic a ote w.3") == [
                {5,
-                "`w.3` is a bit of `w`, which the `ote` on line 4 writes whole: the last one in " <>
-                  "the scan decides it"}
+                "`w.3` is a bit of `w`, and the `ote` on line 4 writes one bit of it, `w.[n]`, " <>
+                  "which a tag numbers: the last one in the scan decides it"}
              ]
     end
 
@@ -571,8 +572,11 @@ defmodule Logex.TagBitTest do
       later = "the last one in the scan decides it"
       decides = fn source -> Enum.filter(warnings(source), &(elem(&1, 1) =~ later)) end
 
+      # Decision 597 (RV-34): told at the write's line that it writes the word whole.
       assert decides.(head <> "xic a ote w.[n]\nmove 5 w") == [
-               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+               {8,
+                "`w` is written whole by the `move`, and its bit `w.[n]` already has an `ote` " <>
+                  "on line 7: #{later}"}
              ]
 
       assert decides.(head <> "move 5 w\nxic a ote w.[n]") == [
@@ -580,7 +584,9 @@ defmodule Logex.TagBitTest do
              ]
 
       assert decides.(head <> "xic a ote w.[n]\nand k k w") == [
-               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+               {8,
+                "`w` is written whole by the `and`, and its bit `w.[n]` already has an `ote` on " <>
+                  "line 7: #{later}"}
              ]
 
       assert decides.(head <> "and k k w\nxic a ote w.[n]") == [
@@ -588,7 +594,9 @@ defmodule Logex.TagBitTest do
              ]
 
       assert decides.(head <> "xic a ote c.pv.[n]\nmove x c.pv\nctu c 9") == [
-               {8, "`c.pv.[n]` already has an `ote` on line 7: #{later}"}
+               {8,
+                "`c.pv` is written whole by the `move`, and its bit `c.pv.[n]` already has an " <>
+                  "`ote` on line 7: #{later}"}
              ]
 
       assert decides.(head <> "move x c.pv\nxic a ote c.pv.[n]\nctu c 9") == [
@@ -632,12 +640,17 @@ defmodule Logex.TagBitTest do
                {8, "`w.[n]` is already written by the `move` on line 7: #{later}"}
              ]
 
+      # Decision 597 (RV-34): the `otl` told that it writes one bit, `w.[m]`, not `w` whole.
       assert decides.("xic a ote w.[n]\nxic a otl w.[m]") == [
-               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+               {8,
+                "`w.[m]`, which the `otl` writes, is a bit of `w` that a tag numbers, and " <>
+                  "`w.[n]` already has an `ote` on line 7: #{later}"}
              ]
 
       assert decides.("xic a otl w.[m]\nxic a ote w.[n]") == [
-               {8, "`w.[n]` is a bit of `w`, which the `otl` on line 7 writes whole: #{later}"}
+               {8,
+                "`w.[n]` is a bit of `w`, and the `otl` on line 7 writes one bit of it, " <>
+                  "`w.[m]`, which a tag numbers: #{later}"}
              ]
 
       # Decision 372: rows whose literal subscripts differ, `g[1,c]` and `g[0,c]`, never
@@ -654,8 +667,12 @@ defmodule Logex.TagBitTest do
       # The very bit's latch beside a coil on another bit of the word is told that coil,
       # whichever came first among the coils.
       assert decides.("xic a ote w.[n]\nxic a ote w.3\nxic a otl w.[n]") == [
-               {8, "`w.3` is a bit of `w`, which the `ote` on line 7 writes whole: #{later}"},
-               {9, "`w.3` already has an `ote` on line 8: #{later}"}
+               {8,
+                "`w.3` is a bit of `w`, and the `ote` on line 7 writes one bit of it, `w.[n]`, " <>
+                  "which a tag numbers: #{later}"},
+               {9,
+                "`w.[n]`, which the `otl` writes, is a bit of `w` that a tag numbers, and `w.3` " <>
+                  "already has an `ote` on line 8: #{later}"}
              ]
 
       assert decides.("xic a otl w.[n]\nmove 0 w\nxic a ote w.[n]") == [
@@ -667,7 +684,9 @@ defmodule Logex.TagBitTest do
       assert warnings(
                "var w word\nvar_input n int\nvar_input a bool\nxic a ote w.3\nmove a w.[n]"
              ) == [
-               {5, "`w.3` already has an `ote` on line 4: the last one in the scan decides it"}
+               {5,
+                "`w.[n]`, which the `move` writes, is a bit of `w` that a tag numbers, and " <>
+                  "`w.3` already has an `ote` on line 4: the last one in the scan decides it"}
              ]
     end
 

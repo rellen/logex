@@ -189,8 +189,9 @@ defmodule Logex do
   among them, in the order the loader compiled them: a block's after those of the blocks
   it holds. They stay in each block's type too. A block's file compiles to a type
   `compile/2` could give, its body's warnings its own (`Logex.FbType.user?/1`), so it
-  hands back no other. `compile/2`, whose host compiled each block, gives only the
-  program's.
+  hands back no other. Since decision 598 (RV-34) `compile/2`, whose host compiled each
+  block, gives the program's own and then those of every block type its table holds, in
+  the table's order, each as its type carries it.
 
   `path` is a `.ld` file's, exactly, since the extension says what kind of file it is
   (M2-2): any other, `seal.txt`, `seal.LD` or `seal` among them, is a `:file`
@@ -221,10 +222,10 @@ defmodule Logex do
   @doc """
   Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
   in their order. One memo serves the call (decision 34, M2-2), so a block that several of
-  the files hold, at any depth, is read and compiled once, and its warnings are handed
-  back once, among those of the first program in `paths` that holds it and compiles: a
-  block's own file in `paths` hands back nothing, so a program after it still hands its
-  blocks' warnings back. A chain of files that holds itself is found again for each path,
+  the files hold, at any depth, is read and compiled once, and since decision 598 (RV-34)
+  its warnings are handed back among those of every program in `paths` that holds it and
+  compiles, where only the first's held them: a block's own file in `paths` hands back
+  nothing. A chain of files that holds itself is found again for each path,
   since what it cites depends on the file it was reached from. A path given twice gives
   its one result twice. `Logex.Configuration.compile_file/1` loads a configuration's
   program types through it.

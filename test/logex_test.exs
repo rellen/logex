@@ -1172,7 +1172,7 @@ defmodule LogexTest do
     end
 
     test "compiles each as compile_file/1 does, a block they share once, its warnings " <>
-           "handed back once",
+           "in each that holds it",
          %{tmp_dir: dir} do
       latch = Path.join(dir, "latch.ld")
       File.write!(latch, @block)
@@ -1183,11 +1183,13 @@ defmodule LogexTest do
       assert [{:ok, first}, {:ok, second}] = Logex.compile_files([one, two])
       assert {:ok, first} == Logex.compile_file(one)
       assert Enum.map(first.warnings, &Diagnostic.format/1) == [warning]
-      assert {:ok, %{second | warnings: [hd(first.warnings)]}} == Logex.compile_file(two)
-      assert second.warnings == []
+      # Decision 598 (RV-34): the block's warnings travel with its type, to each program
+      # that holds it, where only the first to load it handed them back.
+      assert {:ok, second} == Logex.compile_file(two)
+      assert Enum.map(second.warnings, &Diagnostic.format/1) == [warning]
 
-      # In the other order, the other program hands the warning back.
-      assert [{:ok, %{warnings: [_]}}, {:ok, %{warnings: []}}] = Logex.compile_files([two, one])
+      # In the other order, the same.
+      assert [{:ok, %{warnings: [_]}}, {:ok, %{warnings: [_]}}] = Logex.compile_files([two, one])
 
       # A path given twice gives its one result twice; each path passes the gate.
       assert [{:ok, ^first}, {:ok, ^first}] = Logex.compile_files([one, one])

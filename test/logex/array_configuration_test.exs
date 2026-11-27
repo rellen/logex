@@ -506,11 +506,11 @@ defmodule Logex.ArrayConfigurationTest do
 
     test "an array var_input is connected whole, or at every element" do
       assert refused(String.replace(@configuration, "m1.e[1] x\n", "")) == [
-               "`m1` leaves its var_input `e[1]` unconnected: connect it to a global, a point or a constant, as in `m1.e[1] 0`"
+               "`m1` leaves its var_input `e[1]` unconnected: connect it to a global or a constant, as in `m1.e[1] 0`"
              ]
 
       assert refused(String.replace(@configuration, "m1.e[0] 4\nm1.e[1] x\n", "")) == [
-               "`m1` leaves its var_input `e` unconnected: connect it to a global, a point or a constant, as in `m1.e 0`"
+               "`m1` leaves its var_input `e` unconnected: connect it to a global or a constant, as in `m1.e 0`"
              ]
     end
   end

@@ -493,6 +493,13 @@ defmodule Logex.Warnings do
   defp start(nil, _type), do: "0"
   # M5-11: an array's initial list, which no one value says.
   defp start(initial, _type) when is_list(initial), do: "its initial values"
+
+  # Decision 597 (RV-34): a real's, the value it holds, its type's nearest, spelled as the
+  # shortest text that reads back to it, 16777216.0 for `var_output g real 16777217.0`,
+  # where it was told the declaration's own text.
+  defp start(initial, type) when type in @reals,
+    do: Logex.Real.spelled(type, elem(Logex.Real.stored(type, initial), 1))
+
   defp start(initial, _type), do: "#{initial}"
 
   # Each `ote` after the first on a tag declared in source cites the first. An `ons`
@@ -548,6 +555,8 @@ defmodule Logex.Warnings do
   # It costs a routine with no write but its coils and latches one look at each
   # instruction, and one with no coil on what a coil names by its name and no `cal` one more,
   # so the cost of a routine of coils alone, or of `move`s alone, is what it was.
+  # An `otl` and an `otu` may share a tag with an `ote`, as a latch and its reset do (M1-5),
+  # and an `ons` writes its storage bit, so none of them is a writer here.
   @shared_coils [:ote, :osr, :osf]
   @writers for {_word, {symbol, signature}} when is_list(signature) <-
                  Compiler.instructions(),
@@ -656,9 +665,6 @@ defmodule Logex.Warnings do
 
   defp shared({symbol, _line, _operands} = instruction, _tags) when symbol in @shared_coils,
     do: instruction |> coil_target() |> Enum.flat_map(&shared_write(&1, :coil))
-
-  # An `otl` and an `otu` may share a tag with an `ote`, as a latch and its reset do (M1-5).
-  defp shared({symbol, _line, _operands}, _tags) when symbol in [:ons, :otl, :otu], do: []
 
   defp shared({:cal, _line, _operands} = instruction, tags),
     do:
@@ -1054,7 +1060,7 @@ defmodule Logex.Warnings do
     do:
       {bit_after(
          Map.fetch(coils, key),
-         Map.fetch(wholes, word),
+         told_first(Map.fetch(wholes, word), wholes, word),
          Map.fetch(wholes, {:written, tag}),
          {word, tag, at, shown}
        ),
@@ -1065,7 +1071,7 @@ defmodule Logex.Warnings do
     do:
       {bit_after(
          Map.fetch(coils, key),
-         Map.fetch(wholes, word),
+         told_first(Map.fetch(wholes, word), wholes, word),
          meeting(wholes, {:written, tag}, places),
          {word, tag, at, shown}
        ),
@@ -1094,7 +1100,7 @@ defmodule Logex.Warnings do
       word_after(
         Map.fetch(coils, word),
         Map.fetch(bitted, word),
-        unlike(wholes, word, id),
+        told_first(unlike(wholes, word, id), wholes, word),
         meeting(wholes, {:written, tag}, places),
         {word, tag, line, at, shown}
       )
@@ -1115,7 +1121,13 @@ defmodule Logex.Warnings do
        {coils, wholes, first_at(bitted, word, places, {shown, at}, nil)}}
 
   defp decided({:whole, word, _tag, at, id}, {coils, wholes, bitted}),
-    do: whole_after(unlike(bitted, word, id), at, {coils, first(wholes, word, at, id), bitted})
+    do:
+      whole_after(
+        unlike(bitted, word, id),
+        {word, at},
+        id,
+        {coils, first(wholes, word, at, id), bitted}
+      )
 
   # M5-12's review: a write of an element whole, `move x w[2]`, in an array a coil names
   # through a tag subscript, `ote w[i].1`, comes after that coil as the second-`ote`
@@ -1744,13 +1756,7 @@ defmodule Logex.Warnings do
        do: bit_after(:error, whole, written, {mword_name(word), tag, at, shown})
 
   defp bit_after(:error, {:ok, {first, symbol}}, _written, {word, _tag, {line, _}, shown}),
-    do: [
-      warning(
-        line,
-        "`#{shown}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
-          "writes whole: #{last()}"
-      )
-    ]
+    do: [bit_of_whole(shown, word, {first, symbol}, line)]
 
   defp bit_after(:error, :error, {:ok, _first} = written, {_word, tag, at, shown}),
     do: in_array(written, {:array, tag}, at, shown)
@@ -1788,18 +1794,41 @@ defmodule Logex.Warnings do
        do: word_after(:error, :error, whole, written, {mword_name(word), tag, l, at, s})
 
   defp word_after(:error, :error, {:ok, {first, symbol}}, _written, {word, _tag, line, _, shown}),
-    do: [
-      warning(
-        line,
-        "`#{shown}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
-          "writes whole: #{last()}"
-      )
-    ]
+    do: [bit_of_whole(shown, word, {first, symbol}, line)]
 
   defp word_after(:error, :error, :error, {:ok, _} = written, {_word, tag, _line, at, shown}),
     do: in_array(written, {:array, tag}, at, shown)
 
   defp word_after(:error, :error, :error, :error, _coil), do: []
+
+  # Decision 597 (RV-34): the first whole write of a word found for a coil on a bit of it,
+  # marked with the tag that numbers its bit where it is a write of one bit a tag numbers,
+  # `otl out.[sel]` or `move a out.[sel]`, which a whole write of the word records
+  # (decision 160): the very first the word holds, whose id `{:same, word}` keeps.
+  defp told_first(found, wholes, word),
+    do: numbered(found, Map.fetch(wholes, word), Map.get(wholes, {:same, word}))
+
+  defp numbered({:ok, {line, symbol}} = first, first, {{:bit_at, _container, n}, _other}),
+    do: {:ok, {line, {symbol, n}}}
+
+  defp numbered(found, _first, _same), do: found
+
+  # Such a write is told as the one bit it writes, and any other as the word whole.
+  defp bit_of_whole(shown, word, {first, {symbol, n}}, line),
+    do:
+      warning(
+        line,
+        "`#{shown}` is a bit of `#{word}`, and the `#{symbol}` #{where(first, line)} writes " <>
+          "one bit of it, `#{word}.[#{n}]`, which a tag numbers: #{last()}"
+      )
+
+  defp bit_of_whole(shown, word, {first, symbol}, line),
+    do:
+      warning(
+        line,
+        "`#{shown}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
+          "writes whole: #{last()}"
+      )
 
   # Decision 372: a coil through a tag subscript in an array of one dimension, which meets
   # every element, by its plain keys, at what it cost before; in one of two or three, by
@@ -1919,10 +1948,42 @@ defmodule Logex.Warnings do
   defp as_found(:error, _write), do: []
   defp as_found({:ok, first}, write), do: [as_in(first, write)]
 
-  defp whole_after(:error, _at, firsts), do: {[], firsts}
+  defp whole_after(:error, _at, _id, firsts), do: {[], firsts}
 
-  defp whole_after({:ok, {bit, first}}, {line, _symbol}, firsts),
-    do: {[second_ote(bit, first, line)], firsts}
+  # Decision 597 (RV-34): a write of the word whole after a coil on a bit of it, `move 0
+  # faults[1]` after `ote faults[1].0`, told at the write's line that it writes the word
+  # whole and that the coil decides that bit, where it was told as the coil's bit alone.
+  # A write of a bit a tag numbers, `move a w.[n]` or `otl w.[m]`, is kept as a write of
+  # the word whole (decision 160) and told as the one bit it writes.
+  defp whole_after({:ok, {bit, first}}, {word, {line, symbol}}, {:bit_at, _container, n}, firsts),
+    do:
+      {[
+         warning(
+           line,
+           "`#{word_shown(word)}.[#{n}]`, which the `#{symbol}` writes, is a bit of " <>
+             "`#{word_shown(word)}` that a tag numbers, and #{bit_coiled(bit, first, line)}: " <>
+             last()
+         )
+       ], firsts}
+
+  defp whole_after({:ok, {bit, first}}, {word, {line, symbol}}, _id, firsts),
+    do:
+      {[
+         warning(
+           line,
+           "`#{word_shown(word)}` is written whole by the `#{symbol}`, and its bit " <>
+             "#{bit_coiled(bit, first, line)}: #{last()}"
+         )
+       ], firsts}
+
+  defp word_shown({:mword_el, _, _, _} = word), do: mword_name(word)
+  defp word_shown(word), do: word
+
+  defp bit_coiled(bit, {first, :ote}, line),
+    do: "`#{bit}` already has an `ote` #{where(first, line)}"
+
+  defp bit_coiled(bit, {first, coil}, line),
+    do: "`#{bit}` is already the pulse bit of the `#{coil}` #{where(first, line)}"
 
   # Decision 431: whole_writes/3, and a mark of each write a tag reaches of a member's word
   # of an element a coil names a bit of, by an instruction other than a coil, read in the
@@ -2616,6 +2677,22 @@ defmodule Logex.Warnings do
        when symbol in @comparisons and is_int_lit(literal),
        do: limited(integer_type(operand, tags), {symbol, :left}, {operand, literal}, line)
 
+  # Decision 598 (RV-34): a real's comparison with a literal at its type's limit, `ge
+  # speed -3.4028235e38` on a `real`, whose result never changes, warned as an integer's
+  # is (decision 187), the literal read as the real it is held as; beside decision 219's
+  # warning of its digits.
+  defp by_literal({symbol, line, [operand, literal]} = instruction, tags)
+       when symbol in @comparisons and is_real_lit(literal),
+       do:
+         rounded_literals(instruction, tags) ++
+           real_limited(real_type(operand, tags), {symbol, :right}, {operand, literal}, line)
+
+  defp by_literal({symbol, line, [literal, operand]} = instruction, tags)
+       when symbol in @comparisons and is_real_lit(literal),
+       do:
+         rounded_literals(instruction, tags) ++
+           real_limited(real_type(operand, tags), {symbol, :left}, {operand, literal}, line)
+
   defp by_literal({_, _, [a | _]} = instruction, tags) when is_real_lit(a),
     do: rounded_literals(instruction, tags)
 
@@ -2636,6 +2713,16 @@ defmodule Logex.Warnings do
   end
 
   defp limited(:error, _at, _compared, _line), do: []
+
+  defp real_type(operand, tags), do: Logex.Program.destination(operand, tags, :real)
+
+  defp real_limited({:ok, type}, at, {operand, literal}, line) do
+    {_power, held} = Logex.Real.stored(type, Parser.value(literal))
+    most = Logex.Real.max(type)
+    fixed(fixed?(at, limit(held, -most, most)), at, {operand, literal, type}, line)
+  end
+
+  defp real_limited(_no_real, _at, _compared, _line), do: []
 
   defp limit(lo, lo, _hi), do: :lowest
   defp limit(hi, _lo, hi), do: :highest

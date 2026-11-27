@@ -135,6 +135,34 @@ API".
   integer the conversion gives: `lreal_to_lint 1.5e6 cure.pre` on a `ton_ltime` is told
   `1500000 ns is no whole number of milliseconds`, where it was told only that it reads a
   literal. Look for: a test or a tool that reads such a program's warnings whole.
+- **Four messages made true** (decision 597): `not` and the shifts are told they compute
+  in their source's type, `` `not` computes in `w`'s type, a word (declared on line 1),
+  and writes its result into `d`, a byte `` (decision 214), where they were told the
+  destination's; a coil on a bit a tag numbers is told it writes one bit, ``the `otl` on
+  line 6 writes one bit of it, `out.[sel]`, which a tag numbers``, where it was told it
+  writes `out` whole, and a whole write after a coil on a bit of the word, `move 0
+  faults[1]` after `ote faults[1].0`, `` `faults[1]` is written whole by the `move`, and
+  its bit `faults[1].0` already has an `ote` on line 3 ``; a `var_output` nothing writes
+  is told the value it holds, `it stays at 16777216.0`, not its spelling; and an
+  unconnected `var_input` is offered ``a global or a constant``, no point. Look for: a
+  test or a tool that reads these messages whole.
+- **Four warnings given rightly** (decision 598): under an event task with an interval
+  the one-shot, counter and `tp` warnings no longer say the trigger "is true at every run
+  and never pulses", which a run at the due time disproves; a real's limit compare, `ge
+  speed -3.4028235e38`, is warned as an integer's is; a block's warnings travel with its
+  type, given through `types:` after the program's own in its table's order, and by
+  `Logex.compile_files/1` to every program that holds it, where only the first to load it
+  held them; and a configuration's real initial list is told ten rounded literals and a
+  count of the rest, as a program's is. Look for: code that counts warnings, or reads a
+  program's as its own alone.
+- **Three refusals that help more** (decision 599): an unknown instruction is offered the
+  nearest mnemonic, ``unknown instruction `otee` — did you mean `ote`?``, by the bounded
+  search a tag's name has (decision 520), compared in lowercase; a type word the loader
+  found no file for names the file, ``unknown type `nofile`: there is no `nofile.ld`
+  beside `prog.ld`, and logex has ...``; and a configuration whose program type does not
+  compile still tells its instances' connections whose far end is wrong, ``no global
+  `pbb` — did you mean `pb`?``, beside the compile's mistakes. Look for: a test or a tool
+  that reads these messages whole, or counts a configuration's diagnostics.
 
 ### The host's API
 

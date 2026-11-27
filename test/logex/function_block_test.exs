@@ -3333,7 +3333,7 @@ defmodule Logex.FunctionBlockTest do
       assert motor.blocks["outer"].body.blocks == %{} and motor.blocks["seal"].body.file == seal
     end
 
-    test "compile/2 gives only the program's warnings, and a block's file only its own",
+    test "compile/2 gives the program's warnings and its blocks', and a block's file only its own",
          %{tmp_dir: dir} do
       write!(dir, "seal.ld", @warned_seal)
       outer = write!(dir, "outer.ld", @outer)
@@ -3352,8 +3352,12 @@ defmodule Logex.FunctionBlockTest do
 
       motor = program!(@holds_both, [outer_type, seal_type])
 
+      # Decision 598 (RV-34): a block's warnings travel with its type, given through
+      # `types:`, after the program's own, in the order of its table of blocks.
       assert warnings(motor) == [
-               "line 4: warning: `unused` is declared but no rung uses it"
+               "line 4: warning: `unused` is declared but no rung uses it",
+               "#{outer}: line 4: warning: `spare` is declared but no rung uses it",
+               "#{dir}/seal.ld: line 5: warning: `n` is declared but no rung uses it"
              ]
     end
 
@@ -3456,6 +3460,39 @@ defmodule Logex.FunctionBlockTest do
 
       assert formatted(Logex.compile_file(blk)) == ["#{blk}: #{message}"]
       assert formatted(Logex.compile_file(prog)) == ["#{blk}: #{message}"]
+    end
+
+    # Decision 599 (RV-34): a word the loader looked for a file for, and found none, is told
+    # of the file looked for, before what logex has, its did-you-mean among the blocks loaded
+    # kept; an array's by its base; compile/2, which looks for no file, tells it as before.
+    test "a missing block's file is named", %{tmp_dir: dir} do
+      prog =
+        write!(dir, "prog.ld", "var_input a bool\nvar_output q bool\nvar x nofile\nxic a ote q\n")
+
+      assert formatted(Logex.compile_file(prog)) == [
+               "#{prog}: line 3: unknown type `nofile`: there is no `nofile.ld` beside " <>
+                 "`prog.ld`, and #{@has}"
+             ]
+
+      write!(dir, "seal.ld", @seal)
+
+      near =
+        write!(
+          dir,
+          "near.ld",
+          "var_input a bool\nvar_output q bool\nvar t seal\nvar s sael[2]\nxic a ote q\n"
+        )
+
+      assert formatted(Logex.compile_file(near)) == [
+               "#{near}: line 4: unknown type `sael`: there is no `sael.ld` beside `near.ld`, " <>
+                 "and #{@has}, and the function block `seal` — did you mean `seal`?"
+             ]
+
+      assert formatted(
+               Logex.compile("var_input a bool\nvar_output q bool\nvar x nofile\nxic a ote q\n",
+                 name: "prog"
+               )
+             ) == ["line 3: unknown type `nofile`: #{@has}"]
     end
 
     # Only a word a block's first rung could give is looked for: a dotted word, or the word

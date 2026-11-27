@@ -72,7 +72,7 @@ logex gives these warnings for a program and for the body of a
 | Cause | A `var_output` tag that a rung reads and that no instruction writes. |
 | In the run | The tag keeps its initial value. |
 | `<value>` | The number of the initial value, as Elixir prints it: `16#ff` gives `255`. With no initial value: `0`, or `0.0` for a real. An array with an initial list gives `its initial values`. An array with no list gives `0` or `0.0`. |
-| `<value>` of a real | The number of the literal, not the nearest real that the tag holds. `var_output gain real 16777217.0` gives `it stays at 16777217.0`, and its other warning gives `it is held as 16777216.0`. |
+| `<value>` of a real | The nearest real that the tag holds, not the number of the literal. `var_output gain real 16777217.0` gives `it stays at 16777216.0`, as its other warning gives `it is held as 16777216.0`. |
 | No warning | A `var` tag that a rung reads and that no instruction writes. A `var_output` that no rung names gets the warning [A tag that no rung uses](#a-tag-that-no-rung-uses). |
 | Case | [2](#cases-1-to-10-a-program) |
 
@@ -298,21 +298,27 @@ first write ([11](#cases-11-to-28-2-writes-with-a-warning)). If the first write 
 | `` `<bool>` already has an `ote` on line <n> `` | The first write is an `ote` on the bool. | [11](#cases-11-to-28-2-writes-with-a-warning), [13](#cases-11-to-28-2-writes-with-a-warning), [14](#cases-11-to-28-2-writes-with-a-warning), [20](#cases-11-to-28-2-writes-with-a-warning) |
 | `` `<bool>` is already the pulse bit of the `<mnemonic>` on line <n> `` | The first write is a pulse coil on the bool. | [12](#cases-11-to-28-2-writes-with-a-warning) |
 | `` `<bool>` is already written by the `<mnemonic>` on line <n> `` | The first write is the output operand of a `cal`, or a write that is not a latch. It is on the same bool, by the same literals or through the same tags. | [63](#cases-63-to-80-pairs-in-the-2-orders), [73](#cases-63-to-80-pairs-in-the-2-orders), [75](#cases-63-to-80-pairs-in-the-2-orders) to [79](#cases-63-to-80-pairs-in-the-2-orders) |
-| `` `<bit>` is a bit of `<word>`, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` on a bit. The first write writes its word, or writes a bit of the word through a tag. | [15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-80-pairs-in-the-2-orders) |
+| `` `<bit>` is a bit of `<word>`, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` on a bit. The first write writes its word. | [15](#cases-11-to-28-2-writes-with-a-warning) |
+| `` `<bit>` is a bit of `<word>`, and the `<mnemonic>` on line <n> writes one bit of it, `<first>`, which a tag numbers `` | The later write is an `ote` on a bit. The first write writes a bit of the word through a tag. | [17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-80-pairs-in-the-2-orders) |
+| `` `<word>` is written whole by the `<mnemonic>`, and its bit `<bit>` already has an `ote` on line <n> `` | The later write writes the word. The first write is an `ote` on a bit of the word. | [15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning) |
+| `` `<later>`, which the `<mnemonic>` writes, is a bit of `<word>` that a tag numbers, and `<bit>` already has an `ote` on line <n> `` | The later write writes a bit of the word through a tag. The first write is an `ote` on another bit of the word. | [68](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, which the `<mnemonic>` on line <n> may write through a tag subscript `` | The first write goes through a tag subscript. | [18](#cases-11-to-28-2-writes-with-a-warning), [19](#cases-11-to-28-2-writes-with-a-warning), [22](#cases-11-to-28-2-writes-with-a-warning) to [24](#cases-11-to-28-2-writes-with-a-warning), [70](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, as `<first>` is, which already has an `ote` on line <n> `` | The later write goes through a tag. The first write is an `ote` on a literal element or bit. | [18](#cases-11-to-28-2-writes-with-a-warning), [21](#cases-11-to-28-2-writes-with-a-warning), [64](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, as `<first>` is, which is already the pulse bit of the `<mnemonic>` on line <n> `` | The later write goes through a tag. The first write is a pulse coil on a literal element. | [12](#cases-11-to-28-2-writes-with-a-warning) |
 | `` `<later>` is in `<array>`, as `<first>` is, which the `<mnemonic>` on line <n> writes `` | The later write is an `ote` through a tag. The first write is a write of a different kind. It is on a literal element, on a member of a literal element, or on a bit of 1 of these. | [65](#cases-63-to-80-pairs-in-the-2-orders), [71](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, as `<first>` is, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` through a tag. The first write writes a literal element of a word array, or a member of a literal element, whole. It can also be a write through a tag on a bit of 1 of these. | [15](#cases-11-to-28-2-writes-with-a-warning) |
 
-The name in a message is the name of the later write, with 1 exception. If the later
-write writes a word, and the first write is an `ote` on a bit of that word, the message
-names the bit. For example, the `move` on line 24 of case [15](#cases-11-to-28-2-writes-with-a-warning) gets
-`` `faults[1].0` already has an `ote` on line 23 ``. So does an `otl` on a bit through a
-tag ([68](#cases-63-to-80-pairs-in-the-2-orders)).
+The name in a message is the name of the later write. The later write can write a word
+after an `ote` on a bit of that word. Then the message names the word and the bit. The
+`move` of case [15](#cases-11-to-28-2-writes-with-a-warning) gets
+`` `faults[1]` is written whole by the `move`, and its bit `faults[1].0` already has an `ote` on line 23 ``.
 
-logex counts a write on a bit through a tag as a write of its word. Thus the
-message for an `ote` on a bit after it says `writes whole` ([17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-80-pairs-in-the-2-orders)).
+logex counts a write on a bit through a tag as a write of its word. The tag can number any
+bit of the word. The message names the 1 bit that the write writes:
+
+- `` `status.[n]`, which the `otl` writes, is a bit of `status` that a tag numbers ``, for
+  an `otl` on that bit ([68](#cases-63-to-80-pairs-in-the-2-orders))
+- `writes one bit of it`, for an `ote` on a bit after it ([17](#cases-11-to-28-2-writes-with-a-warning))
 
 ### Example: 2 `ote` instructions on `motor`
 
@@ -479,9 +485,14 @@ The result for each instruction:
 |---|---|
 | `ton` and `rto` | The timer times across the runs of the task. If its rung is true in 2 runs in sequence, it adds the full time between the 2 runs. |
 | `tof` | The delay ends only at a run of the task. The output stays on until the first run after the preset. |
-| `tp` | The pulse ends only at a run of the task. It starts only on an edge between 2 runs. A rung that is the [trigger](glossary.md#trigger) of the task is true at each run and never starts a pulse. |
-| A counter | A pulse between 2 runs does not count. A rung that is the trigger of the task never counts. |
-| `ons`, `osr` and `osf` | A pulse between 2 runs gives no pulse. For an `osf`, a drop between 2 runs gives no pulse. The pulse bit of an `osr` or an `osf` stays on until the next run. A rung that is the trigger of the task never gives a pulse. |
+| `tp` | The pulse ends only at a run of the task. It starts only on an edge between 2 runs. Under a task with no interval, a rung that is the [trigger](glossary.md#trigger) of the task is true at each run and never starts a pulse. |
+| A counter | A pulse between 2 runs does not count. Under a task with no interval, a rung that is the trigger of the task never counts. |
+| `ons`, `osr` and `osf` | A pulse between 2 runs gives no pulse. For an `osf`, a drop between 2 runs gives no pulse. The pulse bit of an `osr` or an `osf` stays on until the next run. Under a task with no interval, a rung that is the trigger of the task never gives a pulse. |
+
+A task with an interval also runs at a due time while its trigger is 0. Thus a rung that
+is the trigger is 0 at that run and 1 at the next rise. The message does not say that it
+never changes. [A task with a trigger and an interval](../explanation/event-tasks.md#a-task-with-a-trigger-and-an-interval)
+gives the runs.
 
 ### A retained value that a connection drives
 
@@ -500,7 +511,7 @@ The result for each instruction:
 |---|---|
 | Message | `` `<literal>` is more precise than a real keeps: it is held as <value> ``, or `than an lreal keeps` |
 | Cause | A real initial value of a `var_global` line, or a real constant of a connection, with more digits than its type keeps. |
-| Limit | No limit. Each value of an initial list gets its own warning. |
+| Limit | A list of initial values gets 10 warnings, then `` <n> more literals of this initial list are more precise than a real keeps, not listed ``, as in a program. |
 | No warning | A configuration from Elixir data. It holds the value of the number, not its text. |
 | Cases | [58](#cases-44-to-62-a-configuration), [62](#cases-44-to-62-a-configuration) |
 
@@ -696,7 +707,7 @@ $ mix run warnings-program.exs
     line 6: warning: `rate` is a var_output, but no rung writes it: it stays at 0.0
     line 7: warning: `mask` is a var_output, but no rung writes it: it stays at 255
     line 8: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
-    line 8: warning: `gain` is a var_output, but no rung writes it: it stays at 16777217.0
+    line 8: warning: `gain` is a var_output, but no rung writes it: it stays at 16777216.0
     line 9: warning: `steps` is a var_output, but no rung writes it: it stays at 0
     line 10: warning: `trims` is a var_output, but no rung writes it: it stays at its initial values
  3  instances that no instruction runs
@@ -904,7 +915,7 @@ $ mix run warnings-writes.exs
       25  xic start move 0 flags[2]
       26  xic stop ote flags[slot].1
     line 22: warning: `status.3` is a bit of `status`, which the `move` on line 21 writes whole: the last one in the scan decides it
-    line 24: warning: `faults[1].0` already has an `ote` on line 23: the last one in the scan decides it
+    line 24: warning: `faults[1]` is written whole by the `move`, and its bit `faults[1].0` already has an `ote` on line 23: the last one in the scan decides it
     line 26: warning: `flags[slot].1` is in `flags`, as `flags[2]` is, which the `move` on line 25 writes whole: the last one in the scan decides it
 16  2 spellings of 1 bit
       21  xic start ote status.3
@@ -916,9 +927,9 @@ $ mix run warnings-writes.exs
       23  xic jog ote status.[slot]
       24  xic start move panel status
       25  xic stop ote status.[n]
-    line 22: warning: `status.3` is a bit of `status`, which the `ote` on line 21 writes whole: the last one in the scan decides it
+    line 22: warning: `status.3` is a bit of `status`, and the `ote` on line 21 writes one bit of it, `status.[n]`, which a tag numbers: the last one in the scan decides it
     line 23: warning: `status.[slot]` already has an `ote` on line 21: the last one in the scan decides it
-    line 24: warning: `status.[n]` already has an `ote` on line 21: the last one in the scan decides it
+    line 24: warning: `status` is written whole by the `move`, and its bit `status.[n]` already has an `ote` on line 21: the last one in the scan decides it
     line 25: warning: `status.[n]` already has an `ote` on line 21: the last one in the scan decides it
 18  an element with a tag as a subscript, and a literal element
       21  xic start ote lamps[slot]
@@ -1416,8 +1427,7 @@ $ mix run warnings-configuration.exs
     line 1: warning: `16777231.0` is more precise than a real keeps: it is held as 16777232.0
     line 1: warning: `16777233.0` is more precise than a real keeps: it is held as 16777232.0
     line 1: warning: `16777235.0` is more precise than a real keeps: it is held as 16777236.0
-    line 1: warning: `16777237.0` is more precise than a real keeps: it is held as 16777236.0
-    line 1: warning: `16777239.0` is more precise than a real keeps: it is held as 16777240.0
+    line 1: warning: 2 more literals of this initial list are more precise than a real keeps, not listed
     line 2: warning: `0.12345678901234567890` is more precise than an lreal keeps: it is held as 0.12345678901234568
 ```
 
@@ -1536,10 +1546,10 @@ $ mix run warnings-pairs.exs
 68  an ote on a bit and an otl on a bit with a tag as its number
       21  xic start ote status.3
       22  xic stop otl status.[n]
-    line 22: warning: `status.3` already has an `ote` on line 21: the last one in the scan decides it
+    line 22: warning: `status.[n]`, which the `otl` writes, is a bit of `status` that a tag numbers, and `status.3` already has an `ote` on line 21: the last one in the scan decides it
       21  xic stop otl status.[n]
       22  xic start ote status.3
-    line 22: warning: `status.3` is a bit of `status`, which the `otl` on line 21 writes whole: the last one in the scan decides it
+    line 22: warning: `status.3` is a bit of `status`, and the `otl` on line 21 writes one bit of it, `status.[n]`, which a tag numbers: the last one in the scan decides it
 69  an ote on a bit through a tag and an otl on a literal bit of a literal element
       21  xic start ote flags[i].3
       22  xic stop otl flags[1].3

@@ -298,8 +298,11 @@ defmodule Logex.ElementBitTest do
 
       assert decides(head <> "xic a ote f[1].3\nxic a ote f[0].3") == []
 
+      # Decision 597 (RV-34): told at the write's line that it writes the word whole.
       assert decides(head <> "xic a ote f[1].3\nmove k f[1]") == [
-               {6, "`f[1].3` already has an `ote` on line 5: #{@later}"}
+               {6,
+                "`f[1]` is written whole by the `move`, and its bit `f[1].3` already has an " <>
+                  "`ote` on line 5: #{@later}"}
              ]
 
       assert decides(head <> "move k f[1]\nxic a ote f[1].3") == [
@@ -309,9 +312,11 @@ defmodule Logex.ElementBitTest do
 
       assert decides(head <> "move k f[0]\nxic a ote f[1].3") == []
 
+      # Decision 597 (RV-34): the coil on a bit a tag numbers told as the one bit it writes.
       assert decides(head <> "xic a ote f[1].[n]\nxic a ote f[1].3") == [
                {6,
-                "`f[1].3` is a bit of `f[1]`, which the `ote` on line 5 writes whole: #{@later}"}
+                "`f[1].3` is a bit of `f[1]`, and the `ote` on line 5 writes one bit of it, " <>
+                  "`f[1].[n]`, which a tag numbers: #{@later}"}
              ]
 
       assert decides(head <> "xic a ote f[1].[n]\nxic a ote f[0].3") == []

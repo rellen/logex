@@ -358,7 +358,7 @@ t=10  both started   k1=1 k2=0  [{:ran, "fast", "m1", 10}]
 t=50  held to 50 ms  k1=1 k2=1  [{:ran, "fast", "m1", 50}, {:ran, "slow", "m2", 50}]
 t=60  released       k1=1 k2=1  [{:ran, "fast", "m1", 60}]
 broken.logex: line 6: no task `fsat` — did you mean `fast`?
-broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.overtemp 0`
+broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global or a constant, as in `m1.overtemp 0`
 broken.logex: line 9: `pb_stop_1` is an input point (line 3): `m1.motor`, a var_output, cannot drive it
 broken.logex: line 10: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
 broken.logex: line 11: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`

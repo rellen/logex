@@ -646,7 +646,7 @@ defmodule Logex.ConfigurationTest do
                "`m` is a task, not an instance",
                "`m` is a task, not an instance",
                "`seal` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
-                 "global, a point or a constant, as in `seal.start 0`"
+                 "global or a constant, as in `seal.start 0`"
              ]
     end
 
@@ -2516,7 +2516,7 @@ defmodule Logex.ConfigurationTest do
                "`seal.x` cannot name a program type: a type is named by its file, `motor.ld` " <>
                  "for `motor`, and a name is a letter or `_`, then letters, digits or `_`",
                "`e` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
-                 "global, a point or a constant, as in `e.start 0`"
+                 "global or a constant, as in `e.start 0`"
              ]
 
       fields =
@@ -2785,7 +2785,7 @@ defmodule Logex.ConfigurationTest do
              ) ==
                [
                  "`m` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
-                   "global, a point or a constant, as in `m.start 0`"
+                   "global or a constant, as in `m.start 0`"
                ]
 
       assert refused(
@@ -2795,8 +2795,7 @@ defmodule Logex.ConfigurationTest do
                connections: [%Connection{instance: "m", member: "stop", to: 0}]
              ) ==
                [
-                 "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
-                   "or a constant, as in `m.start 0`"
+                 "`m` leaves its var_input `start` unconnected: connect it to a global or a constant, as in `m.start 0`"
                ]
 
       # In the order the program declares them, which is not the order of their names.
@@ -2814,7 +2813,7 @@ defmodule Logex.ConfigurationTest do
              ) ==
                [
                  "`z` leaves its var_inputs `zeta` and `alpha` unconnected: connect each to a " <>
-                   "global, a point or a constant, as in `z.zeta 0`"
+                   "global or a constant, as in `z.zeta 0`"
                ]
     end
 
@@ -2834,8 +2833,7 @@ defmodule Logex.ConfigurationTest do
                  ~s|in `m1.start`, found "m" and :start|,
                "`m.stop` is connected to {:x}: a connection's other end is a global, by name, or " <>
                  "a constant",
-               "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
-                 "or a constant, as in `m.start 0`"
+               "`m` leaves its var_input `start` unconnected: connect it to a global or a constant, as in `m.start 0`"
              ]
     end
   end
@@ -2874,7 +2872,7 @@ defmodule Logex.ConfigurationTest do
                "plant.logex: line 4: `k` is at `panel.i.0`, where `pb` already is (line 3): a " <>
                  "location holds one global",
                "plant.logex: line 6: `m` leaves its var_input `stop` unconnected: connect it to " <>
-                 "a global, a point or a constant, as in `m.stop 0`",
+                 "a global or a constant, as in `m.stop 0`",
                "plant.logex: line 7: `m.start` is already connected, to `pb` (line 5): a " <>
                  "var_input has one source",
                "plant.logex: line 8: `k` is an input point (line 4): `m.motor`, a var_output, " <>
@@ -3545,8 +3543,7 @@ defmodule Logex.ConfigurationTest do
                  "and a location, as in `panel.i.0`",
                "line 6: `PB` and `pb` (line 1) differ only in case: names are case-sensitive, " <>
                  "so these would be two (`pb` is a global)",
-               "line 7: `seal` leaves its var_input `stop` unconnected: connect it to a global, " <>
-                 "a point or a constant, as in `seal.stop 0`",
+               "line 7: `seal` leaves its var_input `stop` unconnected: connect it to a global or a constant, as in `seal.stop 0`",
                "line 8: `m` is a global (line 3), not an instance",
                "line 9: `m` is a global (line 3), not an instance",
                "line 10: `m` is a global (line 3), not an instance"
@@ -3989,17 +3986,16 @@ defmodule Logex.ConfigurationTest do
 
       assert errors(source, %{"seal" => seal, "zig" => zig}) == [
                "line 1: `m` leaves its var_inputs `start` and `stop` unconnected: connect each " <>
-                 "to a global, a point or a constant, as in `m.start 0`",
-               "line 2: `n` leaves its var_input `start` unconnected: connect it to a global, a " <>
-                 "point or a constant, as in `n.start 0`",
+                 "to a global or a constant, as in `m.start 0`",
+               "line 2: `n` leaves its var_input `start` unconnected: connect it to a global or a constant, as in `n.start 0`",
                "line 4: `z` leaves its var_inputs `zeta` and `alpha` unconnected: connect each " <>
-                 "to a global, a point or a constant, as in `z.zeta 0`"
+                 "to a global or a constant, as in `z.zeta 0`"
              ]
 
       # A duplicate keeps no name, so only the instance that keeps it is told.
       assert errors("program m seal\nprogram m seal\n", %{"seal" => seal}) == [
                "line 1: `m` leaves its var_inputs `start` and `stop` unconnected: connect each " <>
-                 "to a global, a point or a constant, as in `m.start 0`",
+                 "to a global or a constant, as in `m.start 0`",
                "line 2: `m` is declared twice: first on line 1, as an instance"
              ]
     end
@@ -4021,8 +4017,7 @@ defmodule Logex.ConfigurationTest do
       assert errors(source, %{"seal" => seal}) == [
                "line 3: `k` is at `panel.i.0`, where `pb` already is (line 2): a location holds " <>
                  "one global",
-               "line 4: `m` leaves its var_input `stop` unconnected: connect it to a global, a " <>
-                 "point or a constant, as in `m.stop 0`",
+               "line 4: `m` leaves its var_input `stop` unconnected: connect it to a global or a constant, as in `m.stop 0`",
                "line 5: `m.start` is already connected, to `pb` (line 1): a var_input has one " <>
                  "source",
                "line 6: `k` is an input point (line 3): `m.motor`, a var_output, cannot drive it",
@@ -4384,8 +4379,7 @@ defmodule Logex.ConfigurationTest do
       """
 
       assert errors(source, %{"seal" => seal}) == [
-               "line 2: `m2` leaves its var_input `start` unconnected: connect it to a global, " <>
-                 "a point or a constant, as in `m2.start 0`",
+               "line 2: `m2` leaves its var_input `start` unconnected: connect it to a global or a constant, as in `m2.start 0`",
                "line 3: `m2` runs `seal`, which declares no `Start` — did you mean `start`? " <>
                  "(members are case-sensitive)",
                "line 4: no global `pb` — did you mean `Pb`? (names are case-sensitive)",
@@ -4580,6 +4574,159 @@ defmodule Logex.ConfigurationTest do
 
     test "a program type with none adds none", %{quiet: quiet} do
       assert warned("program q1 quiet\nq1.start 0\n", %{"quiet" => quiet}) == []
+    end
+  end
+
+  describe "messages made true, warnings found and refusals that help (decisions 597 to 599, RV-34)" do
+    @describetag :tmp_dir
+
+    defp told_config({:ok, config}), do: Enum.map(config.warnings, &Diagnostic.format/1)
+    defp told_config({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
+
+    defp two_inputs do
+      {:ok, m} =
+        Logex.compile("var_input a bool\nvar_input b bool\nvar_output q bool\nxic a xic b ote q",
+          name: "m"
+        )
+
+      m
+    end
+
+    # Decision 597: a connection to a point is refused, so an unconnected var_input is
+    # offered a global or a constant alone.
+    test "an unconnected var_input is offered a global or a constant, not a point" do
+      assert told_config(Configuration.compile("plant", "program m1 m\n", %{"m" => two_inputs()})) ==
+               [
+                 "line 1: `m1` leaves its var_inputs `a` and `b` unconnected: connect each to a " <>
+                   "global or a constant, as in `m1.a 0`"
+               ]
+    end
+
+    # Decision 598: a run at an event task's due time reads its trigger as 0, so a trigger
+    # pulses under a task with an interval: only one with none is told it never pulses.
+    test "only an event task with no interval is told its trigger never pulses" do
+      {:ok, e} =
+        Logex.compile(
+          "var_input go bool\nvar_output q bool\nvar_output n bool\nvar_output k bool\n" <>
+            "var c ctu\nvar t tp\nvar s bool\nxic go ons s ote q\nxic go ctu c 3\n" <>
+            "xic go tp t 100\nxic t.dn ote n\nxic c.q ote k",
+          name: "e"
+        )
+
+      text = fn interval ->
+        "var_global estop bool at panel.i.0\ntask trip single estop#{interval} priority 0\n" <>
+          "program a e with trip\na.go estop\n"
+      end
+
+      at = "line 3: warning: `a` runs under the event task `trip`, and `e` runs "
+
+      tp =
+        at <>
+          "the timer `t` on its line 10: a tp's pulse ends only at one of the task's runs, so " <>
+          "it lasts until the first run after its preset has passed, and it starts only on an " <>
+          "edge between two runs"
+
+      counter =
+        at <>
+          "the counter `c` on its line 9: a counter sees its rung only at the task's runs, so " <>
+          "a pulse between two runs is never counted"
+
+      ons =
+        at <>
+          "an `ons` on its line 8, whose storage bit is `s`: an ons sees its rung only at the " <>
+          "task's runs, so a pulse between two runs never fires it"
+
+      trigger = "a rung that is the task's trigger is true at every run and never"
+
+      assert told_config(Configuration.compile("plant", text.(" interval 30"), %{"e" => e})) ==
+               [tp, counter, ons]
+
+      assert told_config(Configuration.compile("plant", text.(""), %{"e" => e})) == [
+               tp <> ": #{trigger} starts one",
+               counter <> ", and #{trigger} counts",
+               ons <> ", and #{trigger} fires it"
+             ]
+    end
+
+    # Decision 598: a `var_global` line's real initial list is told ten of its rounded
+    # literals and a count of the rest, as a program's declaration line is.
+    test "a real initial list warns ten of its rounded literals and a count" do
+      literals =
+        Enum.map(1..9, &"1.00000000#{&1}") ++ ["16777217.0", "16777219.0", "16777221.0"]
+
+      held = List.duplicate("1.0", 9) ++ ["16777216.0", "16777220.0", "16777220.0"]
+
+      text = fn count ->
+        "var_global zs real[#{count}] #{Enum.join(Enum.take(literals, count), " ")}\n" <>
+          "var_global pa bool\nprogram m1 m\nm1.a pa\nm1.b pa\n"
+      end
+
+      rounded = fn count ->
+        for {literal, held} <- Enum.take(Enum.zip(literals, held), count),
+            do:
+              "line 1: warning: `#{literal}` is more precise than a real keeps: it is held as " <>
+                held
+      end
+
+      unused = "line 1: warning: `zs` is declared but nothing uses it"
+      compiled = &told_config(Configuration.compile("plant", text.(&1), %{"m" => two_inputs()}))
+
+      assert compiled.(10) == rounded.(10) ++ [unused]
+
+      assert compiled.(11) ==
+               rounded.(10) ++
+                 [
+                   "line 1: warning: 1 more literal of this initial list is more precise than " <>
+                     "a real keeps, not listed",
+                   unused
+                 ]
+
+      assert compiled.(12) ==
+               rounded.(10) ++
+                 [
+                   "line 1: warning: 2 more literals of this initial list are more precise " <>
+                     "than a real keeps, not listed",
+                   unused
+                 ]
+    end
+
+    # Decision 599: an instance whose program type does not compile has no member to
+    # check, but its connections' far ends are checked still, beside the compile's mistakes.
+    test "a program type that does not compile still has its instances' far ends told",
+         %{tmp_dir: dir} do
+      File.write!(
+        Path.join(dir, "conv.ld"),
+        "var_input a bool\nvar_output q bool\nxic a otee q\n"
+      )
+
+      plant = Path.join(dir, "plant.logex")
+
+      File.write!(plant, """
+      var_global pb bool at panel.i.0
+      program c1 conv
+        c1.a pbb
+        c1.q 5
+        c1.zz pb
+        c1.y panel.i.0
+        c1.w panel.i.1
+        c1.v c2.x
+        c1.u nowhere
+      """)
+
+      assert told_config(Configuration.compile_file(plant)) == [
+               "#{plant}: line 2: program type `conv` does not compile: its mistakes follow, " <>
+                 "cited in `conv.ld`",
+               "#{plant}: line 3: no global `pbb` — did you mean `pb`?",
+               "#{plant}: line 6: `panel.i.0` is a location, written only after `at` on a " <>
+                 "`var_global` line: name the global at it, `pb` (line 1)",
+               "#{plant}: line 7: `panel.i.1` is a location, written only after `at` on a " <>
+                 "`var_global` line: declare a global at it, and name that",
+               "#{plant}: line 8: `c2.x` names a member of an instance, and there is no " <>
+                 "instance `c2`",
+               "#{plant}: line 9: no global `nowhere`: declare it on a `var_global` line",
+               "#{Path.join(dir, "conv.ld")}: line 3: unknown instruction `otee` — did you " <>
+                 "mean `ote`?"
+             ]
     end
   end
 
@@ -5533,25 +5680,36 @@ defmodule Logex.ConfigurationTest do
     defp one_shot(instance, task, type, word, cited, bit),
       do:
         "`#{instance}` runs under the event task `#{task}`, and `#{type}` runs an `#{word}`" <>
-          "#{cited}, whose storage bit is `#{bit}`: " <> sees(word)
+          "#{cited}, whose storage bit is `#{bit}`: " <> sees(word) <> trigger(word, task)
 
     defp sees("ons"),
       do:
-        "an ons sees its rung only at the task's runs, so a pulse between two runs never " <>
-          "fires it, and a rung that is the task's trigger is true at every run and never " <>
-          "fires it"
+        "an ons sees its rung only at the task's runs, so a pulse between two runs never fires it"
 
     defp sees("osr"),
       do:
         "an osr sees its rung only at the task's runs, so a pulse between two runs is never " <>
-          "seen, the pulse it sets stays on until the task's next run, and a rung that is " <>
-          "the task's trigger is true at every run and never pulses"
+          "seen, the pulse it sets stays on until the task's next run"
 
     defp sees("osf"),
       do:
         "an osf sees its rung only at the task's runs, so a drop between two runs is never " <>
-          "seen, the pulse it sets stays on until the task's next run, and a rung that is " <>
-          "the task's trigger is true at every run and never pulses"
+          "seen, the pulse it sets stays on until the task's next run"
+
+    # Decision 598 (RV-34): `parts` has an interval, so its trigger, read at a run at its due
+    # time as 0, pulses: only a task with no interval is told its trigger never pulses.
+    defp trigger(_word, "parts"), do: ""
+
+    defp trigger("ons", _task),
+      do: ", and a rung that is the task's trigger is true at every run and never fires it"
+
+    defp trigger(_word, _task),
+      do: ", and a rung that is the task's trigger is true at every run and never pulses"
+
+    defp counts("parts"), do: ""
+
+    defp counts(_task),
+      do: ", and a rung that is the task's trigger is true at every run and never counts"
 
     test "each one-shot of each instance an event task runs, a block's by its path, after " <>
            "its timers and counters, from files on disk",
@@ -5577,8 +5735,7 @@ defmodule Logex.ConfigurationTest do
           at <>
             "`#{instance}` runs under the event task `#{task}`, and `pressed` runs the " <>
             "counter `presses` on line 12 of `pressed.ld`: a counter sees its rung only at " <>
-            "the task's runs, so a pulse between two runs is never counted, and a rung that " <>
-            "is the task's trigger is true at every run and never counts",
+            "the task's runs, so a pulse between two runs is never counted" <> counts(task),
           at <> one_shot(instance, task, "pressed", "osf", " on line 8 of `edge.ld`", "e.f"),
           at <> one_shot(instance, task, "pressed", "ons", " on line 7 of `edge.ld`", "e.s"),
           at <> one_shot(instance, task, "pressed", "osr", " on line 10 of `pressed.ld`", "s1")
@@ -5709,11 +5866,10 @@ defmodule Logex.ConfigurationTest do
       assert {config.name, config.file} == {"plant", path}
       assert Enum.sort(Map.keys(config.programs)) == ["motor", "pump"]
 
-      # Each program type as compile_file/1 gives it, the block's warning handed back by
-      # the first that loads it (below).
+      # Each program type as compile_file/1 gives it, the block's warning in each that holds
+      # it (decision 598, RV-34).
       assert {:ok, config.programs["motor"]} == Logex.compile_file(Path.join(dir, "motor.ld"))
-      assert {:ok, pump} = Logex.compile_file(Path.join(dir, "pump.ld"))
-      assert config.programs["pump"] == %{pump | warnings: []}
+      assert {:ok, config.programs["pump"]} == Logex.compile_file(Path.join(dir, "pump.ld"))
 
       # The pure seam gives the same configuration from the same text and programs, but
       # for the file, which no text says.
@@ -5722,25 +5878,26 @@ defmodule Logex.ConfigurationTest do
     end
 
     # One memo for the configuration (§4.10, "Loading"): `seal.ld`, which both program
-    # types hold, is compiled once, so its warning is handed back once, by `motor`, which
-    # loads it first, and `pump` holds the very type.
-    test "a block several program types hold is compiled once, its warnings handed back once",
+    # types hold, is compiled once, and `pump` holds the very type; since decision 598
+    # (RV-34) its warning travels with it, to each program type that holds it.
+    test "a block several program types hold is compiled once, its warnings in each that holds it",
          %{tmp_dir: dir} do
       path = plant(dir)
       seal = Path.join(dir, "seal.ld")
       {:ok, config} = Configuration.compile_file(path)
       %{"motor" => motor, "pump" => pump} = config.programs
+      warned = ["#{seal}: line 5: warning: `spare` is declared but no rung uses it"]
 
-      assert Enum.map(motor.warnings, &Diagnostic.format/1) == [
-               "#{seal}: line 5: warning: `spare` is declared but no rung uses it"
-             ]
-
-      assert pump.warnings == []
+      assert Enum.map(motor.warnings, &Diagnostic.format/1) == warned
+      assert Enum.map(pump.warnings, &Diagnostic.format/1) == warned
       assert motor.blocks == pump.blocks
 
-      # Decision 638 (RV-34): the configuration holds it once too, naming `motor`.
+      # Decision 638 (RV-34): the configuration holds each program type's, each naming its
+      # program type (provisional, RV-34: a block two program types hold is told for each).
       assert Enum.map(config.warnings, &Diagnostic.format/1) == [
                "#{seal}: line 5: warning: program type `motor`: `spare` is declared but no " <>
+                 "rung uses it",
+               "#{seal}: line 5: warning: program type `pump`: `spare` is declared but no " <>
                  "rung uses it"
              ]
 
@@ -5772,7 +5929,7 @@ defmodule Logex.ConfigurationTest do
                "#{path}: line 8: `m1` runs `motor`, which declares no `strat` — did you " <>
                  "mean `start`?",
                "#{path}: line 9: `m2` leaves its var_input `stop` unconnected: connect it " <>
-                 "to a global, a point or a constant, as in `m2.stop 0`",
+                 "to a global or a constant, as in `m2.stop 0`",
                "#{path}: line 10: `m2.start` is a bool, but `sp` is a dint (line 3)"
              ]
 
@@ -5785,7 +5942,7 @@ defmodule Logex.ConfigurationTest do
 
       assert file_errors(unread) == [
                "#{unread}: line 1: `m1` leaves its var_input `stop` unconnected: connect it " <>
-                 "to a global, a point or a constant, as in `m1.stop 0`",
+                 "to a global or a constant, as in `m1.stop 0`",
                "#{unread}: line 2, column 10: a configuration line cannot hold `(`"
              ]
     end
@@ -5984,7 +6141,7 @@ defmodule Logex.ConfigurationTest do
                ~s(#{renamed}: "plant-2" cannot name a configuration: a name is a letter or ) <>
                  "`_`, then letters, digits or `_` (rename the file)",
                "#{renamed}: line 1: `m1` leaves its var_inputs `start` and `stop` " <>
-                 "unconnected: connect each to a global, a point or a constant, as in " <>
+                 "unconnected: connect each to a global or a constant, as in " <>
                  "`m1.start 0`",
                "#{renamed}: line 2: `m1` runs `motor`, which declares no `strat` — did you " <>
                  "mean `start`?"

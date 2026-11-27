@@ -1323,6 +1323,11 @@ defmodule Logex.ValidationTest do
                {11, "`belt` already has an `ote` on line 9: #{@later}"}
              ]
 
+      # Two `move`s before the coil meet each other not: the coil alone is told, of the first.
+      assert shared_warnings("xic a move 1 belt\nxio a move 0 belt\nxic a ote belt") == [
+               {11, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+
       # In one rung, and a pulse coil's bit.
       assert shared_warnings("xic a ote belt move 1 belt") == [
                {9, "`belt` already has an `ote` in this rung: #{@later}"}
@@ -1363,6 +1368,138 @@ defmodule Logex.ValidationTest do
 
       _warm = compile.(10)
       assert compile.(400) / compile.(200) < 2.4
+    end
+  end
+
+  describe "messages made true, warnings found and refusals that help (decisions 597 to 599, RV-34)" do
+    defp told(source), do: told_of(Logex.compile(source, name: "p"))
+
+    defp told_of({:ok, program}), do: Enum.map(program.warnings, &Logex.Diagnostic.format/1)
+    defp told_of({:error, diagnostics}), do: Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+
+    # Decision 597: `not` and the shifts compute in their source's type (decision 214), so
+    # a source that does not widen into the destination is told so, where it was told the
+    # instruction computes in the destination's.
+    test "not and the shifts are told they compute in the source's type" do
+      for {word, rung} <- [
+            {"not", "not w d"},
+            {"shl", "shl w 1 d"},
+            {"shr", "shr w 1 d"},
+            {"rol", "rol w 1 d"},
+            {"ror", "ror w 1 d"}
+          ] do
+        assert told("var_input w word\nvar_output d byte\n" <> rung) == [
+                 "line 3: `#{word}` computes in `w`'s type, a word (declared on line 1), and " <>
+                   "writes its result into `d`, a byte: a word does not widen into a byte, so " <>
+                   "convert it first, with `word_to_byte`"
+               ]
+      end
+
+      # A source that widens into the destination is taken, as it was.
+      assert told("var_input w int\nvar_output d dint\nnot w d") == []
+    end
+
+    # Decision 597: a coil on a bit a tag numbers, `otl out.[sel]`, writes one bit and not
+    # `out` whole; and a write of the word whole after a coil on a bit of it is told at the
+    # write's line, naming the coil's bit.
+    test "a bit coil's warning names the one bit it writes, and a whole write names the coil's bit" do
+      later = "the last one in the scan decides it"
+
+      assert told(
+               "var_input a bool\nvar_input b bool\nvar_input sel int\nvar_input other int\n" <>
+                 "var_output out word\nxic a otl out.[sel]\nxic b ote out.[other]"
+             ) == [
+               "line 7: warning: `out.[other]` is a bit of `out`, and the `otl` on line 6 " <>
+                 "writes one bit of it, `out.[sel]`, which a tag numbers: #{later}"
+             ]
+
+      assert told(
+               "var_input a bool\nvar_output faults word[4]\nxic a ote faults[1].0\n" <>
+                 "xic a move 0 faults[1]"
+             ) == [
+               "line 4: warning: `faults[1]` is written whole by the `move`, and its bit " <>
+                 "`faults[1].0` already has an `ote` on line 3: #{later}"
+             ]
+
+      # A write of the word whole, `move 1 w`, first is still told it writes the word whole.
+      assert told("var_input a bool\nvar_output w word\nmove 1 w\nxic a ote w.3") == [
+               "line 4: warning: `w.3` is a bit of `w`, which the `move` on line 3 writes " <>
+                 "whole: #{later}"
+             ]
+    end
+
+    # Decision 597: the value a `var_output` nothing writes holds, as a real keeps it.
+    test "a var_output nothing writes is told the value it holds, not its spelling" do
+      assert told(
+               "var_input a bool\nvar_output g real 16777217.0\nvar_output m bool\n" <>
+                 "xic a gt g 1.0 ote m"
+             ) == [
+               "line 2: warning: `16777217.0` is more precise than a real keeps: it is held as " <>
+                 "16777216.0",
+               "line 2: warning: `g` is a var_output, but no rung writes it: it stays at " <>
+                 "16777216.0"
+             ]
+
+      assert told(
+               "var_input a bool\nvar_output g lreal 0.1\nvar_output m bool\nxic a gt g 1.0 ote m"
+             ) == ["line 2: warning: `g` is a var_output, but no rung writes it: it stays at 0.1"]
+    end
+
+    # Decision 598: a real's limit compare is warned as an integer's is.
+    test "a compare with a real's limit, which never changes its result, is warned" do
+      never = fn word, limit, type, side ->
+        "line 3: warning: `#{word}` compares `speed` with `#{limit}`, and #{type} holds " <>
+          "nothing #{side} `#{limit}`: its result never changes"
+      end
+
+      head = "var_input speed real\nvar_output m bool\n"
+
+      assert told(head <> "ge speed -3.4028235e38 ote m") ==
+               [never.("ge", "-3.4028235e38", "a real", "below")]
+
+      assert told(head <> "lt speed -3.4028235e38 ote m") ==
+               [never.("lt", "-3.4028235e38", "a real", "below")]
+
+      assert told(head <> "le speed 3.4028235e38 ote m") ==
+               [never.("le", "3.4028235e38", "a real", "above")]
+
+      # The literal first, read in its order.
+      assert told(head <> "le -3.4028235e38 speed ote m") == [
+               "line 3: warning: `le` compares `-3.4028235e38` with `speed`, and a real holds " <>
+                 "nothing below `-3.4028235e38`: its result never changes"
+             ]
+
+      assert told(
+               "var_input speed lreal\nvar_output m bool\nge speed -1.7976931348623157e308 ote m"
+             ) == [never.("ge", "-1.7976931348623157e308", "an lreal", "below")]
+
+      # Inside the range, nothing.
+      assert told(head <> "ge speed -3.0e38 ote m") == []
+      assert told(head <> "gt speed -3.4028235e38 ote m") == []
+
+      # As an int's is.
+      assert told("var_input speed int\nvar_output m bool\nge speed -32768 ote m") ==
+               [never.("ge", "-32768", "an int", "below")]
+    end
+
+    # Decision 599: an unknown instruction is offered the nearest mnemonic by the bounded
+    # search a tag's name has (decision 520), its word read in any case.
+    test "an unknown instruction is offered a did-you-mean" do
+      head = "var_input a bool\nvar_output x bool\n"
+
+      assert told(head <> "xic a otee x") ==
+               ["line 3: unknown instruction `otee` — did you mean `ote`?"]
+
+      assert told(head <> "XICC a ote x") ==
+               ["line 3: unknown instruction `XICC` — did you mean `xic`?"]
+
+      assert told("zzz aa") == ["line 1: unknown instruction `zzz`"]
+
+      # A renamed mnemonic keeps its own advice.
+      assert told("var_input a dint\nvar_output x dint\nmov a x") ==
+               [
+                 "line 3: unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)"
+               ]
     end
   end
 

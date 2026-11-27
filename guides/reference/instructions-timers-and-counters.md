@@ -1789,7 +1789,7 @@ $ mix run instructions-timers-and-counters-not-in-logex.exs
 60  xic eye res boxes
       line 18: unknown instruction `res`
 61  xic eye ctud stock 3
-      line 18: unknown instruction `ctud`
+      line 18: unknown instruction `ctud` — did you mean `ctd`?
 62  xic eye ton delay T#5s
       line 18, column 20: illegal character "#"
 ```

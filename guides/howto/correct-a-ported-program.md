@@ -124,7 +124,7 @@ print more diagnostics.
 |---|---|
 | ``unknown instruction `mov` — did you mean `move`?`` | Use the name of the [instruction](../reference/glossary.md#instruction) that the message gives |
 | ``unknown instruction `res` `` | Write a [coil](../reference/glossary.md#coil) on `r`, before the counter: `xic reset_pb ote boxes.r`. Port, step 4 gives each case |
-| ``unknown instruction `equ` `` | Write `eq`, `ne`, `lt`, `gt`, `le` or `ge` |
+| ``unknown instruction `equ` — did you mean `eq`?`` | Write `eq`, `ne`, `lt`, `gt`, `le` or `ge` |
 | ``unknown instruction `jsr` `` or `` `mcr` `` | Do the action of the table in Port, Before you start |
 | ``unknown type `timer` `` | Declare a [timer](../reference/glossary.md#timer): `ton`, `tof` or `rto`. For a [counter](../reference/glossary.md#counter), declare `ctu`, `ctd` or `ctud` |
 | `` `Start` is not declared — did you mean `start`? `` | Write the name with the letters of its declaration |

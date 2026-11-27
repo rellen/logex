@@ -410,7 +410,7 @@ function block follows the same path.
 | The file of a function block | `{:ok, type}`, a `%Logex.FbType{}`, as `Logex.compile/2` gives it. Or `{:error, diagnostics}`. |
 | When it reads a file | A type word that is not an [elementary type](glossary.md#elementary-type) and not a built-in type: `var s1 seal`. It also reads the type word after a qualifier, `var retain s1 seal`, and in an array, `var gates gate[4]`. |
 | Which file | The file with the name of the type word and `.ld`, in the directory of the file that names it. The name has the same case as the type word. |
-| No such file | The diagnostic `unknown type`. It names each type that logex has, and the function blocks that it found. It does not name the file that logex looked for. Make sure that `seal.ld` is in the directory of the program. |
+| No such file | The diagnostic `unknown type`. It names the file that logex looked for, `` there is no `seal.ld` beside `panel.ld` ``, then each type that logex has, and the function blocks that it found. Make sure that `seal.ld` is in the directory of the program. |
 | A file that is a program | An error: `lamp_panel` is a program. Only the file of a function block gives a type. |
 | A wrong file of a function block | logex returns its diagnostics, with the name of its file. It does not compile the file that names it. |
 | 2 function blocks that hold each other | An error in the file that closes the circle. The diagnostic gives the path: `belt_b → belt_a → belt_b`. |
@@ -1349,9 +1349,10 @@ $ mix run function-blocks-loader.exs
       → belt_a → belt_b): a function block never holds an instance of
       itself, at any depth
 28  wrong_panel.ld
-      wrong_panel.ld: line 4: unknown type `lamp_rleay`: logex has `bool`,
-      `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`,
-      `lreal`, `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`,
+      wrong_panel.ld: line 4: unknown type `lamp_rleay`: there is no
+      `lamp_rleay.ld` beside `wrong_panel.ld`, and logex has `bool`, `sint`,
+      `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`,
+      `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`,
       `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`,
       `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`,
       `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`,
@@ -1361,13 +1362,14 @@ $ mix run function-blocks-loader.exs
       lamp_board.ld: line 2: `lamp_panel` is a program (lamp_panel.ld), not a
       function block: only a function block's file gives a type for `var`
 30  dryer_panel.ld
-      dryer_panel.ld: line 3: unknown type `dryer`: logex has `bool`, `sint`,
-      `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`,
-      `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`,
-      `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`,
-      `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`,
-      `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`,
-      `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`
+      dryer_panel.ld: line 3: unknown type `dryer`: there is no `dryer.ld`
+      beside `dryer_panel.ld`, and logex has `bool`, `sint`, `int`, `dint`,
+      `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`,
+      `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`,
+      `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`,
+      `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`,
+      `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`,
+      `ton_ltime`, `tp` and `tp_ltime`
 ```
 
 | Text | What it shows |

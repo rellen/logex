@@ -536,6 +536,8 @@ defmodule Logex.Compiler do
 
   # Each IR symbol back to its mnemonic.
   @mnemonics Map.new(@instructions, fn {word, {symbol, _signature}} -> {symbol, word} end)
+  # The mnemonics in their order, the names an unknown instruction is offered (decision 599).
+  @words @instructions |> Map.keys() |> Enum.sort()
 
   # A proper list, each element passing `test`: Enum.all?/2 raises on an improper one.
   defp proper?([], _test), do: true
@@ -2966,7 +2968,18 @@ defmodule Logex.Compiler do
       "`#{word}` qualifies a declaration, straight after its section word, as in " <>
         "`var #{word} count dint`"
 
-  defp unknown_word(_reserved, word), do: "unknown instruction `#{word}`"
+  # Decision 599 (RV-34): an unknown instruction is offered the nearest mnemonic, read in
+  # any case as a mnemonic is, by the bounded search a tag's name has (decision 520), so
+  # `otee` is told `ote` as `mov` is told `move`.
+  defp unknown_word(_reserved, word),
+    do:
+      Declarations.offer(
+        String.downcase(word),
+        @words,
+        & &1,
+        "instructions",
+        &("unknown instruction `#{word}`" <> &1)
+      )
 
   # Takes up to `n` operands, stopping early at a branch group, at the end of the leg, or
   # at a mnemonic: that is the next instruction, so `move src ote bb` leaves `ote bb` intact.
@@ -4714,7 +4727,24 @@ defmodule Logex.Compiler do
 
   defp source(_operand, _computed, _at, diagnostics), do: diagnostics
 
+  # The words of decision 214's instructions, which compute in their source's type.
+  @source_typed ~w(not shl shr rol ror)
+
   defp computes(false, _source, _destination, _at, diagnostics), do: diagnostics
+
+  # Decision 597 (RV-34): `not` and the shifts compute in their source's type and widen the
+  # result into the destination (decision 214), so a source that does not widen into it is
+  # told so in those words, where it was told that they compute in the destination's.
+  defp computes(true, source, destination, {line, word}, diagnostics)
+       when word in @source_typed do
+    message =
+      "`#{word}` computes in `#{source.name}`'s type, #{a_type(source.type)}#{declared(source)}, " <>
+        "and writes its result into `#{destination.name}`, #{a_type(destination.type)}: " <>
+        "#{a_type(source.type)} does not widen into #{a_type(destination.type)}" <>
+        first_with(Declarations.conversion(source.type, destination.type))
+
+    [diagnostic(line, message) | diagnostics]
+  end
 
   defp computes(true, source, destination, {line, word}, diagnostics) do
     message =
@@ -5021,13 +5051,26 @@ defmodule Logex.Compiler do
           "got: #{Logex.Lexer.inspected(options)}"
       )
 
-  defp named(nil, name, source, types), do: compiled(source, name, types)
+  defp named(nil, name, source, types), do: held_warned(compiled(source, name, types))
   defp named(problem, _name, _source, _types), do: raise(ArgumentError, problem)
+
+  # Decision 598 (RV-34): a program compiled with `types:` carries, after its own, the
+  # warnings of every block type it holds, in its table's order, as the loader's program
+  # carries the warnings of the blocks it loads; a block's type, its body's own alone.
+  defp held_warned({:ok, %Program{warnings: own, blocks: blocks} = program}),
+    do:
+      {:ok,
+       %{
+         program
+         | warnings: own ++ Enum.flat_map(Map.values(blocks), fn type -> type.body.warnings end)
+       }}
+
+  defp held_warned(type_or_mistakes), do: type_or_mistakes
 
   @doc false
   def compile_file(path) when is_binary(path) do
     {result, _call} =
-      by_extension(Path.extname(path), Path.basename(path), path, {%{}, MapSet.new()})
+      by_extension(Path.extname(path), Path.basename(path), path, %{})
 
     result
   end
@@ -5042,7 +5085,7 @@ defmodule Logex.Compiler do
   @doc false
   def compile_files(paths) do
     paths!(paths, paths)
-    each_file(paths, {%{}, {%{}, MapSet.new()}}, [])
+    each_file(paths, {%{}, %{}}, [])
   end
 
   defp paths!([], _paths), do: :ok
@@ -5063,8 +5106,7 @@ defmodule Logex.Compiler do
     each_file(rest, acc, [result | results])
   end
 
-  # `done` is each path's result, as given back; `call` is the call's memo and the paths
-  # of the blocks whose warnings a program has handed back, kept apart.
+  # `done` is each path's result, as given back; `call` is the call's memo, kept apart.
   defp compiled_once(path, {done, call}), do: once(Map.fetch(done, path), path, {done, call})
 
   defp once({:ok, result}, _path, acc), do: {result, acc}
@@ -5117,14 +5159,13 @@ defmodule Logex.Compiler do
   defp located_loaded(nil, path, call), do: path_loaded(path, call)
   defp located_loaded(message, path, call), do: {not_ld(path, message), call}
 
-  # One path of the call: its result, and the call's memo and handed-back paths after it.
+  # One path of the call: its result, and the call's memo after it.
   # The memo keeps each file's result with the blocks it reaches, so a program whose blocks
   # an earlier path compiled still finds them; a result a cycle gave is not kept past this
   # path, since what it cites depends on the files loaded above it.
-  defp path_loaded(path, {memo, handed}) do
+  defp path_loaded(path, memo) do
     {{result, reached, _cyclic}, {memo, cyclic}} = load(path, {%{}, []}, {memo, []})
-    {result, handed} = handed_back(result, reached, memo, handed)
-    {result, {Map.drop(memo, cyclic), handed}}
+    {handed_back(result, reached, memo), Map.drop(memo, cyclic)}
   end
 
   # `held` are the names of the files being loaded, as a set and as a list, innermost
@@ -5135,7 +5176,7 @@ defmodule Logex.Compiler do
   # paths this load gave a cyclic result.
   # RV-2 (the review after Milestone 6, a6-compile-scale-14): the memo is keyed by each
   # path expanded, so a block reached as `./seal.ld` and as `sub/../seal.ld` is one file,
-  # compiled once and its warnings handed back once; a file is still cited as its first
+  # compiled once and its warnings held once in each program; a file is still cited as its first
   # path spells it. A directory reached through a link is another path (provisional).
   defp load(path, held, {memo, _cyclic} = state),
     do: loading(Map.fetch(memo, SourceFile.expanded(path)), path, held, state)
@@ -5154,23 +5195,20 @@ defmodule Logex.Compiler do
   defp cyclics(true, path, cyclics), do: [path | cyclics]
   defp cyclics(false, _path, cyclics), do: cyclics
 
-  # The program's own warnings, then those of every block it reaches that no program of
-  # the call has handed back, a block's after those of the blocks it holds. Every block a
-  # program that compiles reaches compiled too. A block's type, or a mistake, hands back
-  # nothing, and counts no block as handed back.
-  defp handed_back({:ok, %Program{warnings: own} = program}, reached, memo, handed) do
-    fresh = Enum.reject(reached, &MapSet.member?(handed, &1))
-
+  # The program's own warnings, then those of every block it reaches, a block's after those
+  # of the blocks it holds: since decision 598 (RV-34) every program of the call that holds
+  # a block carries its warnings, where only the first did. Every block a program that
+  # compiles reaches compiled too. A block's type, or a mistake, hands back nothing.
+  defp handed_back({:ok, %Program{warnings: own} = program}, reached, memo) do
     blocks =
-      for path <- fresh,
+      for path <- reached,
           {{:ok, %FbType{body: body}}, _reached, _cyclic} = Map.fetch!(memo, path),
           do: body.warnings
 
-    {{:ok, %{program | warnings: own ++ Enum.concat(blocks)}},
-     MapSet.union(handed, MapSet.new(fresh))}
+    {:ok, %{program | warnings: own ++ Enum.concat(blocks)}}
   end
 
-  defp handed_back(result, _reached, _memo, handed), do: {result, handed}
+  defp handed_back(result, _reached, _memo), do: result
 
   defp file_read({:error, reason}, _path, _held, state),
     do: {{{:error, [file_problem(SourceFile.unreadable(reason))]}, [], false}, state}
@@ -5200,13 +5238,41 @@ defmodule Logex.Compiler do
   defp parsed_file({:ok, ast}, {name, path, as}, source, {{set, list}, state}) do
     held = {Map.put(set, name, true), [name | list]}
 
-    {types, problems, {reached, cyclic}, state} =
-      dependencies(needed(ast, name), {[], [], {[], false}, state}, {path, held})
+    needed = needed(ast, name)
 
-    {{built(problems, ast, {as, source}, types), Enum.uniq(Enum.reverse(reached)), cyclic}, state}
+    {types, problems, {reached, cyclic}, state} =
+      dependencies(needed, {[], [], {[], false}, state}, {path, held})
+
+    {{looked_for(built(problems, ast, {as, source}, types), {path, Map.new(needed)}),
+      Enum.uniq(Enum.reverse(reached)), cyclic}, state}
   end
 
   defp parsed_file(front_end, _file, _source, {_held, state}), do: {{front_end, [], false}, state}
+
+  # Decision 599 (RV-34): a type word the loader looked for a file for and found none is
+  # told of the file, `var x nofile` "there is no `nofile.ld` beside `prog.ld`", before what
+  # logex has: no such file is present, or it would have been loaded. A word no block can
+  # be named is looked for in no file, and told as compile/2 tells it.
+  defp looked_for({:error, diagnostics}, {path, needed}),
+    do: {:error, Enum.map(diagnostics, &file_looked_for(&1, {Path.basename(path), needed}))}
+
+  defp looked_for(compiled, _looked), do: compiled
+
+  defp file_looked_for(%Diagnostic{message: "unknown type `" <> rest} = diagnostic, looked) do
+    [word, told] = :binary.split(rest, "`: ")
+    no_file(Map.has_key?(elem(looked, 1), word), {word, told}, diagnostic, elem(looked, 0))
+  end
+
+  defp file_looked_for(diagnostic, _looked), do: diagnostic
+
+  defp no_file(true, {word, told}, diagnostic, beside),
+    do: %{
+      diagnostic
+      | message:
+          "unknown type `#{word}`: there is no `#{word}.ld` beside `#{beside}`, and " <> told
+    }
+
+  defp no_file(false, _told, diagnostic, _beside), do: diagnostic
 
   # Each block a file names loaded in turn, by recursion and no closure (decision 432).
   defp dependencies([], acc, _file), do: acc

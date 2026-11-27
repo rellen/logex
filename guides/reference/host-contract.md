@@ -1300,7 +1300,7 @@ new!/1 with 5 problems:
   the priority of `slow` is `-1`: a priority is 0 to 65535, and 0 is the highest
   `estop` is a bool: its initial value must be 0 or 1, found `5`
   no task `fsat` — did you mean `fast`?
-  `m1` leaves its var_inputs `start`, `stop`, `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.start 0`
+  `m1` leaves its var_inputs `start`, `stop`, `overtemp` and `reset` unconnected: connect each to a global or a constant, as in `m1.start 0`
 check/1 with a map:
   expected a %Logex.Configuration{}, got: %{name: "p"}
 check/1 of a priority of -1:

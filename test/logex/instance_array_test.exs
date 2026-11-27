@@ -2147,8 +2147,13 @@ defmodule Logex.InstanceArrayTest do
              [{13, "`lane_c[1].pv.3` already has an `ote` on line 12: #{last}"}]},
             {"xic go ote lane_c[1].pv.3\nxio go ote lane_c[01].pv.03",
              [{13, "`lane_c[01].pv.03` already has an `ote` on line 12: #{last}"}]},
+            # Decision 597 (RV-34): told at the write's line that it writes the word whole.
             {"xic go ote lane_c[1].pv.3\nxio go move 5 lane_c[1].pv",
-             [{13, "`lane_c[1].pv.3` already has an `ote` on line 12: #{last}"}]},
+             [
+               {13,
+                "`lane_c[1].pv` is written whole by the `move`, and its bit `lane_c[1].pv.3` " <>
+                  "already has an `ote` on line 12: #{last}"}
+             ]},
             {"xic go move 5 lane_c[1].pv\nxio go ote lane_c[1].pv.3",
              [
                {13,

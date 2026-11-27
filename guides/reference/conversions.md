@@ -1520,29 +1520,37 @@ report.(16, rungs, &Logex.compile(tags <> &1, name: "wrong"))
 ```console
 $ mix run conversions-wrong-names.exs
 16  dint_to_dint a_dint d_dint
-      line 37: unknown instruction `dint_to_dint`
+      line 37: unknown instruction `dint_to_dint` — did you mean
+      `dint_to_udint`?
 17  real_to_real a_real d_real
-      line 37: unknown instruction `real_to_real`
+      line 37: unknown instruction `real_to_real` — did you mean
+      `lreal_to_real`?
 18  bool_to_int a_bool d_int
       line 37: unknown instruction `bool_to_int`
 19  int_to_bool a_int d_bool
-      line 37: unknown instruction `int_to_bool`
+      line 37: unknown instruction `int_to_bool` — did you mean
+      `int_to_lword`?
 20  bool_to_word a_bool d_word
       line 37: unknown instruction `bool_to_word`
 21  word_to_bool a_word d_bool
-      line 37: unknown instruction `word_to_bool`
+      line 37: unknown instruction `word_to_bool` — did you mean
+      `word_to_lword`?
 22  dword_to_real a_dword d_real
-      line 37: unknown instruction `dword_to_real`
+      line 37: unknown instruction `dword_to_real` — did you mean
+      `dword_to_lword`?
 23  real_to_dword a_real d_dword
-      line 37: unknown instruction `real_to_dword`
+      line 37: unknown instruction `real_to_dword` — did you mean
+      `real_to_dint`?
 24  int_to_bcd a_int d_word
-      line 37: unknown instruction `int_to_bcd`
+      line 37: unknown instruction `int_to_bcd` — did you mean `int_to_byte`?
 25  bcd_to_int a_word d_int
       line 37: unknown instruction `bcd_to_int`
 26  real_trunc_real a_real d_real
-      line 37: unknown instruction `real_trunc_real`
+      line 37: unknown instruction `real_trunc_real` — did you mean
+      `real_trunc_lint`?
 27  real_trunc_word a_real d_word
-      line 37: unknown instruction `real_trunc_word`
+      line 37: unknown instruction `real_trunc_word` — did you mean
+      `real_trunc_dint`?
 28  trunc_int a_real d_int
       line 37: unknown instruction `trunc_int`
 29  round a_real d_int
@@ -1768,8 +1776,9 @@ $ mix run conversions-warnings.exs
     var_output out word
     xic eye ote out.3
     int_to_word code out
-      line 5: warning: `out.3` already has an `ote` on line 4: the last one in
-      the scan decides it
+      line 5: warning: `out` is written whole by the `int_to_word`, and its bit
+      `out.3` already has an `ote` on line 4: the last one in the scan decides
+      it
  7  var_input go bool
     var t ton_ltime
     var_output done bool
