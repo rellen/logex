@@ -298,6 +298,16 @@ defmodule Logex.TypespecTest do
     assert {:ok, %Logex.Program{}} = held(Logex, :compile, [@motor, [name: "motor"]])
     assert {:ok, %Logex.Program{tags: tags}} = held(Logex, :compile, ["", [name: "empty"]])
     assert tags == %{}
+
+    # Decision 607 (RV-34): `declared:` held to the option type, its tags to Logex.Tag.t().
+    start = Logex.Tag.new!("start", :bool, :var_input)
+
+    assert {:ok, %Logex.Program{}} =
+             held(Logex, :compile, [
+               "var_output q bool\nxic start ote q",
+               [declared: [start], name: "belt", types: []]
+             ])
+
     assert {:error, [_ | _]} = held(Logex, :compile, ["xic nowhere ote q\n", [name: "bad"]])
 
     File.write!(Path.join(dir, "leaf.ld"), @leaf)

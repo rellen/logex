@@ -101,10 +101,12 @@ defmodule Logex do
           {:ok, Logex.Program.t() | Logex.FbType.t()} | {:error, [Logex.Diagnostic.t(), ...]}
 
   @typedoc """
-  `compile/2`'s options, in either order: the program's `name:`, which it needs, and the
-  `types:` its source may declare instances of, none by default.
+  `compile/2`'s options, in any order, each once: the program's `name:`, which it needs;
+  the `types:` its source may declare instances of, none by default; and since decision 607
+  (RV-34) the tags `declared:` from Elixir with `Logex.Tag.new!/5`, none by default.
   """
-  @type option :: {:name, String.t()} | {:types, [Logex.FbType.t()]}
+  @type option ::
+          {:name, String.t()} | {:types, [Logex.FbType.t()]} | {:declared, [Logex.Tag.t()]}
 
   # Decision 432 (RV-15): the three are Logex.Compiler's, so that the loader and its own
   # compile of a file over the blocks it compiled itself are private code of the module
@@ -129,8 +131,17 @@ defmodule Logex do
   `Logex.FbType.user?/1`), a type the tables of several of them share compiled again once
   (`Logex.FbType.check/2`). The
   program, or the block's type, holds every type its instances reach, at any depth, once,
-  in one table, its `blocks`, and each instance's tag names its type (decision 53). The
-  options come in either order, and `types` defaults to none.
+  in one table, its `blocks`, and each instance's tag names its type (decision 53).
+
+  `declared` (decision 607, RV-34) are tags built in Elixir with `Logex.Tag.new!/5`,
+  entered in the table before the source's own, as `Logex.Compiler.instructionize/3`
+  takes them: `Logex.compile(source, name: "belt", declared: [Logex.Tag.new!("start",
+  :bool, :var_input)])` compiles a source whose rungs read `start` and whose lines do not
+  declare it. A tag the source declares too is a diagnostic at the source's line, "`start`
+  is declared twice: the caller's table already has it"; a `declared` that is no list of
+  `%Logex.Tag{}`, or a tag `Logex.Declarations.check/1` refuses, raises `ArgumentError`,
+  in `instructionize/3`'s words. The options come in any order, each once, and `types` and
+  `declared` default to none; any other option, or one given twice, raises.
 
   A name is required, because a configuration refers to a program type by its name. It is
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises

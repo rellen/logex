@@ -108,7 +108,7 @@ of a [one-shot](glossary.md#one-shot).
 | 1 name, 1 declaration | A file cannot declare the same name 2 times. It cannot declare 2 names that are different only in case, such as `motor` and `Motor`. |
 | The case of the words | A section word, a qualifier and a built-in type word are not case-sensitive: `VAR_INPUT eye BOOL` is correct. The name of a tag is case-sensitive. |
 | A tag that no rung uses | The program [compiles](glossary.md#compile). logex gives a [warning](glossary.md#warning) for the tag. [Warnings](warnings.md) gives each warning. |
-| A tag from Elixir | `Logex.Tag.new!/5` makes a tag with the rules of this page. It is a part of the [host contract](glossary.md#host-contract). If the tag breaks a rule, the function raises an `ArgumentError`. The message is the message of the diagnostic for the same declaration, with no line number. |
+| A tag from Elixir | `Logex.Tag.new!/5` makes a tag with the rules of this page. It is a part of the [host contract](glossary.md#host-contract). If the tag breaks a rule, the function raises an `ArgumentError`. The message is the message of the diagnostic for the same declaration, with no line number. `Logex.compile(source, name: "belt", declared: [tag])` compiles the source with the tag in its table. |
 | Where a tag from Elixir goes | `Logex.compile/2` and `Logex.compile_file/1` take no tag. A program declares each tag in its text. |
 | A qualifier on a `var_input` from Elixir | `Logex.Tag.new!/5` does not know if the tag is for a program. Thus it takes the qualifier. |
 

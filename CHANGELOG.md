@@ -166,6 +166,15 @@ API".
 
 ### The host's API
 
+- **`Logex.compile/2` takes `declared:`** (decision 607), the tags `Logex.Tag.new!/5`
+  builds, entered in the table before the source's declarations as
+  `Logex.Compiler.instructionize/3` takes them: `Logex.compile(source, name: "belt",
+  declared: [Logex.Tag.new!("start", :bool, :var_input)])`, where it refused the option.
+  The options come in any order, each once; a tag the source declares too is a diagnostic
+  at the source's line, and a `declared:` that is no list of tags raises in
+  `instructionize/3`'s words. The refusal of other options names `declared:` too, "...
+  their types, and tags declared from Elixir, each once in any order, as in ...". Look for:
+  code that matches that message whole.
 - **`Logex.Configuration.Text.print/1` prints every configuration `new!/1` accepts**
   (decision 601): a real global's initial value that is no value of its type, `initial:
   0.1` on a `real`, is printed as the shortest text that reads back to the value the

@@ -21,6 +21,7 @@ refused.("compile/2 with the name 2motor", fn -> Logex.compile(source, name: "2m
 refused.("compile/2 with a charlist", fn -> Logex.compile(~c"xic a", name: "m") end)
 refused.("compile/2 with the option file", fn -> Logex.compile(source, name: "m", file: "x") end)
 refused.("compile/2 with types: [1]", fn -> Logex.compile(source, name: "m", types: [1]) end)
+refused.("compile/2 with declared: [:x]", fn -> Logex.compile(source, name: "m", declared: [:x]) end)
 refused.("compile_file/1 with a charlist", fn -> Logex.compile_file(~c"motor.ld") end)
 refused.("compile_files/1 with a path", fn -> Logex.compile_files("motor.ld") end)
 {:error, [diagnostic]} = Logex.compile_file("motor.txt")

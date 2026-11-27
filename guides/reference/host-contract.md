@@ -186,14 +186,15 @@ the other values that each function refuses with an `ArgumentError`.
 
 | Call | Returns |
 |---|---|
-| `compile(source, opts)` | `{:ok, program}`, `{:ok, fb_type}` for the text of a function block, or `{:error, diagnostics}`. A function block type holds no warnings: compile the program that uses it with `compile_file/1` to see them |
+| `compile(source, opts)` | `{:ok, program}`, `{:ok, fb_type}` for the text of a function block, or `{:error, diagnostics}`. A function block type holds no warnings: a program that uses it gives them after its own, from `compile_file/1` or from `types:` |
 | `compile_file(path)` | The same results as `compile/2`. The name of the program is the name of the file |
 | `compile_files(paths)` | 1 result for each path, in the sequence of the paths |
 
 - `compile/2`: source text that is not a binary. Options that are not a keyword list with
-  `name:` and, if the source uses function blocks, `types:`, each 1 time. `name:` is
-  necessary, and there is no `compile/1`. A `name:` that is not a string, or that is not
-  a name. A `types:` that is not a list of function block types from `compile/2`.
+  `name:` and, if you need them, `types:` and `declared:`, each 1 time, in any order.
+  `name:` is necessary, and there is no `compile/1`. A `name:` that is not a string, or
+  that is not a name. A `types:` that is not a list of function block types from
+  `compile/2`. A `declared:` that is not a list of tags from `Logex.Tag.new!/5`.
 - `compile_file/1`: a path that is not a binary.
 - `compile_files/1`: a value that is not a proper list of binaries.
 
@@ -412,6 +413,10 @@ It also refuses these values, which no declaration line can give:
 - an initial value of `-0.0` for a real
 - options that are not a keyword list of `retain:` and `non_retain:`, each `true` or
   `false`, each 1 time, and not both `true`
+
+`Logex.compile/2` takes these tags with `declared:`. Each tag goes in the tag table before
+the tags of the source. A tag that the source also declares is a diagnostic at the line
+of the source.
 
 [Declarations and types](declarations-and-types.md) gives the rules of a declaration.
 
@@ -1196,6 +1201,7 @@ refused.("compile/2 with the name 2motor", fn -> Logex.compile(source, name: "2m
 refused.("compile/2 with a charlist", fn -> Logex.compile(~c"xic a", name: "m") end)
 refused.("compile/2 with the option file", fn -> Logex.compile(source, name: "m", file: "x") end)
 refused.("compile/2 with types: [1]", fn -> Logex.compile(source, name: "m", types: [1]) end)
+refused.("compile/2 with declared: [:x]", fn -> Logex.compile(source, name: "m", declared: [:x]) end)
 refused.("compile_file/1 with a charlist", fn -> Logex.compile_file(~c"motor.ld") end)
 refused.("compile_files/1 with a path", fn -> Logex.compile_files("motor.ld") end)
 {:error, [diagnostic]} = Logex.compile_file("motor.txt")
@@ -1250,7 +1256,7 @@ end)
 $ mix run host-contract-compile.exs
 Logex:
 compile/2 with no name:
-  Logex.compile/2 takes a name and, where the source uses function blocks, their types, as in Logex.compile(source, name: "motor", types: [seal]), got: []
+  Logex.compile/2 takes a name and, where the source uses function blocks, their types, and tags declared from Elixir, each once in any order, as in Logex.compile(source, name: "motor", types: [seal], declared: [start]), got: []
 compile/2 with an atom name:
   a program's name is a string, got: :motor
 compile/2 with the name 2motor:
@@ -1258,9 +1264,11 @@ compile/2 with the name 2motor:
 compile/2 with a charlist:
   Logex.compile/2 takes source text as a binary, got: ~c"xic a"
 compile/2 with the option file:
-  Logex.compile/2 takes a name and, where the source uses function blocks, their types, as in Logex.compile(source, name: "motor", types: [seal]), got: [name: "m", file: "x"]
+  Logex.compile/2 takes a name and, where the source uses function blocks, their types, and tags declared from Elixir, each once in any order, as in Logex.compile(source, name: "motor", types: [seal], declared: [start]), got: [name: "m", file: "x"]
 compile/2 with types: [1]:
   types must be function block types from Logex.compile/2, got: 1
+compile/2 with declared: [:x]:
+  expected a %Logex.Tag{}, got: :x
 compile_file/1 with a charlist:
   Logex.compile_file/1 takes a path as a binary, got: ~c"motor.ld"
 compile_files/1 with a path:

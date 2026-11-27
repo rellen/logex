@@ -399,12 +399,14 @@ defmodule Logex.FunctionBlockTest do
         fn -> Logex.compile("var s1 seal", name: "m", types: improper) end
       )
 
-      # The options come in either order, and the message names both.
+      # The options come in any order, and the message names each (decision 607, RV-34,
+      # which adds `declared:`).
       assert {:ok, _} = Logex.compile("var s1 seal", types: [seal], name: "m")
 
       raises(
         "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
-          ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
+          "types, and tags declared from Elixir, each once in any order, as in " <>
+          ~s|Logex.compile(source, name: "motor", types: [seal], declared: [start]), | <>
           ~s|got: [types: [], name: "m", file: "x"]|,
         fn -> Logex.compile("var s1 seal", opaque(types: [], name: "m", file: "x")) end
       )

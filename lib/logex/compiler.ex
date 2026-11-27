@@ -5033,26 +5033,45 @@ defmodule Logex.Compiler do
         "Logex.compile/2 takes source text as a binary, got: #{Logex.Lexer.inspected(source)}"
       )
 
-  def compile(source, name: name), do: compile(source, name: name, types: [])
-  def compile(source, types: types, name: name), do: compile(source, name: name, types: types)
+  # Decision 607 (RV-34): the options, in any order, each once: `name:`, which a program
+  # needs; `types:`, the blocks it may hold; and `declared:`, tags built in Elixir with
+  # `Logex.Tag.new!/5` beside the source's declarations, as instructionize/3 takes them.
+  def compile(source, options), do: optioned(options_of(options, %{}), source, options)
 
-  def compile(source, name: name, types: types) when is_binary(name),
-    do: named(name_problem(name), name, source, types)
+  @options [:name, :types, :declared]
 
-  def compile(_source, name: name, types: _types),
+  defp options_of([], taken), do: {:ok, taken}
+
+  defp options_of([{key, value} | rest], taken)
+       when key in @options and not is_map_key(taken, key),
+       do: options_of(rest, Map.put(taken, key, value))
+
+  defp options_of(_other, _taken), do: :error
+
+  defp optioned({:ok, %{name: name} = taken}, source, _options) when is_binary(name),
+    do:
+      named(
+        name_problem(name),
+        name,
+        source,
+        {Map.get(taken, :types, []), Map.get(taken, :declared, [])}
+      )
+
+  defp optioned({:ok, %{name: name}}, _source, _options),
     do: raise(ArgumentError, "a program's name is a string, got: #{Logex.Lexer.inspected(name)}")
 
-  def compile(_source, options),
+  defp optioned(_no_name, _source, options),
     do:
       raise(
         ArgumentError,
         "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
-          ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
+          "types, and tags declared from Elixir, each once in any order, as in " <>
+          ~s|Logex.compile(source, name: "motor", types: [seal], declared: [start]), | <>
           "got: #{Logex.Lexer.inspected(options)}"
       )
 
-  defp named(nil, name, source, types), do: held_warned(compiled(source, name, types))
-  defp named(problem, _name, _source, _types), do: raise(ArgumentError, problem)
+  defp named(nil, name, source, given), do: held_warned(compiled(source, name, given))
+  defp named(problem, _name, _source, _given), do: raise(ArgumentError, problem)
 
   # Decision 598 (RV-34): a program compiled with `types:` carries, after its own, the
   # warnings of every block type it holds, in its table's order, as the loader's program
@@ -5428,10 +5447,10 @@ defmodule Logex.Compiler do
   defp filed(%Program{warnings: warnings} = program, path),
     do: %{program | file: path, warnings: Enum.map(warnings, &%{&1 | file: path})}
 
-  defp compiled(source, name, types), do: built_from(source_parsed(source), source, name, types)
+  defp compiled(source, name, given), do: built_from(source_parsed(source), source, name, given)
 
-  defp built_from({:ok, ast}, source, name, types), do: source_lowered(ast, source, name, types)
-  defp built_from(front_end, _source, _name, _types), do: front_end
+  defp built_from({:ok, ast}, source, name, given), do: source_lowered(ast, source, name, given)
+  defp built_from(front_end, _source, _name, _given), do: front_end
 
   # `{:ok, ast}`, or a lex or parse error as the one diagnostic, with its column.
   defp source_parsed(source), do: lexed(tokenize(source))
@@ -5446,8 +5465,8 @@ defmodule Logex.Compiler do
   defp parsed({:error, {{line, column}, module, reason}}),
     do: {:error, [front_end(:parse, line, column, module.format_error(reason))]}
 
-  defp source_lowered(ast, source, name, types),
-    do: named_as(instructionize(ast, [], types), header(ast), source, name)
+  defp source_lowered(ast, source, name, {types, declared}),
+    do: named_as(instructionize(ast, declared, types), header(ast), source, name)
 
   defp named_as({:ok, %Program{} = program}, _header, source, name),
     do: {:ok, %{program | name: name, source: source}}
