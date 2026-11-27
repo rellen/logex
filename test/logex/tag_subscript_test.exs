@@ -882,17 +882,12 @@ defmodule Logex.TagSubscriptTest do
                {8, "`w[i].[n]` already has an `ote` on line 7: #{@later}"}
              ]
 
-      # The element itself, and another element, beside a coil on it: none; and since
-      # decision 246 the very element through the very tag, `l[i]` beside `l[i]`, any write
-      # but a coil's, in either order, as `l[2]` beside `l[2]` is not, where M5-13's review
-      # warned it.
+      # Another element beside a coil on one: none; and since decision 246 the very element
+      # through the very tag, `l[i]` beside `l[i]`, a latch, in either order, as `l[2]` beside
+      # `l[2]` is not, where M5-13's review warned it.
       for rungs <- [
-            "xic a ote l[2]\nmove a l[2]",
-            "move a l[2]\nxic a ote l[2]",
             "xic a ote l[2]\nmove a l[3]",
             "xic a otl l[2]\nxic a ote l[2]",
-            "xic a ote l[i]\nmove a l[i]",
-            "move a l[i]\nxic a ote l[i]",
             "xic a ote l[i]\nxic a otl l[i]",
             "xic a otu l[i]\nxic a ote l[i]"
           ] do
@@ -902,6 +897,23 @@ defmodule Logex.TagSubscriptTest do
                   &(elem(&1, 1) =~ @later)
                 )} ==
                  {rungs, []}
+      end
+
+      # Decision 626 (RV-34), changing decision 246's reading for a write but a latch's: the
+      # element itself beside a coil on it, by literals or through the very tag, in either
+      # order, is warned as two coils are, as a word's bit is beside its word.
+      for {rungs, warning} <- [
+            {"xic a ote l[2]\nmove a l[2]", "`l[2]` already has an `ote` on line 6"},
+            {"move a l[2]\nxic a ote l[2]", "`l[2]` is already written by the `move` on line 6"},
+            {"xic a ote l[i]\nmove a l[i]", "`l[i]` already has an `ote` on line 6"},
+            {"move a l[i]\nxic a ote l[i]", "`l[i]` is already written by the `move` on line 6"}
+          ] do
+        assert {rungs,
+                Enum.filter(
+                  warnings(head <> rungs <> "\nxic l[0] ote o"),
+                  &(elem(&1, 1) =~ @later)
+                )} ==
+                 {rungs, [{7, "#{warning}: #{@later}"}]}
       end
     end
 

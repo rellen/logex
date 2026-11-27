@@ -963,6 +963,47 @@ defmodule Logex.LongTimerTest do
       assert length(beside("lt 3 cure.acc ote y")) == 1
     end
 
+    # Decision 637 (RV-34): a real literal reaches a long timer's member only through a
+    # conversion, `ton cure 1.5`, `move 1.5 cure.pre` and a comparison with one being
+    # refused; the conversion's integer is its time, warned as an integer literal's is. The
+    # oracle is the scan's own value of `cure.pre`, rounded to the nearest, a tie to the even
+    # one, or truncated, as IEC's REAL_TO_LINT and TRUNC give it.
+    test "a real literal a conversion writes into a long timer's member is warned by the integer it gives" do
+      for {rung, ns} <- [
+            {"lreal_to_lint 1500000.0 cure.pre", 1_500_000},
+            {"lreal_to_lint 1.5e6 cure.acc", 1_500_000},
+            {"real_to_lint 2.5e6 cure.pre", 2_500_000},
+            {"lreal_to_lint 2.5 cure.pre", 2},
+            {"lreal_trunc_lint 1999999.6 cure.pre", 1_999_999}
+          ] do
+        [read, timed] = beside(rung)
+        assert read =~ "reads a literal"
+
+        [symbol, literal, member] = String.split(rung)
+
+        assert timed ==
+                 "line 6: warning: `#{symbol}` writes `#{literal}` into `#{member}`, where " <>
+                   "`#{member}` #{@ns_told}: #{ns} ns is no whole number of milliseconds, " <>
+                   "and a ton_ltime counts whole milliseconds"
+
+        # The scan writes the very value the warning names.
+        program = c!(@beside <> "xic go " <> rung)
+        [state] = scans(program, Runtime.instance(program), [{0, %{"go" => 1}}])
+        [_cure, field] = String.split(member, ".")
+        assert get_in(state.env, ["cure", field]) == ns, rung
+      end
+
+      # Rounded to a whole number of ms, or truncated to one: no warning but decision 178's.
+      for rung <- [
+            "lreal_to_lint 1999999.6 cure.pre",
+            "lreal_trunc_lint 2000000.9 cure.pre",
+            "real_to_lint 3.0e6 cure.pre"
+          ] do
+        assert [read] = beside(rung), rung
+        assert read =~ "reads a literal"
+      end
+    end
+
     # Decision 196: the first long timer's member among the operands is the one named, the
     # instruction's own order, whichever side it is on.
     test "of two long timers' members, the first among the operands is named" do

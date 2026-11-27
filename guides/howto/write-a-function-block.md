@@ -260,6 +260,7 @@ block.
 |---|---|---|
 | `` is an instance of `starter`, but no `cal` runs it `` | A rung reads a member of the instance, for example `xic c3.run`, but no `cal` names the instance. Its members stay at their [initial values](../reference/glossary.md#initial-value). | Write a `cal` for the instance. |
 | `` is declared but no rung uses it `` | No rung names the tag or the instance. With the name of `starter.ld`, the body does not use a tag of its file. | Use the tag, or remove the declaration. |
+| `` is already written by the `cal` on line `` | 2 `cal` instructions write the same tag, or a `cal` and an `ote` or a `move` write it. The last write in the scan decides the value. | Give each `cal` its own output tag, and combine the tags on 1 rung. |
 
 ### When you run the scans
 

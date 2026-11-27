@@ -4490,6 +4490,99 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # Decision 638 (RV-34): a configuration's warnings hold, after its own, each warning of
+  # each program type its instances run, once a type, in the order they first name the
+  # types, its message naming the type, its line and file its program's; at every door.
+  describe "a program type's warnings (decision 638, RV-34)" do
+    @describetag :tmp_dir
+
+    setup do
+      {:ok, belt} =
+        Logex.compile(
+          "var_input start bool\nvar_output motor bool\nvar spare bool\n" <>
+            "xic start ote motor\nxic start ote motor",
+          name: "belt"
+        )
+
+      {:ok, quiet} =
+        Logex.compile("var_input start bool\nvar_output motor bool\nxic start ote motor",
+          name: "quiet"
+        )
+
+      {:ok, lamp} =
+        Logex.compile(
+          "var_input start bool\nvar_output lamp bool\nvar idle bool\nxic start ote lamp",
+          name: "lamp"
+        )
+
+      %{belt: belt, quiet: quiet, lamp: lamp}
+    end
+
+    @belt_told [
+      "line 3: warning: program type `belt`: `spare` is declared but no rung uses it",
+      "line 5: warning: program type `belt`: `motor` already has an `ote` on line 4: the " <>
+        "last one in the scan decides it"
+    ]
+
+    test "compile/3: after its own, each type once, in the order the instances name them",
+         %{belt: belt, quiet: quiet, lamp: lamp} do
+      source =
+        "var_global spare_g bool\nprogram l1 lamp\nprogram q1 quiet\nprogram b1 belt\n" <>
+          "program b2 belt\nprogram l2 lamp\n" <>
+          Enum.map_join(~w(l1 q1 b1 b2 l2), &"#{&1}.start 0\n")
+
+      programs = %{"belt" => belt, "quiet" => quiet, "lamp" => lamp}
+
+      assert warned(source, programs) ==
+               ["line 1: warning: `spare_g` is declared but nothing uses it"] ++
+                 ["line 3: warning: program type `lamp`: `idle` is declared but no rung uses it"] ++
+                 @belt_told
+
+      # Each program keeps its own as it was.
+      assert {:ok, config} = Configuration.compile("c", source, programs)
+      assert config.programs["belt"].warnings == belt.warnings
+
+      assert Enum.map(belt.warnings, & &1.message) |> hd() ==
+               "`spare` is declared but no rung uses it"
+    end
+
+    test "new!/1, its programs given from Elixir", %{belt: belt, quiet: quiet} do
+      config =
+        Configuration.new!(
+          name: "c",
+          programs: [quiet, belt],
+          instances: [%Instance{name: "b1", type: "belt"}, %Instance{name: "q1", type: "quiet"}],
+          connections: [
+            %Connection{instance: "b1", member: "start", to: 0},
+            %Connection{instance: "q1", member: "start", to: 0}
+          ]
+        )
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == @belt_told
+    end
+
+    test "compile_file/1: each with its program type's file", %{tmp_dir: dir} do
+      File.write!(
+        Path.join(dir, "belt.ld"),
+        "var_input start bool\nvar_output motor bool\nvar spare bool\n" <>
+          "xic start ote motor\nxic start ote motor\n"
+      )
+
+      path = Path.join(dir, "plant.logex")
+      File.write!(path, "program b1 belt\nb1.start 0\n")
+      belt = Path.join(dir, "belt.ld")
+
+      assert {:ok, config} = Configuration.compile_file(path)
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) ==
+               Enum.map(@belt_told, &("#{belt}: " <> &1))
+    end
+
+    test "a program type with none adds none", %{quiet: quiet} do
+      assert warned("program q1 quiet\nq1.start 0\n", %{"quiet" => quiet}) == []
+    end
+  end
+
   describe "one message a rule (M2-2)" do
     # The same configuration from the text and from Elixir: each diagnostic in the same
     # words, but for the line a message cites, which an element from Elixir has none of.
@@ -5644,7 +5737,12 @@ defmodule Logex.ConfigurationTest do
 
       assert pump.warnings == []
       assert motor.blocks == pump.blocks
-      assert config.warnings == []
+
+      # Decision 638 (RV-34): the configuration holds it once too, naming `motor`.
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "#{seal}: line 5: warning: program type `motor`: `spare` is declared but no " <>
+                 "rung uses it"
+             ]
 
       # Each program type alone, as compile_file/1 gives it, hands the warning back.
       assert {:ok, %{warnings: [_seal]}} = Logex.compile_file(Path.join(dir, "pump.ld"))
@@ -5905,8 +6003,13 @@ defmodule Logex.ConfigurationTest do
   end
 
   # A configuration as compile/3 gives it, which no file names.
+  # The configuration's own warnings carry its file; since decision 638 (RV-34) those of
+  # its program types follow, each with its own file, which compile/3 gives too.
   defp unfiled(config),
-    do: %{config | file: nil, warnings: Enum.map(config.warnings, &%{&1 | file: nil})}
+    do: %{config | file: nil, warnings: Enum.map(config.warnings, &unfiled(&1, config.file))}
+
+  defp unfiled(%Diagnostic{file: file} = warning, file), do: %{warning | file: nil}
+  defp unfiled(warning, _file), do: warning
 
   describe "compile/3's host mistakes" do
     # What no configuration text holds is the host's, raised as check/1 raises it.

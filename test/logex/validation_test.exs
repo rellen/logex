@@ -1201,6 +1201,171 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  # Decision 626 (RV-34): a `cal`'s write beside a coil or another `cal`'s, and a write but
+  # a latch's of a bool a coil writes, are warned as two coils are, either first.
+  describe "a write beside a coil (decision 626, RV-34)" do
+    @later "the last one in the scan decides it"
+
+    defp shared_warnings(source) do
+      {:ok, seal} =
+        Logex.compile("function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q",
+          name: "seal"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var_input a bool\nvar_input i dint\nvar_input n dint\nvar belt bool\n" <>
+            "var lamps bool[4]\nvar w word\nvar s1 seal\nvar s2 seal\n" <> source,
+          name: "p",
+          types: [seal]
+        )
+
+      for %Logex.Diagnostic{line: line, message: message} <- program.warnings,
+          String.ends_with?(message, @later),
+          do: {line, message}
+    end
+
+    test "a cal and an ote on one tag, either first" do
+      assert shared_warnings("cal s1 a belt\nxic a ote belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a ote belt\ncal s1 a belt") == [
+               {10, "`belt` already has an `ote` on line 9: #{@later}"}
+             ]
+    end
+
+    test "two cals on one tag, and a cal and a move" do
+      assert shared_warnings("cal s1 a belt\ncal s2 a belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      # Provisional (PLAN's RV-34): the `cal` judged as its coil.
+      assert shared_warnings("cal s1 a belt\nxic a move 0 belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a move 0 belt\ncal s1 a belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+    end
+
+    test "a move and an ote on one bool, either first, a bool array's and a word's alike" do
+      for {first, later, shown} <- [
+            {"xic a move 1 belt", "xic a ote belt", "belt"},
+            {"xic a move 1 lamps[2]", "xic a ote lamps[2]", "lamps[2]"},
+            {"xic a move 1 w.0", "xic a ote w.0", "w.0"},
+            {"xic a move 1 lamps[i]", "xic a ote lamps[i]", "lamps[i]"},
+            {"xic a move 1 w.[n]", "xic a ote w.[n]", "w.[n]"},
+            {"xic a not a belt", "xic a ote belt", "belt"}
+          ] do
+        [symbol | _] = first |> String.split() |> Enum.drop(2)
+
+        assert shared_warnings(first <> "\n" <> later) == [
+                 {10, "`#{shown}` is already written by the `#{symbol}` on line 9: #{@later}"}
+               ]
+
+        assert shared_warnings(later <> "\n" <> first) == [
+                 {10, "`#{shown}` already has an `ote` on line 9: #{@later}"}
+               ]
+      end
+    end
+
+    test "two cals on a tag of any type, a cal and a move on a bool alone (provisional)" do
+      {:ok, gauge} =
+        Logex.compile("function_block gauge\nvar_input s dint\nvar_output q dint\nmove s q",
+          name: "gauge"
+        )
+
+      text = "var_input a bool\nvar n dint\nvar g1 gauge\nvar g2 gauge\n"
+
+      told = fn rungs ->
+        {:ok, program} = Logex.compile(text <> rungs, name: "p", types: [gauge])
+        for %{line: line, message: m} <- program.warnings, m =~ @later, do: {line, m}
+      end
+
+      assert told.("cal g1 1 n\ncal g2 2 n") == [
+               {6, "`n` is already written by the `cal` on line 5: #{@later}"}
+             ]
+
+      assert told.("cal g1 1 n\nxic a move 3 n") == []
+    end
+
+    test "a coil after a coil is told once, by the second-ote warning" do
+      assert shared_warnings("xic a move 1 belt\nxic a ote belt\nxic a ote belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"},
+               {11, "`belt` already has an `ote` on line 10: #{@later}"}
+             ]
+    end
+
+    test "latches, two moves and writes of other bools stay quiet" do
+      for rungs <- [
+            "xic a ote belt\nxic a otl belt\nxio a otu belt",
+            "xic a move 1 belt\nxic a move 0 belt",
+            "xic a otl belt\nxic a move 0 belt",
+            "xic a ote lamps[1]\nxic a move 1 lamps[2]",
+            "xic a ote lamps[i]\nxic a otl lamps[i]",
+            "xic a ote w.0\nxic a move 1 w.1",
+            "cal s1 a belt\nxic a otl belt"
+          ] do
+        assert {rungs, shared_warnings(rungs)} == {rungs, []}
+      end
+    end
+
+    test "each write is told the earliest it meets, a coil none where a coil came first" do
+      assert shared_warnings("xic a move 1 belt\nxic a ote belt\ncal s1 a belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"},
+               {11, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a ote belt\nxic a ote belt\nxic a move 1 belt") == [
+               {10, "`belt` already has an `ote` on line 9: #{@later}"},
+               {11, "`belt` already has an `ote` on line 9: #{@later}"}
+             ]
+
+      # In one rung, and a pulse coil's bit.
+      assert shared_warnings("xic a ote belt move 1 belt") == [
+               {9, "`belt` already has an `ote` in this rung: #{@later}"}
+             ]
+
+      assert shared_warnings("var st bool\nxic a osr st belt\nxic a move 0 belt") == [
+               {11, "`belt` is already the pulse bit of the `osr` on line 10: #{@later}"}
+             ]
+    end
+
+    test "a one-shot's storage bit and a tag declared from Elixir are judged elsewhere" do
+      assert shared_warnings("var st bool\nxic a ons st ote belt\nxic a move 1 st") == []
+
+      {:ok, program} =
+        source_compile("xic a ote d\nxic a move 1 d", [
+          Logex.Tag.new!("a", :bool),
+          Logex.Tag.new!("d", :bool)
+        ])
+
+      assert program.warnings == []
+    end
+
+    # The look costs a routine with no coil on what it names by its name and no `cal` one
+    # pass, and grows linearly where it looks.
+    test "grows linearly, in reductions" do
+      compile = fn n ->
+        text =
+          Enum.map_join(1..n, "", &"var b#{&1} bool\n") <>
+            "var_input a bool\n" <>
+            Enum.map_join(1..n, "\n", &"xic a ote b#{&1}\nxic a move 1 b#{&1}")
+
+        {:reductions, before} = Process.info(self(), :reductions)
+        {:ok, %{warnings: warnings}} = Logex.compile(text, name: "p")
+        {:reductions, later} = Process.info(self(), :reductions)
+        assert length(warnings) == n
+        later - before
+      end
+
+      _warm = compile.(10)
+      assert compile.(400) / compile.(200) < 2.4
+    end
+  end
+
   describe "ons (M1-6)" do
     test "its storage bit is a bool tag it writes: M1-3's rules refuse anything else" do
       assert source_errors(

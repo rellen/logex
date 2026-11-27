@@ -14,7 +14,13 @@ programs = [
   "var_input eye bool\nvar_output lamp bool\nvar s1 seal\nxic eye jmp done\nlbl done ote lamp",
   "var_input eye bool\nvar_output lamp bool\nvar seen bool\nvar s1 seal\n" <>
     "xic eye ons seen ote lamp\ncal s1 eye 0 seen",
-  "var_output total lreal\nvar g gain\ncal g 2 9007199254740993.0 total"
+  "var_output total lreal\nvar g gain\ncal g 2 9007199254740993.0 total",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
+    "cal s1 eye skip lamp\nxic skip ote lamp",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\nvar s2 seal\n" <>
+    "cal s1 eye skip lamp\ncal s2 skip eye lamp",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
+    "xic eye cal s1 eye skip lamp ote lamp"
 ]
 
 report.(1, programs, &Logex.compile(&1, name: "warned", types: [seal, gain]))

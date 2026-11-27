@@ -597,8 +597,8 @@ defmodule Logex.TagBitTest do
              ]
     end
 
-    # Decision 246, superseding M5-9's reading for this case: a coil and another write of the
-    # very bit through the very tag, `ote w.[n]` beside `otl w.[n]`, either first, are warned
+    # Decision 246, superseding M5-9's reading for this case: a coil and a latch of the very
+    # bit through the very tag, `ote w.[n]` beside `otl w.[n]`, either first, are warned
     # of nothing, as `ote w.3` beside `otl w.3` is not; through another tag, `w.[m]`, they
     # still are, and so is another coil on the word, whichever write comes first.
     test "a coil and a latch on the very bit through the very tag are warned of nothing" do
@@ -612,7 +612,6 @@ defmodule Logex.TagBitTest do
       for rungs <- [
             "xic a ote w.[n]\nxic a otl w.[n]",
             "xic a otl w.[n]\nxic a ote w.[n]",
-            "xic a ote w.[n]\nmove a w.[n]",
             "xic a otu w.[n]\nxic a ote w.[n]",
             "xic a ote g[1,c].[n]\nxic a otl g[1,c].[n]",
             "xic a ote g[1,c].[n]\nxic a otl g[01,c].[n]",
@@ -621,6 +620,17 @@ defmodule Logex.TagBitTest do
           ] do
         assert {rungs, decides.(rungs)} == {rungs, []}
       end
+
+      # Decision 626 (RV-34), changing decision 246's reading for a write but a latch's: a
+      # `move` of the very bit through the very tag beside its coil is warned as two coils
+      # are, in either order.
+      assert decides.("xic a ote w.[n]\nmove a w.[n]") == [
+               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+             ]
+
+      assert decides.("move a w.[n]\nxic a ote w.[n]") == [
+               {8, "`w.[n]` is already written by the `move` on line 7: #{later}"}
+             ]
 
       assert decides.("xic a ote w.[n]\nxic a otl w.[m]") == [
                {8, "`w.[n]` already has an `ote` on line 7: #{later}"}

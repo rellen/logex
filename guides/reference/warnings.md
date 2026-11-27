@@ -134,7 +134,7 @@ logex gives these warnings for a program and for the body of a
 |---|---|
 | Message for a preset | `` `<mnemonic>` gives `<timer>` a preset of <n> ns, which is no whole number of milliseconds: a <type> counts whole milliseconds, so it times as the next whole millisecond, <m> ms `` |
 | Message for a literal | What the instruction does with the literal, for example `` `move` writes `2500` into `cure.pre` ``. Then `` , where `<member>` is a <type>'s time in nanoseconds: <n> ns is no whole number of milliseconds, and a <type> counts whole milliseconds ``. |
-| Cause | A [long timer](glossary.md#long-timer) counts whole ms. Its members `.pre` and `.acc` hold ns. The warning is for a [preset](glossary.md#preset) that is not a whole number of ms. It is also for such a literal beside `.pre` or `.acc` in a `move`, a conversion, a comparison, an `add` or a `sub`. |
+| Cause | A [long timer](glossary.md#long-timer) counts whole ms. Its members `.pre` and `.acc` hold ns. The warning is for a [preset](glossary.md#preset) that is not a whole number of ms. It is also for such a literal beside `.pre` or `.acc` in a `move`, a conversion, a comparison, an `add` or a `sub`. A real literal in a conversion, for example `lreal_to_lint 1.5e6 cure.pre`, is the integer that the conversion gives. |
 | `<type>` | The type of the timer, for example `ton_ltime` or `tof_ltime`. |
 | In the run | A timer with such a preset times to the next whole ms. |
 | No warning | The same literal in a different instruction, for example `mul`. |
@@ -177,7 +177,8 @@ gives the pairs. Each message ends with `the last one in the scan decides it`.
 |---|---|---|
 | A write | An instruction that sets the value of a tag, a member, an element or a [bit](glossary.md#bit) | `ote motor`, `move 0 status` |
 | An `ote` or a pulse coil | An `ote`, or an `osr` or an `osf` on its [pulse bit](glossary.md#pulse-bit). These [coils](glossary.md#coil) set their bool in each scan, on a [true rung](glossary.md#true-rung) and on a [false rung](glossary.md#false-rung). | `ote motor`, and `osr s1 kick` on `kick` |
-| A write of a different kind | Each other write: an `otl`, an `otu`, a `move`, the output operand of a `cal`, and each other instruction that writes a value | `otl motor`, `move 0 lamps[2]` |
+| A latch | An `otl` or an `otu` | `otl motor` |
+| A write of a different kind | Each other write: a latch, a `move`, the output operand of a `cal`, and each other instruction that writes a value | `otl motor`, `move 0 lamps[2]` |
 | The word of a bit | The tag, the member or the element that holds the bit | `status` for `status.3`, `flags[1]` for `flags[1].3` |
 | A literal element, a literal bit | An element with only literals as subscripts. A bit with a literal as its number. | `lamps[2]`, `status.3` |
 | A write through a tag | A write with a tag as a subscript or as the number of a bit | `lamps[slot]`, `status.[n]`, `flags[i].3` |
@@ -196,7 +197,9 @@ flowchart TD
   pair[2 writes] --> same{Same bool?}
   same -- cannot --> none[No warning]
   same -- can --> one{An ote or pulse coil?}
-  one -- no --> none
+  one -- no --> cal{2 cals, or a cal and a move?}
+  cal -- no --> none
+  cal -- yes --> warn
   one -- yes --> both{The other also?}
   both -- yes --> warn[Warning]
   both -- no --> table[Look up the pair]
@@ -211,14 +214,17 @@ The questions of the diagram, in sequence:
    [When 2 writes cannot set the same bool](#when-2-writes-cannot-set-the-same-bool)
    gives the pairs that cannot.
 2. Is 1 of the writes an `ote` or a pulse coil? 2 writes of a different kind get no
-   warning ([30](#cases-29-to-43-2-writes-with-no-warning) and [37](#cases-29-to-43-2-writes-with-no-warning)).
+   warning ([30](#cases-29-to-43-2-writes-with-no-warning), [31](#cases-29-to-43-2-writes-with-no-warning) and [37](#cases-29-to-43-2-writes-with-no-warning)). A `cal` is the exception. The output
+   operands of 2 `cal` instructions on 1 bool get the warning
+   ([78](#cases-63-to-80-pairs-in-the-2-orders)). So do a `cal` and a write that is not a latch
+   ([79](#cases-63-to-80-pairs-in-the-2-orders)).
 3. Is the other write also an `ote` or a pulse coil? Then the 2 writes get the warning
    ([11](#cases-11-to-28-2-writes-with-a-warning) to [14](#cases-11-to-28-2-writes-with-a-warning), [16](#cases-11-to-28-2-writes-with-a-warning) to [20](#cases-11-to-28-2-writes-with-a-warning) and [23](#cases-11-to-28-2-writes-with-a-warning)).
 4. If not, look up the pair in
    [An `ote` and a write of a different kind](#an-ote-and-a-write-of-a-different-kind).
 
-Each rule of this part is true in each order of the 2 writes in the text. Cases [63](#cases-63-to-74-pairs-in-the-2-orders)
-to [72](#cases-63-to-74-pairs-in-the-2-orders) show each pair in the 2 orders.
+Each rule of this part is true in each order of the 2 writes in the text. Cases [63](#cases-63-to-80-pairs-in-the-2-orders)
+to [73](#cases-63-to-80-pairs-in-the-2-orders) and [75](#cases-63-to-80-pairs-in-the-2-orders) to [80](#cases-63-to-80-pairs-in-the-2-orders) show each pair in the 2 orders.
 
 ### When 2 writes cannot set the same bool
 
@@ -240,29 +246,33 @@ On a bool tag, on a member of 1 instance, or on a pulse bit:
 
 | The `ote` | The other write | Warning |
 |---|---|---|
-| On the bool | On the same bool | No ([29](#cases-29-to-43-2-writes-with-no-warning), [31](#cases-29-to-43-2-writes-with-no-warning), [43](#cases-29-to-43-2-writes-with-no-warning), [73](#cases-63-to-74-pairs-in-the-2-orders)) |
+| On the bool | A latch on the same bool | No ([29](#cases-29-to-43-2-writes-with-no-warning), [43](#cases-29-to-43-2-writes-with-no-warning)) |
+| On the bool | Each other write on the same bool, a `move` or the output operand of a `cal` among them | Yes ([73](#cases-63-to-80-pairs-in-the-2-orders), [75](#cases-63-to-80-pairs-in-the-2-orders)) |
 
 On an element of a bool array, or on a bool member of an element of an array of
 instances, for example `lane_c[i].r`:
 
 | The `ote` | The other write | Warning |
 |---|---|---|
-| On a literal element | On the same literal element | No ([63](#cases-63-to-74-pairs-in-the-2-orders)) |
-| On a literal element | Through a tag | Yes ([21](#cases-11-to-28-2-writes-with-a-warning), [64](#cases-63-to-74-pairs-in-the-2-orders)) |
-| Through a tag | On a literal element | Yes ([65](#cases-63-to-74-pairs-in-the-2-orders)) |
-| Through tags | Through the same tags | No ([35](#cases-29-to-43-2-writes-with-no-warning)) |
-| Through tags | Through different tags | Yes ([66](#cases-63-to-74-pairs-in-the-2-orders)) |
+| On a literal element | A latch on the same literal element | No ([80](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a literal element | Each other write on the same literal element | Yes ([63](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a literal element | Through a tag | Yes ([21](#cases-11-to-28-2-writes-with-a-warning), [64](#cases-63-to-80-pairs-in-the-2-orders)) |
+| Through a tag | On a literal element | Yes ([65](#cases-63-to-80-pairs-in-the-2-orders)) |
+| Through tags | A latch through the same tags | No ([35](#cases-29-to-43-2-writes-with-no-warning)) |
+| Through tags | Each other write through the same tags | Yes ([77](#cases-63-to-80-pairs-in-the-2-orders)) |
+| Through tags | Through different tags | Yes ([66](#cases-63-to-80-pairs-in-the-2-orders)) |
 
 On a bit of a word, that is a word tag, a word member of 1 instance or an element of a
 word array:
 
 | The `ote` | The other write | Warning |
 |---|---|---|
-| On a bit | A write of its word, or of an element that can be its word, also through the same tags | Yes ([15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning), [22](#cases-11-to-28-2-writes-with-a-warning), [70](#cases-63-to-74-pairs-in-the-2-orders)) |
-| On a literal bit | On the same literal bit | No ([67](#cases-63-to-74-pairs-in-the-2-orders)) |
-| On a bit | On a bit through a tag, not through the same tags | Yes ([68](#cases-63-to-74-pairs-in-the-2-orders)) |
-| Through a tag | On a literal bit | No ([36](#cases-29-to-43-2-writes-with-no-warning), [69](#cases-63-to-74-pairs-in-the-2-orders)) |
-| Through tags | On a bit through the same tags | No ([35](#cases-29-to-43-2-writes-with-no-warning)) |
+| On a bit | A write of its word, or of an element that can be its word, also through the same tags | Yes ([15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning), [22](#cases-11-to-28-2-writes-with-a-warning), [70](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a literal bit | A latch on the same literal bit | No ([67](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a literal bit | Each other write on the same literal bit | Yes ([76](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a bit | On a bit through a tag, not through the same tags | Yes ([68](#cases-63-to-80-pairs-in-the-2-orders)) |
+| Through a tag | On a literal bit | No ([36](#cases-29-to-43-2-writes-with-no-warning), [69](#cases-63-to-80-pairs-in-the-2-orders)) |
+| Through tags | A latch on a bit through the same tags | No ([35](#cases-29-to-43-2-writes-with-no-warning)) |
 
 A member of an element of an array of timers or counters can be a word, for example
 `lane_c[i].pv`. On a bit of such a member, the rules of a word array apply, with 2
@@ -270,38 +280,39 @@ differences:
 
 | The `ote` | The other write | Warning |
 |---|---|---|
-| Through a tag subscript, for example `lane_c[i].pv.3` or `lane_c[i].pv.[n]` | On a literal bit of a literal element, for example `lane_c[1].pv.3` | Yes ([71](#cases-63-to-74-pairs-in-the-2-orders)) |
-| On a literal bit through a tag subscript, for example `lane_c[i].pv.3` | A write of the member through the same tag subscript, for example `move 5 lane_c[i].pv` | No ([72](#cases-63-to-74-pairs-in-the-2-orders)) |
+| Through a tag subscript, for example `lane_c[i].pv.3` or `lane_c[i].pv.[n]` | On a literal bit of a literal element, for example `lane_c[1].pv.3` | Yes ([71](#cases-63-to-80-pairs-in-the-2-orders)) |
+| On a literal bit through a tag subscript, for example `lane_c[i].pv.3` | A write of the member through the same tag subscript, for example `move 5 lane_c[i].pv` | No ([72](#cases-63-to-80-pairs-in-the-2-orders)) |
 
 A bit through a tag beside a write of the member through the same tag subscript gets the
-warning, for example `ote lane_c[i].pv.[n]` and `move 5 lane_c[i].pv` ([72](#cases-63-to-74-pairs-in-the-2-orders)).
+warning, for example `ote lane_c[i].pv.[n]` and `move 5 lane_c[i].pv` ([72](#cases-63-to-80-pairs-in-the-2-orders)).
 
 ### The messages
 
 logex gives the warning at the line of the later write in the text. The message names the
 first write in the text that can set the same bool. Thus a third write also names the
 first write ([11](#cases-11-to-28-2-writes-with-a-warning)). If the first write is in the same rung, the message says
-`in this rung` in place of `on line <n>` ([74](#cases-63-to-74-pairs-in-the-2-orders)).
+`in this rung` in place of `on line <n>` ([74](#cases-63-to-80-pairs-in-the-2-orders)).
 
 | Message | When | Cases |
 |---|---|---|
 | `` `<bool>` already has an `ote` on line <n> `` | The first write is an `ote` on the bool. | [11](#cases-11-to-28-2-writes-with-a-warning), [13](#cases-11-to-28-2-writes-with-a-warning), [14](#cases-11-to-28-2-writes-with-a-warning), [20](#cases-11-to-28-2-writes-with-a-warning) |
 | `` `<bool>` is already the pulse bit of the `<mnemonic>` on line <n> `` | The first write is a pulse coil on the bool. | [12](#cases-11-to-28-2-writes-with-a-warning) |
-| `` `<bit>` is a bit of `<word>`, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` on a bit. The first write writes its word, or writes a bit of the word through a tag. | [15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-74-pairs-in-the-2-orders) |
-| `` `<later>` is in `<array>`, which the `<mnemonic>` on line <n> may write through a tag subscript `` | The first write goes through a tag subscript. | [18](#cases-11-to-28-2-writes-with-a-warning), [19](#cases-11-to-28-2-writes-with-a-warning), [22](#cases-11-to-28-2-writes-with-a-warning) to [24](#cases-11-to-28-2-writes-with-a-warning), [70](#cases-63-to-74-pairs-in-the-2-orders) |
-| `` `<later>` is in `<array>`, as `<first>` is, which already has an `ote` on line <n> `` | The later write goes through a tag. The first write is an `ote` on a literal element or bit. | [18](#cases-11-to-28-2-writes-with-a-warning), [21](#cases-11-to-28-2-writes-with-a-warning), [64](#cases-63-to-74-pairs-in-the-2-orders) |
+| `` `<bool>` is already written by the `<mnemonic>` on line <n> `` | The first write is the output operand of a `cal`, or a write that is not a latch. It is on the same bool, by the same literals or through the same tags. | [63](#cases-63-to-80-pairs-in-the-2-orders), [73](#cases-63-to-80-pairs-in-the-2-orders), [75](#cases-63-to-80-pairs-in-the-2-orders) to [79](#cases-63-to-80-pairs-in-the-2-orders) |
+| `` `<bit>` is a bit of `<word>`, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` on a bit. The first write writes its word, or writes a bit of the word through a tag. | [15](#cases-11-to-28-2-writes-with-a-warning), [17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-80-pairs-in-the-2-orders) |
+| `` `<later>` is in `<array>`, which the `<mnemonic>` on line <n> may write through a tag subscript `` | The first write goes through a tag subscript. | [18](#cases-11-to-28-2-writes-with-a-warning), [19](#cases-11-to-28-2-writes-with-a-warning), [22](#cases-11-to-28-2-writes-with-a-warning) to [24](#cases-11-to-28-2-writes-with-a-warning), [70](#cases-63-to-80-pairs-in-the-2-orders) |
+| `` `<later>` is in `<array>`, as `<first>` is, which already has an `ote` on line <n> `` | The later write goes through a tag. The first write is an `ote` on a literal element or bit. | [18](#cases-11-to-28-2-writes-with-a-warning), [21](#cases-11-to-28-2-writes-with-a-warning), [64](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, as `<first>` is, which is already the pulse bit of the `<mnemonic>` on line <n> `` | The later write goes through a tag. The first write is a pulse coil on a literal element. | [12](#cases-11-to-28-2-writes-with-a-warning) |
-| `` `<later>` is in `<array>`, as `<first>` is, which the `<mnemonic>` on line <n> writes `` | The later write is an `ote` through a tag. The first write is a write of a different kind. It is on a literal element, on a member of a literal element, or on a bit of 1 of these. | [65](#cases-63-to-74-pairs-in-the-2-orders), [71](#cases-63-to-74-pairs-in-the-2-orders) |
+| `` `<later>` is in `<array>`, as `<first>` is, which the `<mnemonic>` on line <n> writes `` | The later write is an `ote` through a tag. The first write is a write of a different kind. It is on a literal element, on a member of a literal element, or on a bit of 1 of these. | [65](#cases-63-to-80-pairs-in-the-2-orders), [71](#cases-63-to-80-pairs-in-the-2-orders) |
 | `` `<later>` is in `<array>`, as `<first>` is, which the `<mnemonic>` on line <n> writes whole `` | The later write is an `ote` through a tag. The first write writes a literal element of a word array, or a member of a literal element, whole. It can also be a write through a tag on a bit of 1 of these. | [15](#cases-11-to-28-2-writes-with-a-warning) |
 
 The name in a message is the name of the later write, with 1 exception. If the later
 write writes a word, and the first write is an `ote` on a bit of that word, the message
 names the bit. For example, the `move` on line 24 of case [15](#cases-11-to-28-2-writes-with-a-warning) gets
 `` `faults[1].0` already has an `ote` on line 23 ``. So does an `otl` on a bit through a
-tag ([68](#cases-63-to-74-pairs-in-the-2-orders)).
+tag ([68](#cases-63-to-80-pairs-in-the-2-orders)).
 
 logex counts a write on a bit through a tag as a write of its word. Thus the
-message for an `ote` on a bit after it says `writes whole` ([17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-74-pairs-in-the-2-orders)).
+message for an `ote` on a bit after it says `writes whole` ([17](#cases-11-to-28-2-writes-with-a-warning), [68](#cases-63-to-80-pairs-in-the-2-orders)).
 
 ### Example: 2 `ote` instructions on `motor`
 
@@ -371,7 +382,7 @@ changes the scan of the next pulse.
 | In the run | The one-shot gives its pulse in the wrong scans. |
 | No warning | A [contact](glossary.md#contact) that reads the storage bit. A write through a tag that cannot write the storage bit, for example `ote edges[i,0]` beside `ons edges[1,1]`. |
 | An error instead | A second one-shot on the same storage bit. [Instructions: contacts and coils](instructions-contacts-and-coils.md) gives that error. |
-| Cases | [26](#cases-11-to-28-2-writes-with-a-warning) to [28](#cases-11-to-28-2-writes-with-a-warning), [41](#cases-29-to-43-2-writes-with-no-warning), [42](#cases-29-to-43-2-writes-with-no-warning), [74](#cases-63-to-74-pairs-in-the-2-orders) |
+| Cases | [26](#cases-11-to-28-2-writes-with-a-warning) to [28](#cases-11-to-28-2-writes-with-a-warning), [41](#cases-29-to-43-2-writes-with-no-warning), [42](#cases-29-to-43-2-writes-with-no-warning), [74](#cases-63-to-80-pairs-in-the-2-orders) |
 
 ## The warnings of a configuration
 
@@ -492,6 +503,15 @@ The result for each instruction:
 | Limit | No limit. Each value of an initial list gets its own warning. |
 | No warning | A configuration from Elixir data. It holds the value of the number, not its text. |
 | Cases | [58](#cases-44-to-62-a-configuration), [62](#cases-44-to-62-a-configuration) |
+
+### The warnings of a program type
+
+| Part | Rule |
+|---|---|
+| Message | `` program type `<type>`: `` and the message of the warning of the program type |
+| Cause | A warning of a [program type](glossary.md#program-type) that an instance of the configuration runs. The program type keeps the warning in its own `warnings` too. |
+| Where | After the warnings of the configuration, in the sequence of the program types that the instances name. Each warning keeps its line and its file: the `.ld` file of the program type, or of the function block that holds the line. |
+| Each program type 1 time | A program type that 2 instances run gives its warnings 1 time. |
 
 ## The warning of the runner
 
@@ -632,7 +652,8 @@ cases = [
   {"a long timer with a time that is not a whole number of ms",
    "var_input start bool\nvar_output lamp bool\nvar_output left lint\nvar cure ton_ltime\n" <>
      "xic start ton cure 1500000\nxic start ge cure.acc 3000 ote lamp\n" <>
-     "xic start move 2500 cure.pre\nxic start sub 1500 cure.acc left"},
+     "xic start move 2500 cure.pre\nxic start sub 1500 cure.acc left\n" <>
+     "xic start lreal_to_lint 1.5e6 cure.pre"},
   {"real literals with more digits than the type keeps",
    "var_input hz real\nvar_output speed real\nvar_output precise lreal\n" <>
      "mul hz 16777217.0 speed\nmul hz 0.12345678901234567890 precise\n" <>
@@ -704,6 +725,7 @@ $ mix run warnings-program.exs
     line 4: warning: `lane_c` is an array of 13 ctus, but no `ctu` runs `lane_c[1]`, `lane_c[2]`, `lane_c[3]`, `lane_c[4]`, `lane_c[5]`, `lane_c[6]`, `lane_c[7]`, `lane_c[8]`, `lane_c[9]`, `lane_c[10]` or 2 more: they never count
     line 5: warning: `belts` is an array of 3 instances of `seal`, but no `cal` runs `belts[0]` or `belts[2]`: they never run, and their members stay at their initial values
     line 6: warning: `pulses` is an array of 2 tps, but no `tp` runs any of its elements: they never time
+    line 11: warning: `full_lamp` is already written by the `cal` on line 10: the last one in the scan decides it
  5  a label that no jmp names
        1  var_input start bool
        2  var_output motor bool
@@ -744,10 +766,13 @@ $ mix run warnings-program.exs
        6  xic start ge cure.acc 3000 ote lamp
        7  xic start move 2500 cure.pre
        8  xic start sub 1500 cure.acc left
+       9  xic start lreal_to_lint 1.5e6 cure.pre
     line 5: warning: `ton` gives `cure` a preset of 1500000 ns, which is no whole number of milliseconds: a ton_ltime counts whole milliseconds, so it times as the next whole millisecond, 2 ms
     line 6: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc` is a ton_ltime's time in nanoseconds: 3000 ns is no whole number of milliseconds, and a ton_ltime counts whole milliseconds
     line 7: warning: `move` writes `2500` into `cure.pre`, where `cure.pre` is a ton_ltime's time in nanoseconds: 2500 ns is no whole number of milliseconds, and a ton_ltime counts whole milliseconds
     line 8: warning: `sub` takes `cure.acc` from `1500` into `left`, where `cure.acc` is a ton_ltime's time in nanoseconds: 1500 ns is no whole number of milliseconds, and a ton_ltime counts whole milliseconds
+    line 9: warning: `lreal_to_lint` reads a literal, `1.5e6`: its result never changes
+    line 9: warning: `lreal_to_lint` writes `1.5e6` into `cure.pre`, where `cure.pre` is a ton_ltime's time in nanoseconds: 1500000 ns is no whole number of milliseconds, and a ton_ltime counts whole milliseconds
  9  real literals with more digits than the type keeps
        1  var_input hz real
        2  var_output speed real
@@ -992,15 +1017,14 @@ cases = [
   {"2 writes of a bool tag or of a word, with no ote",
    "xic start move 1 motor\nxic stop move 0 motor\nxic start move panel status\n" <>
      "xic stop move 0 status"},
-  {"a move and an ote on 1 bool tag", "xic start move 1 kick\nxic stop ote kick"},
+  {"an otl and a move on 1 bool tag", "xic start otl kick\nxic stop move 0 kick"},
   {"an otl on a bit and a write of its word",
    "xic start otl status.3\nxic stop move panel status"},
   {"2 bits with different numbers", "xic start ote status.3\nxic stop ote status.4"},
   {"2 different elements", "xic start ote lamps[1]\nxic stop ote lamps[2]"},
-  {"an ote and a different write through the same tag",
+  {"an ote and a latch through the same tag",
    "xic start ote lamps[slot]\nxic stop otl lamps[slot]\nxic start ote status.[n]\n" <>
-     "xic stop otu status.[n]\nxic jog ote lane_c[i].r\nxic stop otl lane_c[i].r\n" <>
-     "xic jog move 0 lamps[slot]"},
+     "xic stop otu status.[n]\nxic jog ote lane_c[i].r\nxic stop otl lane_c[i].r"},
   {"an otl on a literal bit and an ote on a bit through a tag, in the 2 orders",
    "xic start otl status.3\nxic stop ote status.[n]\nxic jog ote flags[1].[n]\nxic stop otl flags[1].3"},
   {"2 writes with no ote, 1 with a tag as a subscript",
@@ -1037,9 +1061,9 @@ $ mix run warnings-no-warning.exs
       23  xic start move panel status
       24  xic stop move 0 status
     no warning about 2 writes
-31  a move and an ote on 1 bool tag
-      21  xic start move 1 kick
-      22  xic stop ote kick
+31  an otl and a move on 1 bool tag
+      21  xic start otl kick
+      22  xic stop move 0 kick
     no warning about 2 writes
 32  an otl on a bit and a write of its word
       21  xic start otl status.3
@@ -1053,14 +1077,13 @@ $ mix run warnings-no-warning.exs
       21  xic start ote lamps[1]
       22  xic stop ote lamps[2]
     no warning about 2 writes
-35  an ote and a different write through the same tag
+35  an ote and a latch through the same tag
       21  xic start ote lamps[slot]
       22  xic stop otl lamps[slot]
       23  xic start ote status.[n]
       24  xic stop otu status.[n]
       25  xic jog ote lane_c[i].r
       26  xic stop otl lane_c[i].r
-      27  xic jog move 0 lamps[slot]
     no warning about 2 writes
 36  an otl on a literal bit and an ote on a bit through a tag, in the 2 orders
       21  xic start otl status.3
@@ -1398,7 +1421,7 @@ $ mix run warnings-configuration.exs
     line 2: warning: `0.12345678901234567890` is more precise than an lreal keeps: it is held as 0.12345678901234568
 ```
 
-### Cases 63 to 74: pairs in the 2 orders
+### Cases 63 to 80: pairs in the 2 orders
 
 Each case of this script is 1 pair of writes. The script compiles the pair in the 2
 orders: first the `ote`, then the write of a different kind first.
@@ -1449,7 +1472,16 @@ cases = [
      orders.("ote lane_c[i].pv.[n]", "move 5 lane_c[i].pv")},
   {"an ote and the output operand of a cal on 1 bool tag",
    Enum.map(orders.("ote motor", "cal belt jog motor"), &("var belt seal\n" <> &1))},
-  {"2 writes in 1 rung", "xic start ote motor ote motor\nxic jog ons s1 ote s1"}
+  {"2 writes in 1 rung", "xic start ote motor ote motor\nxic jog ons s1 ote s1"},
+  {"an ote and a move on 1 bool tag", orders.("ote kick", "move 0 kick")},
+  {"an ote and a move on 1 literal bit", orders.("ote status.3", "move 1 status.3")},
+  {"an ote and a move on 1 element through the same tag",
+   orders.("ote lamps[slot]", "move 0 lamps[slot]")},
+  {"the output operands of 2 cals on 1 bool tag",
+   "var belt seal\nvar roll seal\nxic start cal belt jog motor\nxic stop cal roll jog motor"},
+  {"a move and the output operand of a cal on 1 bool tag",
+   Enum.map(orders.("cal belt jog motor", "move 0 motor"), &("var belt seal\n" <> &1))},
+  {"an ote and an otl on 1 literal element", orders.("ote lamps[2]", "otl lamps[2]")}
 ]
 
 report.(63, cases, &two_writes.(Logex.compile(&1, name: "panel", types: [seal])),
@@ -1463,10 +1495,10 @@ $ mix run warnings-pairs.exs
 63  an ote and a move on 1 literal element
       21  xic start ote lamps[2]
       22  xic stop move 0 lamps[2]
-    no warning about 2 writes
+    line 22: warning: `lamps[2]` already has an `ote` on line 21: the last one in the scan decides it
       21  xic stop move 0 lamps[2]
       22  xic start ote lamps[2]
-    no warning about 2 writes
+    line 22: warning: `lamps[2]` is already written by the `move` on line 21: the last one in the scan decides it
 64  an ote on a literal element and an otl through a tag
       21  xic start ote lamps[2]
       22  xic stop otl lamps[slot]
@@ -1546,16 +1578,59 @@ $ mix run warnings-pairs.exs
       21  var belt seal
       22  xic start ote motor
       23  xic stop cal belt jog motor
-    no warning about 2 writes
+    line 23: warning: `motor` already has an `ote` on line 22: the last one in the scan decides it
       21  var belt seal
       22  xic stop cal belt jog motor
       23  xic start ote motor
-    no warning about 2 writes
+    line 23: warning: `motor` is already written by the `cal` on line 22: the last one in the scan decides it
 74  2 writes in 1 rung
       21  xic start ote motor ote motor
       22  xic jog ons s1 ote s1
     line 21: warning: `motor` already has an `ote` in this rung: the last one in the scan decides it
     line 22: warning: `ote` writes `s1`, the storage bit of the `ons` in this rung: the one-shot then fires on the wrong scans
+75  an ote and a move on 1 bool tag
+      21  xic start ote kick
+      22  xic stop move 0 kick
+    line 22: warning: `kick` already has an `ote` on line 21: the last one in the scan decides it
+      21  xic stop move 0 kick
+      22  xic start ote kick
+    line 22: warning: `kick` is already written by the `move` on line 21: the last one in the scan decides it
+76  an ote and a move on 1 literal bit
+      21  xic start ote status.3
+      22  xic stop move 1 status.3
+    line 22: warning: `status.3` already has an `ote` on line 21: the last one in the scan decides it
+      21  xic stop move 1 status.3
+      22  xic start ote status.3
+    line 22: warning: `status.3` is already written by the `move` on line 21: the last one in the scan decides it
+77  an ote and a move on 1 element through the same tag
+      21  xic start ote lamps[slot]
+      22  xic stop move 0 lamps[slot]
+    line 22: warning: `lamps[slot]` already has an `ote` on line 21: the last one in the scan decides it
+      21  xic stop move 0 lamps[slot]
+      22  xic start ote lamps[slot]
+    line 22: warning: `lamps[slot]` is already written by the `move` on line 21: the last one in the scan decides it
+78  the output operands of 2 cals on 1 bool tag
+      21  var belt seal
+      22  var roll seal
+      23  xic start cal belt jog motor
+      24  xic stop cal roll jog motor
+    line 24: warning: `motor` is already written by the `cal` on line 23: the last one in the scan decides it
+79  a move and the output operand of a cal on 1 bool tag
+      21  var belt seal
+      22  xic start cal belt jog motor
+      23  xic stop move 0 motor
+    line 23: warning: `motor` is already written by the `cal` on line 22: the last one in the scan decides it
+      21  var belt seal
+      22  xic stop move 0 motor
+      23  xic start cal belt jog motor
+    line 23: warning: `motor` is already written by the `move` on line 22: the last one in the scan decides it
+80  an ote and an otl on 1 literal element
+      21  xic start ote lamps[2]
+      22  xic stop otl lamps[2]
+    no warning about 2 writes
+      21  xic stop otl lamps[2]
+      22  xic start ote lamps[2]
+    no warning about 2 writes
 ```
 
 ## See also

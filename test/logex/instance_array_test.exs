@@ -1999,7 +1999,11 @@ defmodule Logex.InstanceArrayTest do
                  {6,
                   "`grid` is an array of 2 by 2 tps, but no `tp` runs `grid[0,0]`, `grid[0,1]` or `grid[1,0]`: they never time"},
                  {7, "`idle` is declared but no rung uses it"},
-                 {8, "`unused` is declared but no rung uses it"}
+                 {8, "`unused` is declared but no rung uses it"},
+                 # Decision 626 (RV-34): the `cal`'s write of `q` and the `ote` on it.
+                 {12,
+                  "`q` is already written by the `cal` on line 11: the last one in the scan " <>
+                    "decides it"}
                ]
 
       assert warnings(
@@ -2540,7 +2544,17 @@ defmodule Logex.InstanceArrayTest do
                "`m1` runs under the event task `t`, and `m` runs an `ons` on line 8 of block " <>
                  "`seal`, whose storage bit is `lanes[1].e`: an ons sees its rung only at the " <>
                  "task's runs, so a pulse between two runs never fires it, and a rung that is " <>
-                 "the task's trigger is true at every run and never fires it"
+                 "the task's trigger is true at every run and never fires it",
+               # Decision 638 (RV-34): the program type's own warnings, after the
+               # configuration's, each naming it.
+               "program type `m`: `lane_t` is an array of 2 tons, but no `ton` runs " <>
+                 "`lane_t[0]`: it never times",
+               "program type `m`: `lane_c` is an array of 2 ctus, but no `ctu` runs " <>
+                 "`lane_c[1]`: it never counts",
+               "program type `m`: `lanes` is an array of 2 instances of `seal`, but no `cal` " <>
+                 "runs `lanes[0]`: it never runs, and its members stay at their initial values",
+               "program type `m`: `q` is already written by the `cal` on line 9: the last one " <>
+                 "in the scan decides it"
              ]
     end
 

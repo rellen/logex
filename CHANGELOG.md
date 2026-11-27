@@ -117,7 +117,34 @@ API".
   and a poll period trips the line whatever the runner's lateness. Look for: plants on a
   loaded or virtual machine.
 
+### The language
+
+- **A write beside a coil is warned as a second coil is** (decision 626), "the last one in
+  the scan decides it", where it compiled unwarned: a `cal`'s output and an `ote` on one
+  tag, `cal s1 a b belt` beside `xic a ote belt`, two `cal`s' outputs on one tag, and any
+  write but a latch's of a bool an `ote` or a pulse coil writes, `xic a move 1 belt`
+  beside `xic a ote belt`, by literals or through the very tags, `move 0 lamps[slot]`
+  beside `ote lamps[slot]` among them, where decision 246 had left it quiet, so a bool
+  array's element is told as a word's bit is beside its word. A write after the coil is
+  told ``already has an `ote` on line 5``, the coil after it ``is already written by the
+  `move` on line 5``. A `cal` and a `move` on one bool are warned too (provisional,
+  `PLAN.md`'s RV-34); an `otl` and an `otu` beside an `ote`, and two `move`s, stay
+  quiet. Look for: a test or a tool that reads a program's warnings whole.
+- **A real literal a conversion writes into a long timer's `.pre` or `.acc` is warned of
+  its nanoseconds** (decision 637), as an integer literal is since decision 196, by the
+  integer the conversion gives: `lreal_to_lint 1.5e6 cure.pre` on a `ton_ltime` is told
+  `1500000 ns is no whole number of milliseconds`, where it was told only that it reads a
+  literal. Look for: a test or a tool that reads such a program's warnings whole.
+
 ### The host's API
+
+- **A configuration's `warnings` hold its program types' warnings** (decision 638), after
+  its own, each program type's once, in the order its instances first name them, each
+  message naming its type, ``program type `conveyor`: `belt` already has an `ote` on line
+  4: ...``, its line and file its program's, from `Logex.Configuration.new!/1`,
+  `compile/3` and `compile_file/1`, where they were only in each program type's own
+  struct; each program keeps its own as it was. Look for: code that reads a
+  configuration's `warnings` as its own alone, or counts them.
 
 - **`Logex.Configuration.Global.new!/3` refuses an initial value no global of its type
   holds, at once** (decision 555), an `ArgumentError`, where it kept any value and

@@ -5,7 +5,11 @@ defmodule Logex.Warnings do
 
   - a tag declared but used by no rung;
   - a `var_output` a rung reads but none writes: it stays at its initial value;
-  - a second `ote` on one tag: only the last one in the scan decides it;
+  - a second `ote` on one tag: only the last one in the scan decides it; and since
+    decision 626 (RV-34) a `cal`'s write of a tag beside a coil on it or another `cal`'s
+    write, and any other write but a latch's of a bool a coil writes, `move 1 belt` beside
+    `ote belt`, told "is already written by the `move`" where the coil comes second, the
+    pairs `shared_writes/3` gives;
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`). Since M3-4 so
     is an `osr`'s or an `osf`'s storage bit, and a coil's pulse bit is written as an
@@ -24,7 +28,8 @@ defmodule Logex.Warnings do
     choice), `ton t 1500000` on a `ton_ltime`: it times as the next whole millisecond; and
     since decision 196 a literal that is no whole number of them taken beside a long
     timer's `.pre` or `.acc` by `move`, a conversion, a comparison, `add` or `sub`, `ge
-    cure.acc 3000`;
+    cure.acc 3000`, and since decision 637 (RV-34) a real literal a conversion writes
+    there, by the integer it gives, `lreal_to_lint 1.5e6 cure.pre`;
   - a label no `jmp` names (M3-5): nothing jumps to its rung;
   - since decision 219, a real literal with more digits than the real its slot computes
     in keeps, `move 16777217.0 r` into a `real`: it is held as 16777216.0, where `0.1` and
@@ -132,6 +137,7 @@ defmodule Logex.Warnings do
     |> Enum.filter(& &1.line)
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, []), run))
     |> Kernel.++(second_otes(instructions, tags, owners))
+    |> Kernel.++(shared_writes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Kernel.++(Enum.flat_map(instructions, &by_literal(&1, tags)))
@@ -523,6 +529,200 @@ defmodule Logex.Warnings do
 
     once(warnings, words)
   end
+
+  # Decision 626 (RV-34): a `cal`'s write and a coil on one tag, `cal s1 a b belt` beside
+  # `xic a ote belt`, two `cal`s' writes of it, and a coil and any other write of one bool,
+  # `xic a move 1 belt` beside `xic a ote belt`, are warned as two coils are: each write
+  # after the first it meets is told that first, at its own line, "the last one in the scan
+  # decides it". A bool is a tag, an element, a bit or a member that holds one, keyed as a
+  # coil keys it (target/3), so a `move` and an `ote` on `lamps[2]` are told as on a bit
+  # of a word, `w.0`, which decision 155 already tells beside `move x w`, and the rules for
+  # a bool array and for a word agree. Two coils are second_otes/3's, two `move`s are no
+  # warning, as a rung that sets a value on its condition is no coil, and an `otl` or an
+  # `otu` beside an `ote` none, as a latch and its reset share a tag (M1-5); a `cal` and a
+  # `move` of one bool are warned too, the `cal` judged as its coil (provisional, PLAN's
+  # RV-34). Only writes of what a coil names by its name are compared here, a write through
+  # a tag subscript being judged by the rules above; a one-shot's storage bit is
+  # storage_writes/3's.
+  #
+  # It costs a routine with no write but its coils and latches one look at each
+  # instruction, and one with no coil on what a coil names by its name and no `cal` one more,
+  # so the cost of a routine of coils alone, or of `move`s alone, is what it was.
+  @shared_coils [:ote, :osr, :osf]
+  @writers for {_word, {symbol, signature}} when is_list(signature) <-
+                 Compiler.instructions(),
+               symbol not in [:ons, :otl, :otu | @shared_coils],
+               Enum.any?(signature, &match?({:write, _type}, &1)),
+               into: %{cal: true},
+               do: {symbol, true}
+
+  defp shared_writes(instructions, tags, owners),
+    do:
+      instructions
+      |> Enum.filter(fn {symbol, _line, _operands} -> is_map_key(@writers, symbol) end)
+      |> shared_among(instructions, {tags, owners})
+
+  defp shared_among([], _instructions, _known), do: []
+
+  defp shared_among(writers, instructions, known),
+    do:
+      shared_judged(
+        Enum.any?(instructions, &(coil_operand(&1) != nil)),
+        Enum.any?(writers, &match?({:cal, _, _}, &1)),
+        instructions,
+        known
+      )
+
+  # What a coil writes, and every operand of a `cal`, which is judged as its coil.
+  defp coiling({:cal, _line, operands}), do: operands
+  defp coiling(instruction), do: List.wrap(coil_operand(instruction))
+
+  defp coil_operand({:ote, _line, [target]}), do: target
+  defp coil_operand({symbol, _line, [_storage, pulse]}) when symbol in [:osr, :osf], do: pulse
+  defp coil_operand(_instruction), do: nil
+
+  # Two writes but coils' never meet but where a `cal` is one of them.
+  defp shared_judged(false, false, _instructions, _known), do: []
+
+  # The full look: each coil's tag and whether it names what it writes by its name, its
+  # subscripts and its bit's number literals, read from its operand's shape alone; then
+  # each write but a coil's that names one of those tags so, or a `cal`'s; then each coil on
+  # a tag those write; in the routine's order. A write by literals never meets a coil
+  # through a tag subscript, nor one through tags a coil by literals, here.
+  defp shared_judged(_coils, _cal, instructions, {tags, owners}) do
+    indexed = Enum.with_index(instructions)
+
+    coiled =
+      for {instruction, _at} <- indexed,
+          operand <- coiling(instruction),
+          into: MapSet.new(),
+          do: shape(operand)
+
+    writes =
+      for {{symbol, _line, operands} = writer, at} <- indexed,
+          is_map_key(@writers, symbol),
+          reaches?(symbol, operands, coiled),
+          shared <- shared(writer, tags),
+          do: {at, shared}
+
+    written = MapSet.new(writes, fn {_at, {_key, tag, _kind, _line, _shown}} -> tag end)
+
+    coils =
+      for {coil, at} <- indexed,
+          operand = coil_operand(coil),
+          operand != nil,
+          MapSet.member?(written, base(operand)),
+          shared <- shared(coil, tags),
+          do: {at, shared}
+
+    {warnings, _firsts} =
+      (coils ++ writes)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.filter(fn {key, tag, _kind, _at, _shown} ->
+        from_source?(tags, tag) and not is_map_key(owners, key)
+      end)
+      |> Enum.flat_map_reduce(%{}, &shared_after/2)
+
+    warnings
+  end
+
+  defp reaches?(:cal, _operands, _coiled), do: true
+
+  defp reaches?(_symbol, operands, coiled),
+    do: Enum.any?(operands, &MapSet.member?(coiled, shape(&1)))
+
+  defp shape(operand), do: {named?(operand), base(operand)}
+
+  defp named?({:name, _, _name}), do: true
+  defp named?({:member, _, path}) when is_list(path), do: true
+  defp named?({:member, _, {:element, _, _, _, _}, _members}), do: true
+  defp named?({:element, _, _array, _index, _name}), do: true
+  defp named?({:bit, _, container, _n, _mask, _name}), do: named?(container)
+  defp named?(path) when is_list(path), do: true
+  defp named?(_through_a_tag), do: false
+
+  # The tag an operand names, as target/3 gives it, an element's or a bit's array or word,
+  # a member's instance; a literal names none.
+  defp base({:name, _, name}), do: name
+  defp base({:member, _, [instance | _]}), do: instance
+  defp base({:member, _, element, _members}), do: base(element)
+  defp base({:element, _, array, _index, _name}), do: array
+  defp base({:element_at, _, array, _index, _dims, _name}), do: array
+  defp base({:bit, _, container, _n, _mask, _name}), do: base(container)
+  defp base({:bit_at, _, container, _index, _width, _name}), do: base(container)
+  defp base([container | _]), do: container
+  defp base(_literal), do: nil
+
+  defp shared({symbol, _line, _operands} = instruction, _tags) when symbol in @shared_coils,
+    do: instruction |> coil_target() |> Enum.flat_map(&shared_write(&1, :coil))
+
+  # An `otl` and an `otu` may share a tag with an `ote`, as a latch and its reset do (M1-5).
+  defp shared({symbol, _line, _operands}, _tags) when symbol in [:ons, :otl, :otu], do: []
+
+  defp shared({:cal, _line, _operands} = instruction, tags),
+    do:
+      for(
+        {operand, line, symbol} <- written(instruction, tags),
+        write <- target(operand, line, symbol),
+        shared <- shared_write(write, :cal),
+        do: shared
+      )
+
+  defp shared(instruction, tags),
+    do:
+      for(
+        {operand, line, symbol} <- written(instruction, tags),
+        Logex.Program.destination(operand, tags, :bitwise) == {:ok, :bool},
+        write <- target(operand, line, symbol),
+        shared <- shared_write(write, :other),
+        do: shared
+      )
+
+  defp shared_write({:coil, key, _word, tag, at, shown, _places}, kind),
+    do: [{key, tag, kind, at, shown}]
+
+  defp shared_write({:member_coil, key, {array, _members}, at, shown, _places}, kind),
+    do: [{key, array, kind, at, shown}]
+
+  # Decision 626 with decision 246: through the very tags, `ote lamps[slot]` beside `move 0
+  # lamps[slot]`, keyed by what the coil decides and its subscripts' tags, as a word's bit a
+  # tag numbers is beside its word written through them (decision 435).
+  defp shared_write({:coil_at, word, tag, at, shown, id}, kind),
+    do: [{{word, id}, tag, kind, at, shown}]
+
+  defp shared_write({:member_coil_at, {array, _members} = group, at, shown, id}, kind),
+    do: [{{group, id}, array, kind, at, shown}]
+
+  defp shared_write(_judged_above, _kind), do: []
+
+  # Each key's first write of each kind; a write is told the earliest first of a kind it
+  # meets, a coil none where a coil came first, which second_otes/3 tells.
+  defp shared_after({key, _tag, kind, {line, _symbol} = at, shown}, firsts) do
+    seen = Map.get(firsts, key, %{})
+
+    {shared_told(shared_meets(kind, seen), shown, line),
+     Map.put(firsts, key, Map.put_new(seen, kind, {kind, at}))}
+  end
+
+  defp shared_meets(:coil, seen) when is_map_key(seen, :coil), do: nil
+  defp shared_meets(:coil, seen), do: shared_first(Map.take(seen, [:cal, :other]))
+  defp shared_meets(:cal, seen), do: shared_first(seen)
+  defp shared_meets(:other, seen), do: shared_first(Map.take(seen, [:coil, :cal]))
+
+  defp shared_first(seen),
+    do: seen |> Map.values() |> Enum.min_by(fn {_kind, {line, _}} -> line end, fn -> nil end)
+
+  defp shared_told(nil, _shown, _line), do: []
+  defp shared_told({:coil, at}, shown, line), do: [second_ote(shown, at, line)]
+
+  defp shared_told({_kind, {first, symbol}}, shown, line),
+    do: [
+      warning(
+        line,
+        "`#{shown}` is already written by the `#{symbol}` #{where(first, line)}: #{last()}"
+      )
+    ]
 
   # Decision 431 (RV-15): a routine some member's word of which is judged as a word array
   # is (virtual/4) is told each warning once, a member rule's and the word array's alike
@@ -2378,17 +2578,19 @@ defmodule Logex.Warnings do
   # instructions of one source.
   @numbers Declarations.convertible() ++ Declarations.reals()
 
+  @truncations for(
+                 from <- Declarations.reals(),
+                 to <- Declarations.integers(),
+                 do: String.to_atom("#{from}_trunc_#{to}")
+               )
+
   @conversions for(
                  from <- @numbers,
                  to <- @numbers,
                  word = Declarations.conversion(from, to),
                  do: String.to_atom(word)
                ) ++
-                 for(
-                   from <- Declarations.reals(),
-                   to <- Declarations.integers(),
-                   do: String.to_atom("#{from}_trunc_#{to}")
-                 )
+                 @truncations
 
   @one_source [:neg, :abs, :not, :sqrt] ++ @conversions
 
@@ -2550,8 +2752,7 @@ defmodule Logex.Warnings do
     do:
       for(
         literal <- operands,
-        is_int_lit(literal),
-        value = Parser.value(literal),
+        {:ok, value} <- [nanoseconds(symbol, literal)],
         rem(value, per_ms) != 0,
         do:
           warning(
@@ -2562,6 +2763,21 @@ defmodule Logex.Warnings do
               "whole milliseconds"
           )
       )
+
+  # The time in ns a literal gives the member: an integer's its value; and since decision
+  # 637 (RV-34) a real's, which only a conversion takes beside a long timer's member, the
+  # integer the conversion gives, as the runtime gives it, rounded to the nearest, a tie to
+  # the even one, or by a truncation toward zero, so `lreal_to_lint 1500000.0 t.pre` is
+  # warned of 1500000 ns as `dint_to_lint 1500000 t.pre` is.
+  defp nanoseconds(_symbol, literal) when is_int_lit(literal), do: {:ok, Parser.value(literal)}
+
+  defp nanoseconds(symbol, literal) when is_real_lit(literal) and symbol in @truncations,
+    do: {:ok, trunc(Parser.value(literal))}
+
+  defp nanoseconds(_symbol, literal) when is_real_lit(literal),
+    do: {:ok, Logex.Real.round_even(Parser.value(literal))}
+
+  defp nanoseconds(_symbol, _tag), do: :error
 
   # What the instruction does with its operands, in its own words.
   defp taking(symbol, [a, b]) when symbol in @comparisons,

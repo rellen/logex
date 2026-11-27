@@ -38,7 +38,8 @@ cases = [
   {"a long timer with a time that is not a whole number of ms",
    "var_input start bool\nvar_output lamp bool\nvar_output left lint\nvar cure ton_ltime\n" <>
      "xic start ton cure 1500000\nxic start ge cure.acc 3000 ote lamp\n" <>
-     "xic start move 2500 cure.pre\nxic start sub 1500 cure.acc left"},
+     "xic start move 2500 cure.pre\nxic start sub 1500 cure.acc left\n" <>
+     "xic start lreal_to_lint 1.5e6 cure.pre"},
   {"real literals with more digits than the type keeps",
    "var_input hz real\nvar_output speed real\nvar_output precise lreal\n" <>
      "mul hz 16777217.0 speed\nmul hz 0.12345678901234567890 precise\n" <>

@@ -348,9 +348,17 @@ defmodule Logex.ReviewLowsTest do
             {"gt gs[i].n 255 otl q",
              "`gt` compares `gs[i].n` with `255`, and a usint holds nothing above `255`"}
           ] do
-        assert warnings(head <> rung, [rb]) == [
-                 "line 12: warning: #{said}: its result never changes"
-               ],
+        # Decision 626 (RV-34): the three `cal`s write `nn` and `rr`, each after the first
+        # told so.
+        cals =
+          for line <- [9, 10],
+              tag <- ["nn", "rr"],
+              do:
+                "line #{line}: warning: `#{tag}` is already written by the `cal` on line 8: " <>
+                  "the last one in the scan decides it"
+
+        assert warnings(head <> rung, [rb]) ==
+                 cals ++ ["line 12: warning: #{said}: its result never changes"],
                rung
       end
     end
@@ -368,6 +376,9 @@ defmodule Logex.ReviewLowsTest do
           "cal gs[1] k rr\neq gs[1].r 16777217.0 ote q"
 
       assert warnings(source, [rb]) == [
+               # Decision 626 (RV-34): both `cal`s write `rr`.
+               "line 6: warning: `rr` is already written by the `cal` on line 5: the last one " <>
+                 "in the scan decides it",
                "line 7: warning: `16777217.0` is more precise than a real keeps: it is held as " <>
                  "16777216.0"
              ]

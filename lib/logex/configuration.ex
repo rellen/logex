@@ -108,7 +108,10 @@ defmodule Logex.Configuration do
   runs, an `ons`, an `osr` or an `osf`, a block's by its storage bit's path, so too, after
   its counters, each in its own words, citing its instruction (`Logex.Walk.one_shots/1`,
   decision 103): a one-shot sees its rung only at the task's runs, so an edge between two
-  runs is never seen, and the pulse a coil sets stays on until the task's next run.
+  runs is never seen, and the pulse a coil sets stays on until the task's next run. Since
+  decision 638 (RV-34), after its own, every warning of each program type its instances
+  run, once a type, in the order they first name the types, its message naming its type,
+  "program type `conveyor`: ...", its line and its `file` its program's.
 
   **Arrays** (M5-11, `docs/organisation.md` §4.12, decisions 151 and 159). A global may be
   an array of an elementary type, `var_global temps int[8] 1 2 3 4 5 6 7 8`, its sizes
@@ -1052,7 +1055,30 @@ defmodule Logex.Configuration do
         Enum.reverse(lined) ++ mistakes ++ Enum.map(finished(diagnostics), &Diagnostic.format/1),
       %{config | warnings: warnings}
     )
+    |> programs_told()
   end
+
+  # Decision 638 (RV-34): a configuration holds, after its own warnings, every warning of
+  # each program type its instances run, in the order they first name the types, each as
+  # its program holds it, its `file` kept, and its message naming its program type,
+  # "program type `conveyor`: `belt` already has an `ote` on line 4: ..."; the program
+  # keeps its own as it was. Each door gives it: `new!/1`, `compile/3` and
+  # `compile_file/1`.
+  defp with_programs({:ok, config}), do: {:ok, programs_told(config)}
+  defp with_programs(refused), do: refused
+
+  defp programs_told(%__MODULE__{instances: instances, programs: programs} = config),
+    do: %{
+      config
+      | warnings:
+          config.warnings ++
+            for(
+              type <- Enum.uniq(for(%Instance{type: type} <- instances, do: type)),
+              %Program{warnings: warnings} <- [Map.get(programs, type)],
+              warning <- warnings,
+              do: %{warning | message: "program type #{quoted(type)}: " <> warning.message}
+            )
+    }
 
   # An element from Elixir has no line: a line is where a configuration file declares it,
   # and every message that cites one relies on that. One that brings a line is refused,
@@ -1212,6 +1238,7 @@ defmodule Logex.Configuration do
     |> compiled(name, programs, {nil, [], MapSet.new()})
     |> with_rounded(rounded)
     |> respelled(spelled, literals)
+    |> with_programs()
   end
 
   def compile(_name, source, _programs),
@@ -1369,7 +1396,10 @@ defmodule Logex.Configuration do
   compiled by `Logex.compile_files/1` in the order the types are first named: one memo for
   the configuration, so a function block several program types hold is read and compiled
   once, and its warnings are handed back once, by the first program type that holds it and
-  compiles. A program type's warnings stay in its program, the configuration's own in its `warnings`.
+  compiles. Since decision 638 (RV-34) the configuration's `warnings` hold, after its own,
+  every program type's, as `compile/3`'s and `new!/1`'s do: each with its `file`, the
+  program type's `.ld` or the block's it was found in, and its message naming its program
+  type; each program keeps its own too.
   A name on a `program` line that gives no program type is cited once, at the line of
   its first instance, and no instance of it is reported again:
 
@@ -1494,6 +1524,7 @@ defmodule Logex.Configuration do
     |> with_rounded(rounded)
     |> respelled(spelled, literals)
     |> with_theirs(Enum.reverse(theirs))
+    |> with_programs()
   end
 
   # Each type a `program` line names that could be a file's, once, at its first line: one
