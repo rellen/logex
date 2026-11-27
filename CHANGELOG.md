@@ -155,6 +155,15 @@ API".
   held them; and a configuration's real initial list is told ten rounded literals and a
   count of the rest, as a program's is. Look for: code that counts warnings, or reads a
   program's as its own alone.
+- **A diagnostic that lists names tells the first hundred and a count** (decision 636),
+  as a refusal of the host contract's does since decision 629: a block's "its members
+  are", a `cal`'s formals, the function blocks given, a configuration's "its var_inputs
+  and var_outputs are", the types given and the files a type's mistakes are cited in, each
+  `` ..., `i00100` and 9901 more, not listed ``; and an instance that leaves more than a
+  hundred var_inputs unconnected is told the count first, `` `f1` leaves 10000 var_inputs
+  unconnected, `i00001`, ... and 9900 more, not listed: connect each ... ``. Each name the
+  list shows is quoted whole (decision 633). Look for: a test or a tool that reads such a
+  list whole.
 - **Three refusals that help more** (decision 599): an unknown instruction is offered the
   nearest mnemonic, ``unknown instruction `otee` — did you mean `ote`?``, by the bounded
   search a tag's name has (decision 520), compared in lowercase; a type word the loader

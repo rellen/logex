@@ -2436,7 +2436,8 @@ defmodule Logex.Compiler do
   defp reserved_word(:section), do: "the keyword"
   defp reserved_word(:qualifier), do: "the keyword"
 
-  # docs/organisation.md §4.3: an arity error names every formal, in order.
+  # docs/organisation.md §4.3: an arity error names every formal, in order, since decision
+  # 636 (RV-34) the first hundred and a count.
   defp cal_count(formals, operands, _rest, _instance, diagnostics)
        when length(operands) == length(formals),
        do: diagnostics
@@ -2444,7 +2445,8 @@ defmodule Logex.Compiler do
   defp cal_count(formals, operands, rest, {:name, line, instance}, diagnostics) do
     message =
       "`cal #{instance}` expects #{operand_count(length(formals))} after its instance, " <>
-        "#{Enum.map_join(formals, ", then ", &formal/1)}: found #{found(length(operands))}" <>
+        "#{Declarations.named(formals, &formal/1, ", then ", ", then ")}: found " <>
+        "#{found(length(operands))}" <>
         stopped_at(rest)
 
     [diagnostic(line, message) | diagnostics]
@@ -4025,8 +4027,9 @@ defmodule Logex.Compiler do
   defp members([]), do: ": it has none that logic outside it may name"
   defp members(names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
 
-  defp listed([one]), do: one
-  defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
+  # Decision 636 (RV-34): a list of names a diagnostic gives, a block's members or those
+  # logic may write, tells the first hundred and a count (`Logex.Declarations.named/4`).
+  defp listed(names), do: Declarations.named(names, & &1)
 
   defp reserved_as(:mnemonic), do: "an instruction"
   defp reserved_as(:type), do: "a type"

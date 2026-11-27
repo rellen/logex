@@ -4730,6 +4730,75 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # Decision 636 (RV-34): a list of names a configuration's diagnostic gives shows the first
+  # hundred in its order and how many more there are: a fan plant's program of 10,000
+  # var_inputs, wired to one it does not declare, or left unconnected.
+  describe "a diagnostic that lists names (decision 636, RV-34)" do
+    defp fan_inputs(n), do: for(i <- 1..n, do: "i#{String.pad_leading("#{i}", 5, "0")}")
+
+    defp fan(n) do
+      source =
+        Enum.map_join(fan_inputs(n), "", &"var_input #{&1} bool\n") <>
+          "var_output q bool\nxic i00001 ote q"
+
+      {:ok, fan} = Logex.compile(source, name: "fan")
+      %{"fan" => fan}
+    end
+
+    defp fan_told(text, n) do
+      {:error, diagnostics} = Configuration.compile("plant", text, fan(n))
+      Enum.map(diagnostics, &Diagnostic.format/1)
+    end
+
+    defp quoted_names(names), do: Enum.map_join(names, ", ", &"`#{&1}`")
+
+    test "a member it does not declare lists the program's var_inputs and var_outputs" do
+      text = fn n ->
+        "program f1 fan\nf1.fan_speed 0\n" <> Enum.map_join(fan_inputs(n), "", &"f1.#{&1} 0\n")
+      end
+
+      declares_no =
+        "line 2: `f1` runs `fan`, which declares no `fan_speed`: its var_inputs and var_outputs are "
+
+      # 99 and `q`, 100 in all: every one.
+      assert fan_told(text.(99), 99) == [
+               declares_no <> quoted_names(fan_inputs(99)) <> " and `q`"
+             ]
+
+      assert fan_told(text.(100), 100) == [
+               declares_no <> quoted_names(fan_inputs(100)) <> " and 1 more, not listed"
+             ]
+
+      assert fan_told(text.(10_000), 10_000) == [
+               declares_no <> quoted_names(fan_inputs(100)) <> " and 9901 more, not listed"
+             ]
+    end
+
+    test "var_inputs left unconnected, past a hundred, are counted first" do
+      at = "line 1: `f1` leaves "
+      connect = ": connect each to a global or a constant, as in `f1.i00001 0`"
+
+      assert fan_told("program f1 fan\n", 100) == [
+               at <>
+                 "its var_inputs " <>
+                 quoted_names(Enum.drop(fan_inputs(100), -1)) <>
+                 " and `i00100` unconnected" <> connect
+             ]
+
+      assert fan_told("program f1 fan\n", 101) == [
+               at <>
+                 "101 var_inputs unconnected, " <>
+                 quoted_names(fan_inputs(100)) <> " and 1 more, not listed" <> connect
+             ]
+
+      assert fan_told("program f1 fan\n", 10_000) == [
+               at <>
+                 "10000 var_inputs unconnected, " <>
+                 quoted_names(fan_inputs(100)) <> " and 9900 more, not listed" <> connect
+             ]
+    end
+  end
+
   describe "one message a rule (M2-2)" do
     # The same configuration from the text and from Elixir: each diagnostic in the same
     # words, but for the line a message cites, which an element from Elixir has none of.

@@ -1526,6 +1526,89 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  # Decision 636 (RV-34): a list of names a diagnostic gives shows the first hundred in its
+  # order and how many more there are, each name it quotes whole (decision 633), so a
+  # block of 10,000 members is told in about the bytes of one of 101.
+  describe "a diagnostic that lists names (decision 636, RV-34)" do
+    defp member_names(n), do: for(i <- 1..n, do: "i#{String.pad_leading("#{i}", 5, "0")}")
+
+    defp big_block(n) do
+      source =
+        "function_block big\n" <>
+          Enum.map_join(member_names(n), "", &"var_input #{&1} bool\n") <>
+          "var_output q bool\nxic i00001 ote q"
+
+      {:ok, big} = Logex.compile(source, name: "big")
+      big
+    end
+
+    defp listed_names(names), do: Enum.map_join(names, ", ", &"`#{&1}`")
+
+    defp told_with(source, types) do
+      {:error, diagnostics} = Logex.compile(source, name: "p", types: types)
+      Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+    end
+
+    test "a block's members, at 100 and past it, and at 10,000" do
+      members = fn n ->
+        told_with("var s big\nvar_output o bool\nxic s.zz ote o", [big_block(n)])
+      end
+
+      # 99 var_inputs and its output, 100 in all: every one, the last two joined by `and`.
+      names = member_names(99) ++ ["q"]
+
+      assert members.(99) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(Enum.drop(names, -1)) <> " and `q`"
+             ]
+
+      # 101: the first hundred and the one more.
+      assert members.(100) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(member_names(100)) <> " and 1 more, not listed"
+             ]
+
+      # 10,001: the same hundred, and the count.
+      assert members.(10_000) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(member_names(100)) <> " and 9901 more, not listed"
+             ]
+    end
+
+    test "a cal's formals, past a hundred" do
+      formal = fn name -> "`#{name}` (var_input bool)" end
+
+      assert told_with("var s big\ncal s", [big_block(101)]) == [
+               "line 2: `cal s` expects 102 operands after its instance, " <>
+                 Enum.map_join(member_names(100), ", then ", formal) <>
+                 " and 2 more, not listed: found none"
+             ]
+    end
+
+    test "the function blocks given, past a hundred" do
+      blocks =
+        for name <- member_names(101) do
+          {:ok, block} =
+            Logex.compile(
+              "function_block b#{name}\nvar_input x bool\nvar_output y bool\nxic x ote y",
+              name: "b#{name}"
+            )
+
+          block
+        end
+
+      [told] = told_with("var s zzzzzz\nvar_output o bool\nxic o ote o", blocks)
+      assert told =~ ~r/^line 1: unknown type `zzzzzz`: logex has `bool`, /
+
+      assert String.ends_with?(
+               told,
+               ", and the function blocks " <>
+                 listed_names(Enum.map(member_names(100), &"b#{&1}")) <>
+                 " and 1 more, not listed"
+             )
+    end
+  end
+
   describe "ons (M1-6)" do
     test "its storage bit is a bool tag it writes: M1-3's rules refuse anything else" do
       assert source_errors(

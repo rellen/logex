@@ -3046,13 +3046,11 @@ defmodule Logex.Configuration do
 
   defp no_task(false, task, world), do: no_named(:task, task, world, nil)
 
-  defp listed(names) do
-    quoted = Enum.map(names, &"#{quoted(&1)}")
-    listing(Enum.drop(quoted, -1), List.last(quoted))
-  end
-
-  defp listing([], last), do: last
-  defp listing(rest, last), do: Enum.join(rest, ", ") <> " and " <> last
+  # Decision 636 (RV-34): a list of names a diagnostic gives, a program's var_inputs and
+  # var_outputs, the var_inputs left unconnected, the types given or the files a type's
+  # mistakes are cited in, tells the first hundred and a count, each quoted only among the
+  # hundred (`Logex.Declarations.named/4`).
+  defp listed(names), do: Declarations.named(names, &"#{quoted(&1)}")
 
   # The connections, in line order, each checked against its instance's program and the
   # globals. One problem is reported per connection, the first; a var_input with a
@@ -3978,10 +3976,19 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         instance.line,
-        "#{quoted(instance.name)} leaves its var_inputs #{listed(names)} unconnected: connect " <>
-          "each to a global or a constant, as in #{quoted("#{instance.name}.#{first} 0")}"
+        "#{quoted(instance.name)} leaves " <>
+          unconnected(Enum.drop(names, 100), names) <>
+          ": connect each to a global or a constant, as in " <>
+          quoted("#{instance.name}.#{first} 0")
       )
     ]
+
+  # Decision 636 (RV-34): past a hundred, the count first, so that the list's own count of
+  # the rest ends the sentence's list.
+  defp unconnected([], names), do: "its var_inputs #{listed(names)} unconnected"
+
+  defp unconnected(_past, names),
+    do: "#{length(names)} var_inputs unconnected, #{listed(names)}"
 
   defp declared(%Program{tags: tags}),
     do:
