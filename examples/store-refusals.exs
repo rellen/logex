@@ -139,3 +139,8 @@ start.(
   |> String.replace("cv dint 0", "cv dint 3")
   |> counted.(15)
 )
+
+start.(
+  "26. a digest line with a digit lost",
+  String.replace(good, ~r/^digest (\w{31})\w$/m, "digest \\1")
+)

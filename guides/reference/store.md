@@ -281,18 +281,22 @@ edit that changes, adds or removes a value line must also change the `digest` li
 | Line ends | The digest is the same for a store with CRLF or CR line ends. |
 | A store that names no program | It holds no `digest` line, and its header is `logex retain 2`. |
 
-A fresh start refuses these stores. Each refusal gives the digest of the value lines, so
-that you can keep an edit. It also gives the way out.
+A fresh start refuses these stores. Each refusal gives the way out.
 
-| The store | Refused at | Case of [Example: refusals](#example-refusals) |
-|---|---|---|
-| A `digest` line that does not hold the digest of the value lines | The `digest` line | 22, 23 |
-| A store of `logex retain 4` with no `digest` line | Line 1 | 24 |
+| The store | Refused at | The refusal | Case of [Example: refusals](#example-refusals) |
+|---|---|---|---|
+| A `digest` line that does not hold the digest of the value lines | The `digest` line | Gives the digest of the value lines, so that you can keep an edit | 22, 23 |
+| A `digest` line whose digest is not 32 lowercase hexadecimal digits | The `digest` line | Gives the digest of the value lines, so that you can keep an edit | 26 |
+| A store of `logex retain 4` with no `digest` line | Line 1 | Says that the end of the store can be lost, and the values after its last line. It gives no digest. | 24 |
 
 - The refusal of the digest comes only when the store has no other problem. If a line does
-  not read, or the count is not correct, the refusal gives only those problems.
-- A `digest` line whose digest is not 32 lowercase hexadecimal digits gets a different
-  message. It gives no way out.
+  not read, or the count is not correct, the refusal gives only those problems. A
+  `digest` line whose digest is not 32 lowercase hexadecimal digits is then 1 of the
+  problems, with no digest and no way out.
+- A store with no `digest` line was cut short and given an end line, or a person removed
+  its `digest` line. The refusal gives no digest. With a digest written, a start reads
+  the values that the cut took at their initial values. Start it cold, which copies it
+  first.
 - A `digest` line in a store of a different version is refused.
 - The digest finds an edit by hand that was not mended. It is not a protection against a
   person who mends it. [What the store does not do](#what-the-store-does-not-do) gives
@@ -306,7 +310,7 @@ logex reads 4 versions of the store. Each write makes a store of `logex retain 4
 | Header | What the store holds |
 |---|---|
 | `logex retain 4` | The naming lines: 1 `resource` line, then the `program` lines. A `digest` line. An end line. The rules of this page apply. |
-| `logex retain 3` | The naming lines and an end line. No `digest` line. A start reads it as a store of `logex retain 4` with no digest. |
+| `logex retain 3` | The naming lines and an end line. No `digest` line. A start reads it by each rule of version 4 but the digest, which it holds none of. |
 | `logex retain 2` | An end line. The naming lines are possible. |
 | `logex retain 1` | No naming lines and no end line. A start warns of nothing. It cannot find a store that is cut short. |
 
@@ -453,7 +457,7 @@ The cases are in [Example: refusals](#example-refusals).
 | A digest that is not 32 lowercase hexadecimal digits | 15 |
 | A line that is no line of a store, or a line in the wrong place | 16 |
 | 2 lines that name 1 value | 3 |
-| A `digest` line that does not hold the digest of the value lines, or no `digest` line | 22 to 24 |
+| A `digest` line that does not hold the digest of the value lines, a digest mistyped, or no `digest` line | 22 to 24, 26 |
 | A word that is no type, or no number | 17, 18 |
 | An image that `Logex.Runtime.start/2` refuses | [An image that a start refuses](retained-values-and-store.md#an-image-that-a-start-refuses) |
 
@@ -474,13 +478,15 @@ These refusals give the way out:
 - a missing naming line
 - a store of a different configuration
 - a `digest` line that does not hold the digest of the values, or no `digest` line
+- a digest mistyped in a store with no other problem
 
 A refusal of a problem that a person can repair by hand gives no way out. Examples are a
-bad line, a digest with a wrong character and a count that is not correct.
+bad line, a digest of a naming line with a wrong character and a count that is not
+correct.
 
 ### Example: refusals
 
-`store-refusals.exs` writes a good store. Then it changes the store in 25 ways, and
+`store-refusals.exs` writes a good store. Then it changes the store in 26 ways, and
 starts a runner on each. Cases 19 to 21 and 25 start. Cases 19 to 21 change a value, and
 mend the `digest` line with the function `sealed`.
 
@@ -626,6 +632,11 @@ start.(
   |> String.replace("cv dint 0", "cv dint 3")
   |> counted.(15)
 )
+
+start.(
+  "26. a digest line with a digit lost",
+  String.replace(good, ~r/^digest (\w{31})\w$/m, "digest \\1")
+)
 ```
 
 ```console
@@ -682,9 +693,11 @@ tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is not the dige
 -- 23. a line removed, its count mended, the digest kept
 tally.retain: line 14: `digest d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `4d3b92f4ff82f33a17a2631a878de836`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest 4d3b92f4ff82f33a17a2631a878de836` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 24. no digest line, its count mended
-tally.retain: line 1: `logex retain 4` heads a store that holds the digest of its value lines, and the store holds no `digest` line: its value lines' digest is `d1e15a92bd876216f0fa2e5bf5537c82`, so to keep them write `digest d1e15a92bd876216f0fa2e5bf5537c82` just before the end line, counted in it, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 1: `logex retain 4` heads a store that holds the digest of its value lines, and the store holds no `digest` line: its end was lost, the store cut short and an end line written after the cut, or its `digest` line was taken away, so the values that stood after line 14 may be lost and the store is not read; to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- 25. a store of version 3, which holds no digest
 started, count 3, dropped []
+-- 26. a digest line with a digit lost
+tally.retain: line 15: `d1e15a92bd876216f0fa2e5bf5537c8` is no digest: a store's is 32 lowercase hexadecimal digits, and the store's value lines' digest is `d1e15a92bd876216f0fa2e5bf5537c82`: to keep them write `digest d1e15a92bd876216f0fa2e5bf5537c82` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 ```
 
 | Case | What the start does |
@@ -712,8 +725,9 @@ started, count 3, dropped []
 | 21 | Starts. It reads the CRLF line ends, and the count is 7. |
 | 22 | Refuses: the value changed, and the `digest` line did not. The message gives the digest of the values and the way out. |
 | 23 | Refuses: a line removed. The count is correct, and the digest is not. |
-| 24 | Refuses: no `digest` line. The message gives the digest of the values and the way out. |
+| 24 | Refuses: no `digest` line. The message says that values after line 14 can be lost, and gives the way out and no digest. |
 | 25 | Starts: a store of `logex retain 3` holds no `digest` line. The count is 3. |
+| 26 | Refuses: the digest has 31 digits. The message gives the digest of the values and the way out. |
 
 ### The warning of a different program
 

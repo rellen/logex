@@ -184,7 +184,7 @@ Each of these 4 keys is in each report of `status/1`, also when it holds nothing
 |---|---|
 | `forces` | Each force in effect, by the name of its point, with its value. `%{}` for none |
 | `forcing` | The set that the write in progress holds, or `nil` (decision 466) |
-| `forces_unknown` | The set of a cut write that can still reach the disk, or `nil` |
+| `forces_unknown` | The sets of the cut writes that can still reach the disk, the newest first, or `[]` (decision 600) |
 | `forces_unread` | `{path, reason}` for a file that a start was not able to read, until the write of a force or an unforce ends. Otherwise `nil` |
 
 A screen can show "forces on" while `forces` is not empty.

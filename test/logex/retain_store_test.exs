@@ -1568,6 +1568,26 @@ defmodule Logex.RetainStoreTest do
       )
     end
 
+    # Since RV-34's second host lane's review: a store with no digest line is told
+    # that its end may have been lost and the values after its last line with it, and the
+    # way out alone, where it was told the digest its lines give, which written as told
+    # read a store cut short, an end line written after the cut, with the values the cut
+    # took at their initial values; and a digest line that does not read is told the
+    # digest its lines give and the way out, as one that is not their digest is, where it
+    # was told its form alone, and so still beside another problem.
+    defp no_digest(last),
+      do:
+        "s: line 1: `logex retain 4` heads a store that holds the digest of its value lines, " <>
+          "and the store holds no `digest` line: its end was lost, the store cut short and an " <>
+          "end line written after the cut, or its `digest` line was taken away, so the values " <>
+          "that stood after line #{last} may be lost and the store is not read; to start " <>
+          "anyway: " <> @way_out
+
+    defp unread_digest(n, told, digest),
+      do:
+        "s: line #{n}: #{told}, and the store's value lines' digest is `#{digest}`: to keep " <>
+          "them write `digest #{digest}` in its place, and to start anyway: " <> @way_out
+
     test "no digest line, one that does not read, two, or one in a store of version 3" do
       text = written_store()
       lines = String.split(text, "\n")
@@ -1580,28 +1600,79 @@ defmodule Logex.RetainStoreTest do
         |> Enum.map(&String.replace(&1, "end #{count} lines", "end #{count - 1} lines"))
         |> Enum.join("\n")
 
-      raises(
-        "s: line 1: `logex retain 4` heads a store that holds the digest of its value lines, " <>
-          "and the store holds no `digest` line: its value lines' digest is `#{digest}`, so " <>
-          "to keep them write `digest #{digest}` just before the end line, counted in it, and " <>
-          "to start anyway: " <> @way_out,
-        fn -> Retain.decoded!(none, {"s", "plant"}) end
-      )
+      raises(no_digest(count - 2), fn -> Retain.decoded!(none, {"s", "plant"}) end)
+
+      # Cut after the global's line and an end line written after the cut: the values that
+      # stood after it, the instance's, may be lost, and no digest is offered that would
+      # read them at their initial values.
+      {kept, _cut} = Enum.split_while(lines, &(not String.starts_with?(&1, "instance ")))
+      ended = Enum.join(kept ++ ["end #{length(kept) + 1} lines", ""], "\n")
+      message = refused(fn -> Retain.decoded!(ended, {"s", "plant"}) end)
+      assert message == no_digest(length(kept))
+      refute message =~ ~r/[0-9a-f]{32}/
 
       unread = String.replace(text, "digest #{digest}", "digest #{String.upcase(digest)}")
 
       raises(
-        "s: line #{count - 1}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
-          "lowercase hexadecimal digits",
+        unread_digest(
+          count - 1,
+          "`#{String.upcase(digest)}` is no digest: a store's is 32 lowercase hexadecimal " <>
+            "digits",
+          digest
+        ),
         fn -> Retain.decoded!(unread, {"s", "plant"}) end
+      )
+
+      short = String.replace(text, "digest #{digest}", "digest #{binary_part(digest, 0, 31)}")
+
+      raises(
+        unread_digest(
+          count - 1,
+          "`#{binary_part(digest, 0, 31)}` is no digest: a store's is 32 lowercase " <>
+            "hexadecimal digits",
+          digest
+        ),
+        fn -> Retain.decoded!(short, {"s", "plant"}) end
       )
 
       worded = String.replace(text, "digest #{digest}", "digest #{digest} x")
 
       raises(
-        "s: line #{count - 1}: `digest #{digest} x` is no digest's line: it is `digest " <>
-          "<digest>`",
+        unread_digest(
+          count - 1,
+          "`digest #{digest} x` is no digest's line: it is `digest <digest>`",
+          digest
+        ),
         fn -> Retain.decoded!(worded, {"s", "plant"}) end
+      )
+
+      # Beside another problem, a digest that does not read is told its form alone, as
+      # before, the digest its lines give waiting for the line that does not read.
+      both = String.replace(unread, "global total_boxes dint 41", "global total_boxes dint x")
+
+      raises(
+        "s: line 5: `x` is no number\n" <>
+          "s: line #{count - 1}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+          "lowercase hexadecimal digits",
+        fn -> Retain.decoded!(both, {"s", "plant"}) end
+      )
+
+      # A digest line that reads after one that does not keeps it from being told.
+      after_unread =
+        String.replace(
+          unread,
+          "\nend #{count} lines",
+          "\ndigest #{digest}\nend #{count + 1} lines"
+        )
+
+      raises(
+        unread_digest(
+          count - 1,
+          "`#{String.upcase(digest)}` is no digest: a store's is 32 lowercase hexadecimal " <>
+            "digits",
+          digest
+        ),
+        fn -> Retain.decoded!(after_unread, {"s", "plant"}) end
       )
 
       twice =

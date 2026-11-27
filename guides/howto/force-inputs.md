@@ -340,7 +340,7 @@ Logex.Runner.status(Packing).forces
 ```
 
 On your operator panel, show the key `forces` of `Logex.Runner.status/1`. If the key
-`forces_unread` or `forces_unknown` is not `nil`, show an alarm.
+`forces_unread` is not `nil`, or the key `forces_unknown` is not `[]`, show an alarm.
 [The status names a problem](#the-status-names-a-problem) gives the cause. On a slow
 disk, a force takes effect only after the runner writes the forces file.
 
@@ -432,8 +432,8 @@ message of a start.
 | What you see | Cause | What to do |
 |---|---|---|
 | `forces_unread: {path, :eisdir}` | The start or the restart did not read the file. A fresh start then has no force, and a restart keeps the forces of the runner. | Correct the file. The next force or unforce that succeeds writes the forces of the runner over the file, and the key is then `nil`. An orderly stop also writes them. |
-| `forces_unknown: %{"eye" => 1}` | A write did not end in the limit of the write time. The file can hold these forces or the old forces. | Force or unforce a point to write the file again. |
-| `forces_unknown_sets` holds 2 sets or more | 2 writes or more did not end in the limit. The file can hold the set of any of them, or the old forces. | Force or unforce a point to write the file again. The list is then `[]`. |
+| `forces_unknown: [%{"eye" => 1}]` | A write did not end in the limit of the write time. The file can hold these forces or the old forces. | Force or unforce a point to write the file again. The list is then `[]`. |
+| `forces_unknown` holds 2 sets or more | 2 writes or more did not end in the limit. The file can hold the set of any of them, or the old forces. | Force or unforce a point to write the file again. The list is then `[]`. |
 
 ## See also
 

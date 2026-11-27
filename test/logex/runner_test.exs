@@ -3381,7 +3381,7 @@ defmodule Logex.RunnerTest do
     # Decision 440 (RV-16), the leave for `forces_unread` and `forces_unknown` absent:
     # each always there, nil where nothing stands; and decision 466 (RV-18) `forcing`,
     # nil where no write of the forces file is out; and decision 600 (RV-34)
-    # `forces_unknown_sets`, [] where no cut write's set stands.
+    # `forces_unknown` a list, [] where no cut write's set stands.
     test "status/1 at start" do
       {opts, _rig} = plant_rig(counted(), poll: 4)
       {:ok, runner} = Runner.start_link(opts)
@@ -3394,8 +3394,7 @@ defmodule Logex.RunnerTest do
                overlaps: %{"fast" => 0, "trip" => 0},
                forces: %{},
                forces_unread: nil,
-               forces_unknown: nil,
-               forces_unknown_sets: [],
+               forces_unknown: [],
                forcing: nil,
                edit: nil,
                runs: %{"fast" => {0, 500}, "trip" => {0, 500}},

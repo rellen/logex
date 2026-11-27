@@ -268,16 +268,16 @@ $ mix run 0018-file-work-with-a-limit.exs
   of this VM, #PID<...>, which holds it until it stops: two runners on one file
   write each over the other's
 2. A force while the disk does not answer
-  while it is written: [forces: %{}, forcing: %{"eye_1" => 1}, forces_unknown: nil]
+  while it is written: [forces: %{}, forcing: %{"eye_1" => 1}, forces_unknown: []]
   total_boxes after 2 more boxes: 3
   a wrong point, raised at once: `nope` is no input point of `tally`
   the answer at the limit: {:error, {:forces, :timeout}}
-  then: [forces: %{}, forcing: nil, forces_unknown: %{"eye_1" => 1}]
+  then: [forces: %{}, forcing: nil, forces_unknown: [%{"eye_1" => 1}]]
 3. The disk answers again
   tally.forces holds "eye_1 1\n"
-  the runner: [forces: %{}, forcing: nil, forces_unknown: %{"eye_1" => 1}]
+  the runner: [forces: %{}, forcing: nil, forces_unknown: [%{"eye_1" => 1}]]
   unforce: :ok
-  the runner: [forces: %{}, forcing: nil, forces_unknown: nil]
+  the runner: [forces: %{}, forcing: nil, forces_unknown: []]
   tally.forces holds ""
 4. A trip while the disk does not answer
   status: :tripped, trip: {:io, "panel", {:error, :eio}}

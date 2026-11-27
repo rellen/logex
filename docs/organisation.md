@@ -16504,6 +16504,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and an adapter's linked helper that ends while `init/3` runs keeps its real reason in
      the trip, as `Logex.IO`'s documentation says, where it reads `{:down, :noproc}`. Not
      taken: question 21 alone; left. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `6c12ba1`, mended after its second host lane's
+     review: `status/1`'s `forces_unknown` a list of every set a cut write held, newest
+     first and each once, `[]` where none, where it was the newest set or `nil` (a key
+     `forces_unknown_sets` beside it at `6c12ba1`); each problem of a force line told, a
+     name that is no input point told so alone; a linked helper's reason in the trip,
+     `init/3`'s helper ended before it answered among them (provisional, `PLAN.md`'s
+     RV-34).)*
 
 601. **A configuration the file cannot print (DOC-1's close),** DOC-1's close's question
      17: a real global built from Elixir with `initial: 0.1` is taken by `new!/1`, and
@@ -16532,6 +16539,12 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      5,239 ms; and the runner's documentation gives the time a plant of its stated size
      takes, and says that a period shorter than a write is stretched. Not taken: documented
      alone; made faster first. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `6bf3150` and `72ac173`, mended after its second
+     host lane's review: the warm match and a cold start's judge within `write_limit:`,
+     the store's read and its match each limited, so a start waits up to twice it, the
+     runner's documentation giving the times measured, and the changelog's "What no
+     longer compiles, loads or starts" naming the plant that no longer starts with the
+     default limit (provisional, `PLAN.md`'s RV-34).)*
 
 604. **A store edited by hand (DOC-1's close),** DOC-1's close's question 23: an end line
      added to a store cut short reads the lost values at their initial values, `dropped:
@@ -16543,6 +16556,13 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      start with the usual way out. It is a change of the store's format: how it is
      versioned beside `logex retain 3` is the builder's to propose, provisional. Not taken:
      said so alone; warned in `status/1` at the start. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `5e9d3fe`, mended after its second host lane's
+     review: `logex retain 4` and its `digest` line, the builder's proposal; a store of
+     version 4 with no `digest` line told that its end may have been lost and the way out
+     alone, no digest offered, where the digest offered read a store cut short and given an
+     end line with the lost values at their initial values; a digest mistyped told the
+     digest the lines give and the way out where nothing else is wrong (provisional,
+     `PLAN.md`'s RV-34).)*
 
 605. **Three gaps of the suite (DOC-1's close),** DOC-1's close's questions 24, 25 and 26:
      `evaluation_test.exs` passes the mutant that gives a de-energised `ote` power, which

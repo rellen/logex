@@ -634,8 +634,7 @@ answered.(answered, Task.yield(task, 10))
 | `edit` | `:accepted`, `:testing`, `:untested` or `nil`: the stage of the online edit that the runner holds |
 | `forces` | `%{point => value}`: each force in effect. [Forcing](forcing.md) gives this key and the next 4. |
 | `forces_unread` | `{path, reason}` or `nil`: the forces file that the last start or restart did not read |
-| `forces_unknown` | A map or `nil`: the forces of a write of the forces file that took longer than `write_limit:` |
-| `forces_unknown_sets` | A list of maps, or `[]`: the forces of each write of the forces file that took longer than `write_limit:`, the newest first |
+| `forces_unknown` | A list of maps, or `[]`: the forces of each write of the forces file that took longer than `write_limit:`, the newest first |
 | `forcing` | A map or `nil`: the forces of the write of the forces file that is not complete |
 | `retain` | `nil` for a runner with no store. Else a map with the keys `path`, `written_at`, `failed`, `dropped`, `copy`, `unknown` and `warning`. [The store](store.md#the-status-of-the-store) gives each one. |
 
@@ -669,7 +668,7 @@ alias Logex.IO.Sim
 # Prints each key of status/1, in a fixed sequence.
 keys =
   ~w(status trip now rounds runs overlaps latest_wake refresh_gap unzeroed edit forces)a ++
-    ~w(forces_unread forces_unknown forces_unknown_sets forcing retain)a
+    ~w(forces_unread forces_unknown forcing retain)a
 
 status = Runner.status(runner)
 for key <- keys, do: IO.puts("#{key}: #{inspect(status[key])}")
@@ -713,8 +712,7 @@ unzeroed: []
 edit: nil
 forces: %{}
 forces_unread: nil
-forces_unknown: nil
-forces_unknown_sets: []
+forces_unknown: []
 forcing: nil
 retain: nil
 start pressed, then advance 1 ms
@@ -1260,7 +1258,7 @@ gives the copies.
 | Paths | The runner makes each path a full path 1 time, at the start, from the working directory of that time. A later `File.cd/1` moves no file. `status/1` and the messages give the path as the host gave it. |
 | The limit of time | Each read and write of a file is a separate process with the limit `write_limit:` of real time. The runner stops a write at its limit, and the answer is `:timeout`. The write can still end later, when the disk answers. |
 | A large store | A store that the runner cannot make and write in `write_limit:` gives `:timeout`. A longer `write_limit:` gives the write more time. |
-| A large store at a warm start | The runner reads the store, and then puts its values into the resource. Each of the 2 has the limit `write_limit:`. A store that the runner cannot put into the resource in the limit gives `{:error, {:retain, :timeout}}`, and the runner does not start. On a busy machine, 32,768 retained timers took 7.2 s, more than the default 5000 ms. |
+| A large store at a warm start | The runner reads the store, and then puts its values into the resource. Each of the 2 has a separate limit of `write_limit:`. The start can wait up to 2 times `write_limit:` for the store before it answers. A store that the runner cannot put into the resource in the limit gives `{:error, {:retain, :timeout}}`, and the runner does not start. On a busy machine, 32,768 retained timers took 7.2 s, more than the default 5000 ms. |
 
 <!-- unchecked: the messages of 5 wrong files, copied from a run -->
 ```text
