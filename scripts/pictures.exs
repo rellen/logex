@@ -60,7 +60,6 @@ defmodule Pictures do
   @assets "guides/assets"
   @examples "examples"
   @mark ~r/^\s*<!-- (rung|timing): (\S+)((?: \d+)*) -->\s*$/
-  @image ~r/^\s*!\[[^\]]*\]\(([^)\s]+)\)/
 
   # The pictures a page's marks name, `{line, svg path, kind, source, rungs}`, and what is
   # wrong with its marks, each `<page>:<line>: ...`.
@@ -78,12 +77,12 @@ defmodule Pictures do
   defp line({_n, _line, :code}, _page, state), do: state
 
   defp line({n, line, _kind}, page, {found, problems, mark}),
-    do: seen(mark, Regex.run(@mark, line), Regex.run(@image, line), {n, page}, {found, problems})
+    do: seen(mark, Regex.run(@mark, line), Page.picture(line), {n, page}, {found, problems})
 
   defp seen(_mark, [_, kind, source, rungs], _image, _at, {found, problems}),
     do: {found, problems, {kind, source, numbers(rungs)}}
 
-  defp seen({kind, source, rungs}, nil, [_, target], {n, page}, {found, problems}) do
+  defp seen({kind, source, rungs}, nil, {_alt, target}, {n, page}, {found, problems}) do
     svg = resolve(page, target)
 
     named(
@@ -99,7 +98,7 @@ defmodule Pictures do
      nil}
   end
 
-  defp seen(nil, nil, [_, target], {n, page}, {found, problems}),
+  defp seen(nil, nil, {_alt, target}, {n, page}, {found, problems}),
     do: {found, unmarked(String.match?(target, ~r/^[a-z]+:/), n, page) ++ problems, nil}
 
   defp seen(nil, nil, nil, _at, {found, problems}), do: {found, problems, nil}

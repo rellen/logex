@@ -2854,26 +2854,56 @@ defmodule Logex.InstanceArrayTest do
 
   describe "the code" do
     # CLAUDE.md: multiple function clauses, not conditionals. M5-14 brought seven `case`
-    # expressions into `lib/`, which its review found; the four this test names are older,
-    # the parser's three and the runner's one, and no new one joins them unseen. The
-    # runner's is an example in its moduledoc, which this reading of lines takes for code,
-    # and a conditional written inline it does not see; `clauses_test.exs` reads `lib/`'s
-    # syntax trees, the parser's three alone (the review after Milestone 6, a7-docs-9).
-    test "lib/ holds no case, cond, if or unless but the parser's three and the runner's one" do
+    # expressions into `lib/`, which its review found; the three this test names are older,
+    # the parser's, and no new one joins them unseen. Since RV-34 (decision 596, DOC-1's
+    # close) each is found in its file's syntax tree, as `clauses_test.exs` finds them, so
+    # that an example in a moduledoc, the runner's, which a reading of lines took for code,
+    # is none, and a conditional written inline, `if(x, do: 1)`, is one.
+    test "lib/ holds no case, cond, if or unless but the parser's three" do
       found =
         for path <- Path.wildcard("lib/**/*.ex"),
-            {line, number} <- Enum.with_index(File.read!(path) |> String.split("\n"), 1),
-            Regex.match?(~r/^[^#"]*\b(case|cond|if|unless)\b[^#"]*\bdo\s*$/, line),
-            do: {path, number}
+            {kind, line} <- conditionals(Code.string_to_quoted!(File.read!(path))),
+            do: {path, kind, line}
 
-      assert Enum.map(found, &elem(&1, 0)) |> Enum.sort() == [
-               "lib/logex/parser.ex",
-               "lib/logex/parser.ex",
-               "lib/logex/parser.ex",
-               "lib/logex/runner.ex"
-             ]
+      assert Enum.map(found, &Tuple.delete_at(&1, 2)) |> Enum.sort() ==
+               List.duplicate({"lib/logex/parser.ex", :case}, 3)
+    end
+
+    test "the reading finds a conditional inline and none in a string or a moduledoc" do
+      source = ~S'''
+      defmodule M do
+        @moduledoc """
+            case x do
+              _ -> 1
+            end
+        """
+        def f(x), do: if(x, do: "case x do")
+        def g(x), do: Kernel.unless(x, do: 1)
+      end
+      '''
+
+      assert conditionals(Code.string_to_quoted!(source)) == [{:if, 7}, {:unless, 8}]
     end
   end
+
+  @conditionals [:case, :cond, :if, :unless]
+
+  # Each `case`, `cond`, `if` and `unless` of a syntax tree, written bare or through
+  # `Kernel`, with its line, in the order the tree holds them.
+  defp conditionals(ast) do
+    {_ast, found} = Macro.prewalk(ast, [], &conditional/2)
+    Enum.reverse(found)
+  end
+
+  defp conditional({kind, meta, args} = node, found)
+       when kind in @conditionals and is_list(args),
+       do: {node, [{kind, meta[:line]} | found]}
+
+  defp conditional({{:., _, [{:__aliases__, _, [:Kernel]}, kind]}, meta, _args} = node, found)
+       when kind in @conditionals,
+       do: {node, [{kind, meta[:line]} | found]}
+
+  defp conditional(node, found), do: {node, found}
 
   describe "growth, in the words a step allocates" do
     # M5-14's review: an edit that moved each element by a put into its array's tuple copied

@@ -509,7 +509,7 @@ defmodule Prose do
   defp clean(text) do
     text
     |> then(&Regex.replace(~r/(`+)(.+?)\1(?!`)/, &1, " CODE "))
-    |> then(&Regex.replace(~r/!\[([^\]]*)\]\([^)]*\)/, &1, "\\1"))
+    |> Page.unpictured()
     |> then(&Regex.replace(~r/\[([^\]]*)\]\([^)]*\)/, &1, "\\1"))
     |> then(&Regex.replace(~r/<https?:[^>]*>|https?:\/\/\S+/, &1, " LINK "))
     |> then(&Regex.replace(~r/\{:[^}]*\}/, &1, ""))
@@ -521,7 +521,7 @@ defmodule Prose do
   end
 
   defp alts(text) do
-    for [_, alt] <- Regex.scan(~r/!\[([^\]]*)\]\(/, Page.masked(text)), do: String.trim(alt)
+    for {alt, _path} <- Page.pictures(Page.masked(text)), do: String.trim(alt)
   end
 
   @quotation ~r/"[^"]*"|“[^”]*”/u

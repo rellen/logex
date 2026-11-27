@@ -4,6 +4,14 @@ defmodule LineDevice do
   @behaviour Logex.IO
 
   @connect [:binary, packet: :line, active: false]
+  # The waits, under the runner's limit on a device's call, the idle watchdog and a poll
+  # period, 510 ms unless set: a connect and an answer, the most one call waits, 450 ms
+  # together, so that a card that does not answer is told by this adapter, `{:error,
+  # :timeout, state}`, and the runner writes it its 0 and closes it, where a wait past the
+  # limit had the runner kill the device in its call, close/1 never run and the card
+  # keeping its outputs (decision 606).
+  @connect_ms 200
+  @answer_ms 250
 
   # In the host's process, as the runner starts: the options' mistakes, a line each.
   @impl true
@@ -40,12 +48,12 @@ defmodule LineDevice do
 
   def close(%{socket: socket}) do
     _ = :gen_tcp.send(socket, "quit\n")
-    _ = :gen_tcp.recv(socket, 0, 1000)
+    _ = :gen_tcp.recv(socket, 0, @answer_ms)
     :gen_tcp.close(socket)
   end
 
   defp connected(%{socket: nil} = state),
-    do: socket(:gen_tcp.connect(state.host, state.port, @connect, 1000), state)
+    do: socket(:gen_tcp.connect(state.host, state.port, @connect, @connect_ms), state)
 
   defp connected(state), do: {:ok, state}
 
@@ -57,7 +65,7 @@ defmodule LineDevice do
 
   defp asked(error, _line, _answer), do: error
 
-  defp sent(:ok, socket), do: :gen_tcp.recv(socket, 0, 1000)
+  defp sent(:ok, socket), do: :gen_tcp.recv(socket, 0, @answer_ms)
   defp sent(error, _socket), do: error
 
   defp answered({:ok, text}, answer, state), do: given_back(answer.(text), state)

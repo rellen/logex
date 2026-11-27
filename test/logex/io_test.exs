@@ -1995,4 +1995,20 @@ defmodule Logex.IOTest do
       assert named <= unnamed * 1.25 + 500, "named #{named}, unnamed #{unnamed}"
     end
   end
+
+  describe "the example adapter's waits (decision 606)" do
+    # DOC-1's close (decision 606; RV-34): `examples/line_device.exs` waits for its card
+    # under the runner's limit on a device's call, the idle watchdog and a poll period,
+    # `idle: 500` and `poll: 10` unless set, so that a card that does not answer is told by
+    # the adapter and closed, where its 1000 ms waits outlasted the limit and the runner
+    # killed the device in its call. The most one call waits is a connect and an answer.
+    test "a connect and an answer together wait less than idle + poll" do
+      text = File.read!(Path.expand("../../examples/line_device.exs", __DIR__))
+      [connect] = Regex.run(~r/@connect_ms (\d+)\n/, text, capture: :all_but_first)
+      [answer] = Regex.run(~r/@answer_ms (\d+)\n/, text, capture: :all_but_first)
+
+      assert String.to_integer(connect) + String.to_integer(answer) < 500 + 10
+      assert Regex.scan(~r/:gen_tcp\.(?:connect|recv)\([^)]*\b(\d+)\)/, text) == []
+    end
+  end
 end

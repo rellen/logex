@@ -361,7 +361,9 @@ defmodule Logex.Runtime do
   `arrays` or `retained` are not, or whose bitwise instruction's destination has no type
   it can compute in; and since decision 616 one that holds a struct where a map is due, a
   `Date` or a `Time` as its tags, its blocks, its arrays, units or reals, a line each, where
-  it raised Protocol.UndefinedError out of `instance/1`. Every other entry point checks
+  it raised Protocol.UndefinedError out of `instance/1`; and since decision 630 one whose
+  table, or a held body's, holds a tag that is no `%Logex.Tag{}`, a `Date` as `total`'s, a
+  line a tag, where it raised FunctionClauseError. Every other entry point checks
   only a program's shape, so a program swapped in by hand after that check is trusted, and
   a scan that
   reaches such a destination raises there. Otherwise a `%Logex.Program{}`,
@@ -2557,7 +2559,8 @@ defmodule Logex.Runtime do
             "sets each element once"
       )
 
-  defp keyed_list(keys), do: Enum.map_join(keys, " and ", &Logex.Lexer.quoted_text/1)
+  defp keyed_list(keys),
+    do: Declarations.named(keys, &Logex.Lexer.quoted_text/1, " and ", " and ")
 
   # An element key's array and index, its subscripts' values, where it names an element of
   # an array var_input within its dimensions, and nothing for any other key.
@@ -2801,7 +2804,7 @@ defmodule Logex.Runtime do
     do:
       {line,
        fn ->
-         ": the var_inputs are " <> Enum.map_join(Enum.sort(inputs), ", ", &"#{quoted(&1)}")
+         ": the var_inputs are " <> Declarations.named(Enum.sort(inputs), &"#{quoted(&1)}", ", ")
        end}
 
   defp hint(line, suggestion, _inputs), do: line <> suggestion
@@ -3239,7 +3242,7 @@ defmodule Logex.Runtime do
         keys != [],
         keys = Enum.sort(for(key <- keys, do: Map.get(written, key, key))),
         do:
-          "inputs #{Enum.map_join([array | keys], " and ", &"#{quoted(&1)}")} each set " <>
+          "inputs #{Declarations.named([array | keys], &"#{quoted(&1)}", " and ", " and ")} each set " <>
             "#{quoted(array)}, #{Declarations.a_type(Map.fetch!(globals, array).type)}" <>
             "#{global_line(Map.fetch!(globals, array))}: a call sets an array whole or by its " <>
             "elements, not both"
@@ -3505,24 +3508,28 @@ defmodule Logex.Runtime do
 
   # The input points as a hint lists them, a located array's as the range of its
   # elements, `temps[0]` to `temps[7]`, in name order among the rest.
-  defp listed_points(nil, points, _located), do: Enum.map(points, &"#{quoted(&1)}")
+  # Each is quoted only where the hint tells it, among the first hundred (decision 629).
+  defp listed_points(nil, points, _located), do: Enum.map(points, &{:point, &1})
 
   defp listed_points(elements, points, located),
     do:
       Enum.sort_by(
-        for(point <- points, not is_map_key(elements, point), do: {point, "#{quoted(point)}"}) ++
+        for(point <- points, not is_map_key(elements, point), do: {point, {:point, point}}) ++
           for(
             {array, {"i", {first, _from}, {last, _to}}} <- located,
-            do: {array, "#{quoted(first)} to #{quoted(last)}"}
+            do: {array, {:range, first, last}}
           ),
         &elem(&1, 0)
       )
       |> Enum.map(&elem(&1, 1))
 
+  defp point_listed({:point, point}), do: "#{quoted(point)}"
+  defp point_listed({:range, first, last}), do: "#{quoted(first)} to #{quoted(last)}"
+
   defp point_hint(line, "", []), do: line <> ": this configuration has no input point"
 
   defp point_hint(line, "", points),
-    do: {line, fn -> ": the input points are " <> and_list(points) end}
+    do: {line, fn -> ": the input points are " <> Declarations.named(points, &point_listed/1) end}
 
   defp point_hint(line, suggestion, _points), do: line <> suggestion
 
@@ -4106,10 +4113,11 @@ defmodule Logex.Runtime do
 
   defp member_at(:error, type, at, {member, _deeper}, _walked, _env) do
     names = Enum.map(FbType.public(type), & &1.name)
+    base = base_of(member)
 
     raise(
       ArgumentError,
-      no_member(Enum.find(type.members, &(&1.name == base_of(member))), type, {at, member}, names)
+      no_member(Enum.find(type.members, &(&1.name == base)), type, {at, member}, names)
     )
   end
 
@@ -4162,7 +4170,7 @@ defmodule Logex.Runtime do
   defp public_only(names),
     do:
       "an access path reads only its public members, " <>
-        and_list(Enum.map(names, &"#{quoted(&1)}"))
+        Declarations.named(names, &"#{quoted(&1)}")
 
   # The member a read of the instance would mean: the first value the block sets, else the
   # first it is given. A user block may have neither (M2-5).
@@ -4176,7 +4184,7 @@ defmodule Logex.Runtime do
   defp block_hint("", []), do: ": it has none an access path reads"
 
   defp block_hint("", names),
-    do: ": its members are " <> and_list(Enum.map(names, &"#{quoted(&1)}"))
+    do: ": its members are " <> Declarations.named(names, &"#{quoted(&1)}")
 
   defp block_hint(suggestion, _names), do: suggestion
 

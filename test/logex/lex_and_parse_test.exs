@@ -80,4 +80,35 @@ defmodule Logex.LexAndParseTest do
                 ]}
              ]}} = ast
   end
+
+  # DOC-1's close (decision 596; RV-34): a four-leg branch with an empty third leg keeps
+  # its four legs, the third a jumper, through the parse, the printer and the compile, and
+  # its rung is `a` alone, as the empty leg passes the power that comes into the branch.
+  # The close's "changes its rung" does not reproduce on `main` at 516afd7.
+  test "a four-leg branch with an empty third leg keeps its legs and passes power" do
+    source = "xic a ( xic b | xic c | | xic d ) ote e"
+    {:ok, tokens, _} = Logex.Compiler.tokenize(source)
+    {:ok, ast} = Logex.Compiler.parse(tokens)
+
+    assert {:routine, {:rungs, [{:rung, [_xic, _a, {:branches, legs}, _ote, _e]}]}} = ast
+
+    assert legs == [
+             [{:name, 1, "xic"}, {:name, 1, "b"}],
+             [{:name, 1, "xic"}, {:name, 1, "c"}],
+             [],
+             [{:name, 1, "xic"}, {:name, 1, "d"}]
+           ]
+
+    assert Logex.Printer.print(ast) == source
+
+    declared =
+      Enum.map_join(~w(a b c d), "", &"var_input #{&1} bool\n") <> "var_output e bool\n\n"
+
+    {:ok, p} = Logex.compile(declared <> source <> "\n", name: "p")
+
+    for {a, e} <- [{0, 0}, {1, 1}] do
+      s = Logex.Runtime.put_inputs(p, Logex.Runtime.instance(p), %{"a" => a})
+      assert {%{"e" => ^e}, _s} = Logex.Runtime.scan(p, s)
+    end
+  end
 end

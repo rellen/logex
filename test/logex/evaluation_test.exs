@@ -127,6 +127,37 @@ defmodule Logex.EvaluationTest do
     assert state.env == %{"go" => 1, "fb" => %{"x" => 1}, "pulse" => 1}
   end
 
+  # DOC-1's close (decision 605; RV-34): a de-energised `ote` writes 0 and passes no power,
+  # so the coil after it on the rung writes 0 too, and a contact after it in series is
+  # never reached with power; the mutant that gives power out of a de-energised `ote` set
+  # `c` here, and this file passed it, one end-to-end test, two walks and the examples'
+  # test catching it.
+  test "a de-energised ote writes 0 and passes no power to what follows it" do
+    rungs = [
+      {:rung,
+       [
+         {:xic, 1, [{:name, 1, "a"}]},
+         {:ote, 1, [{:name, 1, "b"}]},
+         {:ote, 1, [{:name, 1, "c"}]}
+       ]},
+      {:rung,
+       [
+         {:xic, 2, [{:name, 2, "a"}]},
+         {:ote, 2, [{:name, 2, "d"}]},
+         {:xio, 2, [{:name, 2, "a"}]},
+         {:ote, 2, [{:name, 2, "e"}]}
+       ]}
+    ]
+
+    program = %Logex.Program{rungs: rungs, tags: %{}}
+
+    assert env_after(program, %{"a" => 0, "b" => 1, "c" => 1, "d" => 1, "e" => 1}) ==
+             %{"a" => 0, "b" => 0, "c" => 0, "d" => 0, "e" => 0}
+
+    assert env_after(program, %{"a" => 1, "b" => 0, "c" => 0, "d" => 0, "e" => 1}) ==
+             %{"a" => 1, "b" => 1, "c" => 1, "d" => 1, "e" => 0}
+  end
+
   # One scan through the public API, from an env the test chooses: a program and an
   # instance built by hand, which Logex.Runtime runs without checking (outside its contract).
   defp env_after(program, env) do

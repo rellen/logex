@@ -2330,6 +2330,16 @@ add e i y",
       assert doc.(Logex.Configuration, :compile, 3) =~ "**The cost that remains** (decision 520)"
     end
 
+    # DOC-1's close (decision 596): `Logex.IO.Point` says that it is inside the host
+    # contract, where no sentence put it inside or outside.
+    test "Logex.IO.Point's moduledoc puts it inside the host contract" do
+      {:docs_v1, _, :elixir, _, %{"en" => doc}, _, _} = Code.fetch_docs(Logex.IO.Point)
+
+      assert String.replace(doc, ~r/\s+/, " ") =~
+               "Inside the host contract (decision 523): what `Logex.IO`'s behaviour hands an " <>
+                 "adapter"
+    end
+
     test "every documented module outside the host contract says so, and none inside it" do
       documented =
         for module <- Application.spec(:logex, :modules),
@@ -2984,6 +2994,74 @@ defmodule Logex.RuntimeTest.Traced do
       after
         100 -> n
       end
+    end
+  end
+
+  describe "the core reads no clock (DOC-1's close, decision 596)" do
+    # CLAUDE.md and `Logex.Runtime`'s moduledoc: the runtime reads no clock, the host
+    # giving it the time. Held here on the compiled code: every remote call each module of
+    # logex makes, from its BEAM's imports, and no module but the runner, its writer and
+    # the machine's clock calls a function that reads the time, so that a clock read in
+    # the runtime, the compiler, an edit or a configuration is found, written in Elixir or
+    # Erlang. The functions that wait, `Process.sleep/1` and `Process.send_after/3`, read
+    # no time and are not counted.
+    @clock_reads [
+      {:erlang, :monotonic_time},
+      {:erlang, :system_time},
+      {:erlang, :now},
+      {:erlang, :timestamp},
+      {:erlang, :time},
+      {:erlang, :date},
+      {:erlang, :localtime},
+      {:erlang, :universaltime},
+      {:os, :system_time},
+      {:os, :timestamp},
+      {:os, :perf_counter},
+      {System, :monotonic_time},
+      {System, :system_time},
+      {System, :os_time},
+      {DateTime, :utc_now},
+      {DateTime, :now},
+      {NaiveDateTime, :utc_now},
+      {NaiveDateTime, :local_now},
+      {Time, :utc_now},
+      {Date, :utc_today},
+      {:calendar, :local_time},
+      {:calendar, :universal_time}
+    ]
+
+    defp clock_readers(clock_reads) do
+      for module <- Application.spec(:logex, :modules),
+          {:ok, {_, [imports: imports]}} = :beam_lib.chunks(:code.which(module), [:imports]),
+          reads = for({m, f, _a} <- imports, {m, f} in clock_reads, uniq: true, do: {m, f}),
+          reads != [],
+          into: %{},
+          do: {module, reads}
+    end
+
+    test "only the runner, its writer and the machine's clock read the time" do
+      assert clock_readers(@clock_reads) == %{
+               Logex.Runner => [{System, :monotonic_time}],
+               Logex.Runner.Writer => [{System, :monotonic_time}],
+               Logex.Runner.Clock.Monotonic => [{System, :monotonic_time}, {System, :os_time}]
+             }
+    end
+
+    # `System.monotonic_time/0` is compiled to `:erlang.monotonic_time/0`, which the list
+    # holds too.
+    test "the reading sees a call to a clock in a compiled module" do
+      [{module, binary}] =
+        Code.compile_string("""
+        defmodule Logex.RuntimeTest.Clocked do
+          def now, do: {System.monotonic_time(), :os.timestamp()}
+        end
+        """)
+
+      {:ok, {_, [imports: imports]}} = :beam_lib.chunks(binary, [:imports])
+      reads = for {m, f, _a} <- imports, {m, f} in @clock_reads, uniq: true, do: {m, f}
+
+      assert {module, reads} ==
+               {Logex.RuntimeTest.Clocked, [{:erlang, :monotonic_time}, {:os, :timestamp}]}
     end
   end
 end

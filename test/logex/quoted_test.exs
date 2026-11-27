@@ -21,6 +21,10 @@ defmodule Logex.QuotedTest do
   4,096 bytes cut where a refusal quotes it, pinned at 4,096 bytes and 4,097, its cost at
   a megabyte held to a short one's; and `instance/1` refusing a struct where a map is
   due, which escaped as Protocol.UndefinedError.
+
+  Since RV-34 (decision 629): a line that lists names tells the first hundred and how many
+  more, each pinned whole at 100 names and at 101, its cost and text at 10,000 held to its
+  own at 100.
   """
   use ExUnit.Case, async: true
 
@@ -1554,6 +1558,222 @@ defmodule Logex.QuotedTest do
       do: ~s|input "k#{String.pad_leading("#{i}", 6, "0")}[0]" is not declared|
   end
 
+  describe "a line that lists names tells the first hundred and a count (decision 629)" do
+    # Decision 629 (RV-34; the maintainer, 2026-11-26, RV-33's question 3), reached into
+    # diagnostics too: a line of a refusal of the host contract that lists
+    # names gives the first hundred in its order and how many more there are, where
+    # `put_inputs/3` told a fan controller's 10,000 var_inputs in one line of 100,047
+    # bytes. Each such line at 100 names and at 101, its message pinned whole, and its
+    # growth at 10,000 against 100 in reductions, in the same run.
+    defp n5(i), do: "n" <> String.pad_leading(Integer.to_string(i), 5, "0")
+
+    # The names a line lists, quoted, told as the line tells them: every one of a hundred,
+    # the last two joined by `last`, and the first hundred of more and a count.
+    defp names_told(n, quote, last \\ " and ", between \\ ", ")
+
+    defp names_told(n, quote, last, between) when n <= 100,
+      do: Enum.map_join(1..(n - 1)//1, between, &quote.(&1)) <> last <> quote.(n)
+
+    defp names_told(n, quote, _last, between),
+      do: Enum.map_join(1..100, between, &quote.(&1)) <> " and #{n - 100} more, not listed"
+
+    # A fan controller of `n` var_inputs.
+    defp fan(n) do
+      source =
+        Enum.map_join(1..n, "\n", &"var_input #{n5(&1)} bool") <>
+          "\nvar_output o bool\n\nxic n00001 ote o\n"
+
+      {:ok, p} = Logex.compile(source, name: "fan")
+      {p, Runtime.instance(p)}
+    end
+
+    # A plant of `n` input points on the panel, and a program instance of a block of `n`
+    # var_inputs and one hidden `var`.
+    defp wide(n) do
+      {:ok, big} =
+        Logex.compile(
+          "function_block big\n" <>
+            Enum.map_join(1..n, "\n", &"var_input #{n5(&1)} bool") <>
+            "\nvar hidden bool\nvar_output q bool\n\nxic n00001 ote q\n",
+          name: "big"
+        )
+
+      {:ok, host} =
+        Logex.compile("var_input a bool\nvar b1 big\nvar_output o bool\n\nxic a ote o\n",
+          name: "host",
+          types: [big]
+        )
+
+      {:ok, c} =
+        Configuration.compile(
+          "plant",
+          Enum.map_join(1..n, "\n", &"var_global g#{n5(&1)} bool at panel.i.#{&1}") <>
+            "\n\nprogram h1 host\n  h1.a 0\n",
+          %{"host" => host}
+        )
+
+      {c, Runtime.start(c)}
+    end
+
+    # `n` program types, each the tally renamed, and an instance of a type none is.
+    defp typed(n, type \\ "nope") do
+      {:ok, tally} = Logex.compile(@tally, name: "tally")
+
+      fn ->
+        Configuration.new!(
+          name: "plant",
+          programs: Enum.map(1..n, &%{tally | name: n5(&1)}),
+          instances: [%Configuration.Instance{name: "i1", type: type}]
+        )
+      end
+    end
+
+    defp lines_of(n) do
+      {p, s} = fan(n)
+      {c, rt} = wide(n)
+
+      [
+        {"put_inputs/3's var_inputs", fn -> Runtime.put_inputs(p, s, %{"nope" => 1}) end,
+         "input `nope` is not declared: the var_inputs are " <>
+           names_told(n, &"`#{n5(&1)}`", ", ")},
+        {"cycle/3's input points", fn -> Runtime.cycle(rt, 0, %{"nope" => 1}) end,
+         "input `nope` is not an input point: the input points are " <>
+           names_told(n, &"`g#{n5(&1)}`")},
+        {"IO.bind!/2's points of a device", fn -> Logex.IO.bind!(c, %{}) end,
+         "no adapter is bound to the device `panel`, which " <>
+           names_told(n, &"`g#{n5(&1)}` (panel.i.#{&1})") <> " are at"},
+        {"get!/2's members", fn -> Runtime.get!(rt, "h1.b1.nope") end,
+         "`h1.b1.nope` is not a member of `h1.b1`, an instance of `big`: its members are " <>
+           names_told(n + 1, &member/1)},
+        {"get!/2's public members", fn -> Runtime.get!(rt, "h1.b1.hidden") end,
+         "`h1.b1.hidden` is a `var` of `big`, hidden outside it: an access path reads only " <>
+           "its public members, " <> names_told(n + 1, &member/1)},
+        {"new!/1's types given", typed(n),
+         "unknown program type `nope`: the types given are " <> names_told(n, &"`#{n5(&1)}`")}
+      ]
+    end
+
+    defp member(i), do: "`#{n5(i)}`"
+
+    test "each line at 100 names and at 101" do
+      for n <- [100, 101], {label, refuse, message} <- lines_of(n) do
+        error = assert_raise ArgumentError, refuse
+        assert {label, n, error.message} == {label, n, message}
+      end
+    end
+
+    # Each line of 10,000 names against the same of 100 and of 1, in the same run, in
+    # reductions, the least of three (`spent/1`): its text the 101's with its count, and
+    # each name past the hundred costing less than three quarters of one among them, so
+    # that a name past them is never quoted. A key past 4,096 bytes is looked for among no
+    # name (decision 631), so that a line's cost is its list's and not its did-you-mean's;
+    # on `main` a name past the hundred cost what one among them did, put_inputs/3's 47.6
+    # reductions against 47.6, where they cost 23.5 now.
+    test "a line of 10,000 names costs near a hundred's, its text the hundred's" do
+      long = String.duplicate("q", 4097)
+
+      refusals = fn n ->
+        {p, s} = fan(n)
+        {c, rt} = wide(n)
+        typed = typed(n, long)
+
+        [
+          {"put_inputs/3's var_inputs", fn -> Runtime.put_inputs(p, s, %{long => 1}) end},
+          {"cycle/3's input points", fn -> Runtime.cycle(rt, 0, %{long => 1}) end},
+          {"IO.bind!/2's points of a device", fn -> Logex.IO.bind!(c, %{}) end,
+           fn -> Logex.IO.bind!(c, %{"panel" => {Adapter, checked: []}}) end},
+          {"get!/2's members", fn -> Runtime.get!(rt, "h1.b1." <> long) end,
+           fn -> Runtime.get!(rt, "h1.b1.n00001") end},
+          {"new!/1's types given", typed, typed(n, "n00001")}
+        ]
+      end
+
+      [ones, hundreds, hundred_ones, manys] = Enum.map([1, 100, 101, 10_000], refusals)
+
+      for {{label, one} = row, hundred, hundred_one, many} <-
+            Enum.zip([ones, hundreds, hundred_ones, manys]) do
+        at_one = listing(row)
+        at_hundred = listing(hundred)
+        {_, told_101} = spent(elem(hundred_one, 1))
+        {_, told} = spent(elem(many, 1))
+        at_many = listing(many)
+        _ = one
+
+        # A block's members are its var_inputs and its `q`, one more than its `n`.
+        more = fn n -> n - 100 + Map.get(%{"get!/2's members" => 1}, label, 0) end
+
+        assert {label, told} ==
+                 {label,
+                  String.replace(
+                    told_101,
+                    " and #{more.(101)} more, not listed",
+                    " and #{more.(10_000)} more, not listed"
+                  )}
+
+        assert {label, byte_size(told)} == {label, byte_size(told_101) + 3}
+
+        assert (at_many - at_hundred) / 9_900 < 0.75 * (at_hundred - at_one) / 99,
+               "#{label}: #{(at_many - at_hundred) / 9_900} a name past the hundred, " <>
+                 "against #{(at_hundred - at_one) / 99} among them"
+      end
+    end
+
+    # A refusal's cost, less its twin's where it has one: the same call that passes, so
+    # that what is left is the refusal's own.
+    defp listing({_label, refuse}), do: elem(spent(refuse), 0)
+    defp listing({_label, refuse, twin}), do: elem(spent(refuse), 0) - elem(spent(twin), 0)
+
+    test "keys that set one element or an array twice, and a retained image's paths" do
+      source = "var_input steps dint[3]\nvar retain tl ton[2]\nvar_output o bool\n\nxic o ote o\n"
+      {:ok, p} = Logex.compile(source, name: "p")
+      s = Runtime.instance(p)
+      image = Runtime.retained(p, s)
+
+      for n <- [100, 101] do
+        # `steps[1]`, `steps[01]`, ...: `n` spellings of one element, in the order a sort
+        # gives them, the most zeros first.
+        spelt = fn i -> "steps[#{String.duplicate("0", n - i)}1]" end
+        keys = Map.new(1..n, &{spelt.(&1), 1})
+
+        error = assert_raise ArgumentError, fn -> Runtime.put_inputs(p, s, keys) end
+
+        assert {n, error.message} ==
+                 {n,
+                  "inputs " <>
+                    names_told(n, &"`#{spelt.(&1)}`", " and ", " and ") <>
+                    " each set `steps[1]`, an element of `steps`, an array of 3 dints " <>
+                    "(declared on line 1): a call sets each element once"}
+
+        acc = fn i -> "tl[#{String.duplicate("0", n - i)}1].acc" end
+        values = Map.merge(image.values, Map.new(1..n, &{acc.(&1), {:dint, 0}}))
+
+        error =
+          assert_raise ArgumentError, fn -> Runtime.instance(p, %{image | values: values}) end
+
+        assert {n, error.message} ==
+                 {n,
+                  "`values` holds " <>
+                    names_told(n, &"`#{acc.(&1)}`", " and ", " and ") <>
+                    ", which name one path, `tl[1].acc`"}
+
+        # The array whole and `n - 1` of its elements, each told by its key, in the order a
+        # sort gives them.
+        wide = Runtime.start(plant("var_global temps dint[101] at panel.i.1"))
+        elements = Enum.sort(for i <- 0..(n - 2), do: "temps[#{i}]")
+        inputs = Map.new(elements, &{&1, 1}) |> Map.put("temps", List.duplicate(1, 101))
+        error = assert_raise ArgumentError, fn -> Runtime.cycle(wide, 0, inputs) end
+        told = ["temps" | elements]
+
+        assert {n, error.message} ==
+                 {n,
+                  "inputs " <>
+                    names_told(n, &"`#{Enum.at(told, &1 - 1)}`", " and ", " and ") <>
+                    " each set `temps`, an array of 101 dints (line 4): a call sets an array " <>
+                    "whole or by its elements, not both"}
+      end
+    end
+  end
+
   describe "a text past 4,096 bytes is cut where a refusal quotes it (decision 613)" do
     # Decision 613 (RV-33; the maintainer, 2026-11-24, RV-32's question 4): a name or a
     # location a refusal quotes past 4,096 bytes, `inspect/1`'s `printable_limit`, is cut
@@ -2272,6 +2492,80 @@ defmodule Logex.QuotedTest do
     end
   end
 
+  describe "a tag that is no %Logex.Tag{} is refused wherever a program is handed in (decision 630)" do
+    # Decision 630 (RV-34; the maintainer, 2026-11-26, RV-33's question 4), at every check
+    # of decision 616: a box counter's host puts a `Date` where one tag of a compiled
+    # program's table goes, and `instance/1`, `Logex.Configuration.check/1` and `new!/1`,
+    # `Logex.Runtime.start/1` and both edits refuse it, a line a tag, where on `main` each
+    # raised FunctionClauseError out of `Logex.Program.tag_destination/2`, and a held
+    # body's tag was taken.
+    @counter """
+    var_input eye bool
+    var total dint
+    var_output full bool
+
+    xic eye add total 1 total
+    xic eye ote full
+    """
+
+    @by_hand ": `box` was edited by hand after it compiled"
+
+    test "instance/1 and /2, check/1, new!/1, start/1 and both edits, a line each" do
+      {:ok, box} = Logex.compile(@counter, name: "box")
+      dated = %{box | tags: Map.put(box.tags, "total", ~D[2026-11-24])}
+      line = "`box`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]" <> @by_hand
+      {:ok, c} = Configuration.compile("plant", "program b1 box\n  b1.eye 0\n", %{"box" => box})
+      in_c = %{c | programs: %{"box" => dated}}
+      s = Runtime.instance(box)
+      rt = Runtime.start(c)
+
+      told([
+        {"instance/1", fn -> Runtime.instance(dated) end, line},
+        {"instance/2", fn -> Runtime.instance(dated, Runtime.retained(box, s)) end, line},
+        {"check/1", fn -> Configuration.check(in_c) end, line},
+        {"new!/1",
+         fn ->
+           Configuration.new!(
+             name: "plant",
+             programs: [dated],
+             instances: Enum.map(c.instances, &%{&1 | line: nil}),
+             connections: Enum.map(c.connections, &%{&1 | line: nil})
+           )
+         end, line},
+        {"start/1", fn -> Runtime.start(in_c) end, line},
+        {"Edit.accept/3, the candidate", fn -> Logex.Edit.accept(box, dated, s) end, line},
+        {"Edit.accept/3, the running", fn -> Logex.Edit.accept(dated, box, s) end, line},
+        {"Configuration.Edit.accept/2", fn -> Logex.Configuration.Edit.accept(rt, in_c) end, line}
+      ])
+    end
+
+    test "every such tag a line, by name, and a held body's" do
+      {:ok, box} = Logex.compile(@counter, name: "box")
+      tags = %{box.tags | "total" => {:total, 0}, "eye" => :eye, "full" => nil}
+      error = assert_raise ArgumentError, fn -> Runtime.instance(%{box | tags: tags}) end
+
+      assert error.message ==
+               Enum.map_join(
+                 [{"eye", ":eye"}, {"full", "nil"}, {"total", "{:total, 0}"}],
+                 "\n",
+                 fn {name, got} ->
+                   "`box`'s tag `#{name}` is no %Logex.Tag{}, got: #{got}" <> @by_hand
+                 end
+               )
+
+      {:ok, seal} = Logex.compile(@seal, name: "seal")
+      {:ok, m} = Logex.compile(@sealed, name: "m", types: [seal])
+      body = m.blocks["seal"].body
+      body = %{body | tags: Map.put(body.tags, "stop", ~T[10:00:00])}
+      held = %{m | blocks: %{"seal" => %{m.blocks["seal"] | body: body}}}
+      error = assert_raise ArgumentError, fn -> Runtime.instance(held) end
+
+      assert error.message ==
+               "`seal`'s body's tag `stop` is no %Logex.Tag{}, got: ~T[10:00:00]: `m` was " <>
+                 "edited by hand after it compiled"
+    end
+  end
+
   describe "a hostile value wherever the host contract takes one (RV-32's review, F7)" do
     # A walk over the host contract's arguments and the fields of the structs it checks,
     # each given in turn a long number, a tuple, a list and a struct that hold one, a
@@ -2284,9 +2578,10 @@ defmodule Logex.QuotedTest do
     # what escapes there is listed in `@outside` with its reason. None does: since
     # decision 616 (RV-33) `instance/1`'s shape check refuses a struct where a map is due,
     # a `Date` or a `Time` in a program's tag table or its blocks, which it took for a map
-    # and its check then walked as one (Protocol.UndefinedError), each pinned below. A tag
-    # of the table that is a struct is not walked here: decision 630 has `instance/1`
-    # refuse it, a line each, not built yet.
+    # and its check then walked as one (Protocol.UndefinedError), each pinned below; and
+    # since decision 630 (RV-34) a tag of the table that is no `%Logex.Tag{}`, which it
+    # took for a tag (FunctionClauseError), each hostile value given here as a tag of the
+    # table at `instance/1`, `check/1`, `start/1` and both edits, and of a held body's.
     @outside %{}
 
     # The fields the walk gives a value that nothing reads where it is walked: a
@@ -2400,6 +2695,10 @@ defmodule Logex.QuotedTest do
         {"get!/2", &Runtime.get!(rt, &1)},
         {"Edit.accept/3 the running program's name", &Logex.Edit.accept(%{p | name: &1}, p, s)},
         {"Edit.accept/3 the candidate's name", &Logex.Edit.accept(p, %{p | name: &1}, s)},
+        {"instance/1 a tag of the table",
+         &Runtime.instance(%{p | tags: Map.put(p.tags, "total", &1)})},
+        {"Edit.accept/3 a tag of the candidate's table",
+         &Logex.Edit.accept(p, %{p | tags: Map.put(p.tags, "total", &1)}, s)},
         {"IO.bind!/2 a device's name", &Logex.IO.bind!(c, %{&1 => Sim})},
         {"IO.bind!/2 an adapter's options", &Logex.IO.bind!(c, %{"panel" => {Sim, &1}})},
         {"Sim.set/3 a value", &Sim.set(elem(Sim.start_link(), 1), [0], &1)},
@@ -2463,6 +2762,16 @@ defmodule Logex.QuotedTest do
           {field, call} <- fielded(tally, &Configuration.Edit.accept(rt, in_c.(&1))),
           do: {"Configuration.Edit.accept/2 program.#{field}", call}
         ) ++
+        [
+          {"check/1 a tag of a program's table",
+           &Configuration.check(in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"start/1 a tag of a program's table",
+           &Runtime.start(in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"Configuration.Edit.accept/2 a tag of a program's table",
+           &Configuration.Edit.accept(rt, in_c.(%{tally | tags: Map.put(tally.tags, "eye", &1)}))},
+          {"instance/1 a tag of a block's body",
+           &Runtime.instance(bodied.(%{type.body | tags: Map.put(type.body.tags, "stop", &1)}))}
+        ] ++
         for(
           {field, call} <- fielded(type, &Runtime.instance(typed.(&1))),
           do: {"instance/1 a block type.#{field}", call}

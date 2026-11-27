@@ -46,6 +46,11 @@ defmodule Page do
   @comment ~r/^\s*<!--.*-->\s*$/
   @item ~r/^(\s*)(?:[-*+]|\d+[.)])\s+(?=\S)/
   @span ~r/(`+)(.+?)\1(?!`)/
+  # A picture, `![alt](path)`, its alternative text holding brackets in pairs, as GitHub
+  # reads it, `![The rung of `t[1]`.](../assets/t.svg)`, where `[^\]]*` stopped at the
+  # first `]` and read no picture (decision 596, DOC-1's close; RV-34): the one reading of
+  # a picture, which scripts/pictures.exs and scripts/prose.exs take from here.
+  @picture "!\\[((?:[^\\[\\]]|\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])*)\\]\\(([^)]*)\\)"
   @tag ~r/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/
 
   def user, do: @user
@@ -68,6 +73,19 @@ defmodule Page do
 
   # The script a block runs, `[shown, name]`, where it begins `$ mix run <script>`, or nil.
   def run(body), do: Regex.run(@run, body)
+
+  # The pictures of a text, `{alt, path}` each, in the order they come, and the one that
+  # starts a line, the line's leading spaces before it, or nil.
+  def pictures(text),
+    do: for([_, alt, path] <- Regex.scan(Regex.compile!(@picture), text), do: {alt, path})
+
+  def picture(line), do: pictured(Regex.run(Regex.compile!("^\\s*" <> @picture), line))
+
+  defp pictured(nil), do: nil
+  defp pictured([_, alt, path]), do: {alt, path}
+
+  # A text with each picture made its alternative text alone.
+  def unpictured(text), do: Regex.replace(Regex.compile!(@picture), text, "\\1")
 
   # A page's name in the site, the file ExDoc is given and, its extension apart, the page
   # it builds: README is `readme`; a user's page, under guides/, is named by its file

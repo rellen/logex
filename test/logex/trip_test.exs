@@ -1785,7 +1785,14 @@ defmodule Logex.TripTest do
     # 1000, is judged against the cap at every look: 110 ms unheard at the wake at 1010
     # read at 1110, 220 ms at the next, at 1120 read at 1220, past the cap, and the line
     # trips there, every output 0, the card killed.
-    test "a hung input card while every wake is late trips within the cap, every output 0" do
+    # DOC-1's close (decision 605; RV-34), the 220 ms root-caused: the runner judges a
+    # device only when it looks, at a wake it reads, and the looks here come 110 ms apart,
+    # a poll period and the 100 ms each wake is late, so the card is found past the cap at
+    # the first look after it, 220 ms unheard, where 210 ms is the cap; a trip "within the
+    # cap" would need a look between, which a runner that is late takes none of. The name
+    # says what the test holds, the first look past the cap; its bound is unchanged.
+    test "a hung input card while every wake is late trips at the first look past the cap, " <>
+           "every output 0" do
       %{runner: runner, clock: clock, agent: agent, panel: panel} = stalled_with_card()
       hung = device_pid(runner, "drive")
       :sys.suspend(hung)

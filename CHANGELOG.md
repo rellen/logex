@@ -312,6 +312,19 @@ API".
   the runner's start, which tells a store's image in 50 lines and a count, counts those
   the start's refusal did not list. Look for: code that counts or parses the lines of
   such a message.
+- **A line of a refusal that lists names tells the first hundred and how many more**
+  (decision 629), where it gave every name: `Logex.Runtime.put_inputs/3`'s "the var_inputs
+  are", `cycle/3`'s "the input points are", an access path's "its members are" and "its
+  public members", given to `get/2` and `get!/2`, `Logex.IO.bind!/2`'s points of a device
+  no adapter is bound to, `Logex.Configuration.new!/1`'s and `check/1`'s "the types given
+  are", the keys of `put_inputs/3` and `cycle/3` that each set one element or an array
+  whole and by its elements, and a retained image's paths that name one path. After the
+  hundredth name the line ends `and 9900 more, not listed`, `and 1 more, not listed` for
+  one, each name past the hundred never quoted: a fan controller's 10,000 var_inputs and
+  one key no tag has are told in 1 KB, where the line was 100,047 bytes, and the points
+  of a panel of 10,000 inputs no adapter is bound to in 2 KB, where they were 259 KB. A
+  line of a hundred names or fewer is as it was. Look for: code that reads the names
+  back out of such a line.
 - **A name or a location past 4,096 bytes is cut where a refusal quotes it** (decisions
   613, amending 585, 628, 631, 632 and 633), at a character's boundary, and told how long
   it was, where it was quoted whole: a bridge's megabyte of a key to `put_inputs/3` is told ``input
@@ -350,6 +363,16 @@ API".
   `put_inputs/3` and `call/4` check a program's shape alone, as before. Look for: a
   `rescue` of `Protocol.UndefinedError` or `FunctionClauseError` around `instance/1` or
   `new!/1`.
+- **A program edited by hand whose table holds a tag that is no `%Logex.Tag{}` is
+  refused** (decision 630), a line a tag, by name: a box counter's host that puts a `Date`
+  where `total`'s tag goes, `%{p | tags: %{p.tags | "total" => ~D[2026-11-24]}}`, is told
+  ``"`p`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]: `p` was edited by hand
+  after it compiled"`` by `Logex.Runtime.instance/1` and `instance/2`,
+  `Logex.Configuration.check/1` and `new!/1`, `Logex.Runtime.start/1`,
+  `Logex.Edit.accept/3` and `Logex.Configuration.Edit.accept/2`, where each raised
+  `FunctionClauseError` out of `Logex.Program.tag_destination/2`; so is a tag of a held
+  block's body, which was taken. Look for: a `rescue` of `FunctionClauseError` around
+  those calls.
 
 ### What it carries, by the work that built it
 

@@ -365,12 +365,19 @@ defmodule Logex.Program do
   retained}`, in the same one walk of its tags (`retained/2`), `blocks` the table a
   compiled tag's `{:block, name}` is read inside.
   """
-  def settled(tags, blocks) when is_map(tags), do: settled_in(tags, held_in(blocks))
+  def settled(tags, blocks) when is_map(tags) do
+    {units, reals, arrays, retained, _untagged} = settled_in(tags, held_in(blocks))
+    {units, reals, arrays, retained}
+  end
 
   # `at` is the table with its quiet names (quiet/1), made once a check (edited_by_hand/1).
+  # Decision 630 (RV-34): a value of the table that is no %Logex.Tag{} is kept among the
+  # units, which few tags give, as `{:untagged, name, value}`, and given apart, so that the
+  # walk that settles the tags finds it and a program of tags alone pays nothing for it.
   defp settled_in(tags, at) do
     {units, reals, arrays, retained, _at} = Enum.reduce(tags, {[], [], [], [], at}, &settle/2)
-    {some(units), some(reals), some(arrays), listed(retained)}
+    {untagged, units} = Enum.split_with(units, &match?({:untagged, _name, _value}, &1))
+    {some(units), some(reals), some(arrays), listed(retained), untagged}
   end
 
   defp held_in(blocks), do: {blocks, quiet(blocks)}
@@ -462,6 +469,10 @@ defmodule Logex.Program do
 
   defp settle({name, %Logex.Tag{type: type} = tag}, acc),
     do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
+
+  defp settle({name, value}, {units, reals, arrays, kept, blocks})
+       when not is_struct(value, Logex.Tag),
+       do: {[{:untagged, name, value} | units], reals, arrays, kept, blocks}
 
   defp settle(_not_a_tag, acc), do: acc
 
@@ -614,7 +625,9 @@ defmodule Logex.Program do
   built by hand does. Every entry point that takes a program first checks it so, where it
   is first handed in (decision 190). Since decision 616 a struct where a map is due, a
   `Date` or a `Time` as a routine's tags, as the program's blocks, or as its units, reals
-  or arrays, is a line of its own, where the walk took it for a map and raised.
+  or arrays, is a line of its own, where the walk took it for a map and raised; and since
+  decision 630 a tag of a routine's table that is no `%Logex.Tag{}` is a line a tag, by
+  name, the rest of that routine unwalked.
   """
   def edited_by_hand(%__MODULE__{name: name, blocks: blocks} = program)
       when (is_map(blocks) and not is_struct(blocks)) or blocks == nil do
@@ -647,33 +660,15 @@ defmodule Logex.Program do
             | lines
           ], seen}
 
-  defp routine(
-         %__MODULE__{
-           rungs: rungs,
-           tags: tags,
-           blocks: blocks,
-           units: units,
-           reals: reals,
-           arrays: arrays,
-           retained: retained
-         },
-         where,
-         {lines, seen},
-         table
-       )
-       when is_list(rungs) and is_map(tags) do
-    {program, _block} = where
-    # The tags settled once for all three (M5-11's review), and nothing compared where a
-    # routine holds none and gives none, the common case.
-    {wanted_units, wanted_reals, wanted_arrays, wanted_retained} = settled_in(tags, table)
-    lines = Enum.reverse(unit_lines(units, {tags, wanted_units}, where), lines)
-    lines = Enum.reverse(real_lines(reals, {tags, wanted_reals}, where), lines)
-    lines = Enum.reverse(array_lines(arrays, {tags, wanted_arrays}, where), lines)
-    lines = Enum.reverse(retained_lines(retained, wanted_retained, where), lines)
-    {lines, called} = rungs(rungs, {tags, where}, {lines, []})
-    acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, {program, table}, &2))
-    held_bodies(blocks, {program, table}, acc)
-  end
+  # Decision 630 (RV-34), at every check of decision 616 (instance/1 and instance/2,
+  # Logex.Configuration.check/1 and new!/1, Logex.Runtime.start/1 and both edits): a
+  # routine whose table holds a tag that is no %Logex.Tag{}, a `Date` as `total`'s, is a
+  # line a tag, by name, and its walk goes no further, where the walk took the value for a
+  # tag and raised FunctionClauseError out of `tag_destination/2`. A held body's table is
+  # checked so too, where a scan of its `cal` raised.
+  defp routine(%__MODULE__{rungs: rungs, tags: tags} = routine, where, acc, table)
+       when is_list(rungs) and is_map(tags),
+       do: tagged(settled_in(tags, table), routine, where, acc, table)
 
   # RV-33's review (F1): a body whose tags are no map, `:x` or a list, or whose rungs are
   # no list, is one line, where it was taken as a routine of nothing and its `cal` raised
@@ -696,6 +691,50 @@ defmodule Logex.Program do
               "#{Logex.Lexer.inspected(rungs)}: #{named(program)} was edited by hand after it compiled"
             | lines
           ], seen}
+
+  defp tagged({units, reals, arrays, retained, []}, routine, where, acc, table),
+    do: walked(routine, {units, reals, arrays, retained}, where, acc, table)
+
+  defp tagged({_units, _reals, _arrays, _retained, untagged}, _routine, where, acc, _table) do
+    {program, _block} = where
+    {lines, seen} = acc
+
+    {Enum.reverse(
+       for {:untagged, name, value} <- Enum.sort(untagged) do
+         "#{owner(where)} tag #{Logex.Lexer.quoted_text(name)} is no %Logex.Tag{}, got: " <>
+           "#{Logex.Lexer.inspected(value)}: #{named(program)} was edited by hand after it compiled"
+       end,
+       lines
+     ), seen}
+  end
+
+  defp walked(
+         %__MODULE__{
+           rungs: rungs,
+           tags: tags,
+           blocks: blocks,
+           units: units,
+           reals: reals,
+           arrays: arrays,
+           retained: retained
+         },
+         wanted,
+         where,
+         {lines, seen},
+         table
+       ) do
+    {program, _block} = where
+    # The tags settled once for all three (M5-11's review), and nothing compared where a
+    # routine holds none and gives none, the common case.
+    {wanted_units, wanted_reals, wanted_arrays, wanted_retained} = wanted
+    lines = Enum.reverse(unit_lines(units, {tags, wanted_units}, where), lines)
+    lines = Enum.reverse(real_lines(reals, {tags, wanted_reals}, where), lines)
+    lines = Enum.reverse(array_lines(arrays, {tags, wanted_arrays}, where), lines)
+    lines = Enum.reverse(retained_lines(retained, wanted_retained, where), lines)
+    {lines, called} = rungs(rungs, {tags, where}, {lines, []})
+    acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, {program, table}, &2))
+    held_bodies(blocks, {program, table}, acc)
+  end
 
   # Only a program's own table is walked: a held body's table is the program's (decision
   # 53), so a body names no table of its own to walk. Since M6-1 a body's instances are read

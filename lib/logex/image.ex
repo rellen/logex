@@ -455,7 +455,7 @@ defmodule Logex.Image do
 
   defp one_path({path, paths}, what, at),
     do: [
-      "#{at}#{what} holds #{paths |> Enum.sort() |> Enum.map_join(" and ", &"#{quoted(&1)}")}, " <>
+      "#{at}#{what} holds #{paths |> Enum.sort() |> Declarations.named(&"#{quoted(&1)}", " and ", " and ")}, " <>
         "which name one path, #{quoted(path)}"
     ]
 
