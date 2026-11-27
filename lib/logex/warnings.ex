@@ -397,6 +397,9 @@ defmodule Logex.Warnings do
 
   defp elements_unrun([], _tag), do: []
 
+  # The elements told by `Logex.Array.capped/2`'s ten and a count, left as they are beside
+  # decisions 629 and 636's hundred names (provisional: PLAN.md's RV-34, the lists bounded
+  # at ten).
   defp elements_unrun(names, %Tag{type: {:array, type, dims} = array} = tag) do
     shown =
       names

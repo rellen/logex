@@ -101,10 +101,10 @@ own documentation holds:
 ## lib/
 
 - `lib/logex.ex` — `Logex`, the public way in: `compile/2` (source and `name:`, `types:`
-  the user blocks it may hold) and `compile_file/1`, a `.ld` file named after it, its
-  blocks loaded from `<word>.ld` beside it, and `compile_files/1`, several files over one
-  memo; a program, a block's type or every mistake as diagnostics; each delegated to
-  `Logex.Compiler`.
+  the user blocks it may hold, `declared:` tags declared from Elixir) and `compile_file/1`,
+  a `.ld` file named after it, its blocks loaded from `<word>.ld` beside it, and
+  `compile_files/1`, several files over one memo; a program, a block's type or every
+  mistake as diagnostics; each delegated to `Logex.Compiler`.
 - `lib/logex/lexer.ex` — `Logex.Lexer`, source text to tokens by binary pattern matching,
   each with `{line, column}`; names with `.` parts, bits and subscripts, signed, based and
   real literals with their spellings, and every lex error located.

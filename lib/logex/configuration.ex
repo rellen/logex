@@ -4407,6 +4407,9 @@ defmodule Logex.Configuration do
           stands(bit, global)
       )
 
+  # Decision 239's ten elements and a count, `and 2 more`, left as it is beside decisions 629
+  # and 636's hundred names and `and N more, not listed`, which name lists that were whole
+  # and not these (provisional: PLAN.md's RV-34, the lists bounded at ten).
   defp and_listed(names) when length(names) > 10,
     do:
       Enum.map_join(Enum.take(names, 10), ", ", &"#{quoted(&1)}") <>
@@ -4765,6 +4768,8 @@ defmodule Logex.Configuration do
       )
     ]
 
+  # Decision 243's ten elements and a count, left as it is beside decisions 629 and 636
+  # (provisional: PLAN.md's RV-34, the lists bounded at ten).
   defp elements_listed(names) when length(names) > 10,
     do:
       Enum.map_join(Enum.take(names, 10), ", ", &"#{quoted(&1)}") <>

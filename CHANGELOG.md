@@ -23,6 +23,8 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 - **What no longer compiles, loads or starts**: a word newly reserved, which breaks a
   program with a tag of that name, a form newly refused, a store or forces file an older
   logex wrote and this one refuses, each with what to write instead.
+- **The language**: a warning, a message or a refusal of a program's or a configuration's
+  text changed or added, which a test or a tool that reads it whole meets.
 - **The host's API**: a function, option, event or message changed or added.
 - **Added**: what is new and changes nothing a running program did.
 
@@ -364,8 +366,8 @@ API".
   `rescue` of `Protocol.UndefinedError` or `FunctionClauseError` around `instance/1` or
   `new!/1`.
 - **A program edited by hand whose table holds a tag that is no `%Logex.Tag{}` is
-  refused** (decision 630), a line a tag, by name: a box counter's host that puts a `Date`
-  where `total`'s tag goes, `%{p | tags: %{p.tags | "total" => ~D[2026-11-24]}}`, is told
+  refused** (decisions 630 and 639), a line a tag, by name: a box counter's host that
+  puts a `Date` where `total`'s tag goes, `%{p | tags: %{p.tags | "total" => ~D[2026-11-24]}}`, is told
   ``"`p`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]: `p` was edited by hand
   after it compiled"`` by `Logex.Runtime.instance/1` and `instance/2`,
   `Logex.Configuration.check/1` and `new!/1`, `Logex.Runtime.start/1`,

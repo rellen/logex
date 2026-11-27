@@ -52,7 +52,7 @@ Each heading of level 2 in `CHANGELOG.md` is 1 entry. The newest entry is first.
 | Heading of a release | `## X.Y.Z — YYYY-MM-DD`: the version of `mix.exs` and the day of the release |
 | Heading before a release | `## Unreleased`, before the newest release |
 | First line of an entry | `Decisions:` and the numbers of the decisions that the entry carries, for example `Decisions: 1–14, 30, 41–54.` A range has an en dash |
-| Sections under it | "What changes a running program's outputs", "What no longer compiles, loads or starts", "The host's API" and "Added" |
+| Sections under it | "What changes a running program's outputs", "What no longer compiles, loads or starts", "The language", "The host's API" and "Added" |
 
 The head of `CHANGELOG.md` gives what each section holds.
 

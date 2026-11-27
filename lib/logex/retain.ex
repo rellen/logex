@@ -678,6 +678,9 @@ defmodule Logex.Retain do
   defp program_differs(_digest, nil, name), do: ["`#{name}` is not in this start"]
   defp program_differs(_stored, _digest, name), do: ["`#{name}`'s text differs"]
 
+  # The programs that differ told ten and a count by `Logex.Array.capped/2`, left as they
+  # are beside decision 629's hundred names (provisional: PLAN.md's RV-34, the lists
+  # bounded at ten).
   defp told([], _path), do: nil
 
   defp told(differences, path),
