@@ -1404,8 +1404,12 @@ defmodule Logex.RetainStoreTest do
       )
 
       # Through a fresh start, and with what the image refuses, `Logex.Runtime.start/2`'s
-      # lines, bounded the same, each naming the store.
-      rig = rig(dir)
+      # lines, bounded the same, each naming the store. Since decision 603 (RV-34) the
+      # store's match, its read back of the hundred thousand lines among it, is within the
+      # write limit, some 1 s here and past the default 5000 ms in 2 of 24 runs of
+      # scripts/load.sh, where it answered `{:error, {:retain, :timeout}}`: a store this
+      # large is given the limit it needs, as the runner's documentation tells a host to.
+      rig = rig(dir, write_limit: 60_000)
       File.write!(rig.store, text)
       message = refused(fn -> Runner.start_link(rig.opts) end)
       assert length(String.split(message, "\n")) == 51
