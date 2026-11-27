@@ -181,7 +181,8 @@ own documentation holds:
   the one judge of a global, its name, type, location and value, `check/1`'s and
   `Global.new!/3`'s.
 - `lib/logex/configuration/text.ex` — `Logex.Configuration.Text`, a configuration file's
-  text: its words, `read/1` to entries, `print/1` back, an exact round trip.
+  text: its words, `read/1` to entries, `print/1` back, a file's text an exact round
+  trip, and every configuration `new!/1` accepts printed.
 - `lib/logex/edit.ex` — `Logex.Edit`, a staged online edit of a lone instance: `accept/3`,
   `test/2`, `untest/2`, `assemble/2`, `cancel/2`, each a report; its moduledoc gives every
   rule and report kind.
@@ -247,8 +248,8 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   disk, against oracles that know nothing of logex; its assertions name no IR tag.
 - `test/logex/runtime_test.exs` — every message the runtime raises, the exact public
   surface, every moduledoc held to the host contract, a spec on every function and a
-  typedoc on every type of it, the opaque resource and edits, and the checks made where a
-  program is first handed in.
+  typedoc on every type of it, the opaque resource and edits, the checks made where a
+  program is first handed in, and the core reading no clock.
 - `test/logex/typespec_test.exs` — every spec of the host contract reached, each value a
   function gives and each argument it is given held to its spec as `Code.Typespec` reads
   it, what Dialyzer cannot type among them.
@@ -332,8 +333,9 @@ asserts its reach, and a growth test compares reductions at two sizes, never tim
   a page's name in the site, a mark and an example's run.
 - `test/logex/scripts_test.exs` — `scripts/failed.exs` over the manifests ExUnit writes,
   each test's line read from its file, CI's workflow held to every gate and its test step
-  run as written, `scripts/gate.sh` over a stand-in `mix`, and CI's Dialyzer step and
-  `scripts/dialyzer.sh` over a stand-in `dialyzer`.
+  run as written, `scripts/gate.sh` over a stand-in `mix`, CI's Dialyzer step and
+  `scripts/dialyzer.sh` over a stand-in `dialyzer`, and the toolchain's five pins and CI
+  held to one version.
 - `test/logex/release_test.exs` — the release step: `scripts/changelog.exs` on
   `CHANGELOG.md` and on changelogs it refuses, and `scripts/release.sh` in a scratch
   repository with a stand-in `gh`, every check passed and each taken back.

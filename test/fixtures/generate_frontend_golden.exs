@@ -112,6 +112,7 @@ defmodule FrontendGolden do
       "( | )",
       "(|)",
       "( | | )",
+      "xic a ( xic b | xic c | | xic d ) ote x",
       "( ( ) )",
       "( xic aa | )",
       "( | xic aa )",

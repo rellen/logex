@@ -484,6 +484,27 @@ defmodule Logex.ProseTest do
            ]
   end
 
+  # RV-34's review: scripts/prose.exs reads a picture through scripts/page.exs, as GitHub
+  # reads one, where a reading of its own took `![](` for a picture with no alt text
+  # wherever it stood, closed or not, and an alt text holding brackets for none.
+  test "a picture is read as scripts/page.exs reads it, its alt text's brackets and all",
+       %{tmp_dir: dir} do
+    page = """
+    # A page
+
+    ![The lamps[1] and lamps[2] of the panel](../assets/a.svg)
+
+    A picture is written ![](, then its path and a closing bracket.
+
+    ![](../assets/b.svg)
+
+    ## See also
+    """
+
+    assert {failures, _, 1} = prose(dir, %{"page.md" => page}, ["--kind", "reference", "page.md"])
+    assert for({line, rule, _} <- found(failures), do: {line, rule}) == [{7, "alt"}]
+  end
+
   test "a link's text, a picture's alt text, a heading, a table's cell and a callout are " <>
          "prose, and are read",
        %{tmp_dir: dir} do

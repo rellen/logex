@@ -19,7 +19,8 @@ defmodule Logex.LoadingTest do
     "any text in a configuration file gives a result, compile/3's where it is accepted",
     "loading stays linear in the program types a file names",
     "a6-compile-scale-2: a block's file swapped for a program's during a load is told it is " <>
-      "a program"
+      "a program",
+    "a ring of block files, at 100 names, past it and at 1,000"
   ]
 
   # Decision 480: ExUnit runs a module that is not async only once every async module is
@@ -289,6 +290,56 @@ defmodule Logex.LoadingTest do
       for result <- results do
         assert match?({:ok, _}, result) or match?({:error, [%Diagnostic{} | _]}, result)
       end
+    end
+  end
+
+  # Decision 636 (RV-34), as RV-34's review found it short: a ring of block files each
+  # holding the next, b1 → … → bN → b1, is told by the chain of files loaded, a list of
+  # names its first hundred and a count, where a ring of 2,000 was one line of 19,006
+  # bytes on 0eb9909, every name.
+  describe "a chain of block files (decision 636)" do
+    @describetag :tmp_dir
+
+    test "a ring of block files, at 100 names, past it and at 1,000", %{tmp_dir: dir} do
+      ring = fn n ->
+        ring = Path.join(dir, "#{n}")
+        File.mkdir_p!(ring)
+
+        for i <- 1..n,
+            do:
+              File.write!(
+                Path.join(ring, "b#{i}.ld"),
+                "function_block b#{i}\nvar_input a bool\nvar_output q bool\n" <>
+                  "var h b#{rem(i, n) + 1}\nxic a ote q\n"
+              )
+
+        main = Path.join(ring, "main.ld")
+        File.write!(main, "var x b1\nvar y bool\nxic y ote y\n")
+        {:error, [%Diagnostic{message: message}]} = Logex.compile_file(main)
+        message
+      end
+
+      told = fn n, listed ->
+        "`b#{n}` cannot hold an instance of `b1` (#{listed}): " <>
+          "a function block never holds an instance of itself, at any depth"
+      end
+
+      names = fn n -> Enum.map(1..n, &"b#{&1}") end
+
+      # 99 files: the chain b99 → b1 → … → b99, 100 names, every one.
+      assert ring.(99) == told.(99, Enum.join(["b99" | names.(99)], " → "))
+
+      # 100 files: 101 names, the first hundred and the one more.
+      hundred = Enum.join(["b100" | names.(99)], " → ")
+      assert ring.(100) == told.(100, hundred <> " and 1 more, not listed")
+
+      # 1,000 files: the same hundred's words, and the count. A ring's load grows faster
+      # than its files, on `main` as here (3 s at 4,000 files on an idle machine), so the
+      # ring is a thousand files, not the ten thousand of the other lists.
+      many = ring.(1_000)
+      hundred = Enum.join(["b1000" | names.(99)], " → ")
+      assert many == told.(1_000, hundred <> " and 901 more, not listed")
+      assert byte_size(many) < 2_000
     end
   end
 

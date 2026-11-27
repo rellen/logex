@@ -974,7 +974,11 @@ defmodule Logex.LongTimerTest do
             {"lreal_to_lint 1.5e6 cure.acc", 1_500_000},
             {"real_to_lint 2.5e6 cure.pre", 2_500_000},
             {"lreal_to_lint 2.5 cure.pre", 2},
-            {"lreal_trunc_lint 1999999.6 cure.pre", 1_999_999}
+            {"lreal_trunc_lint 1999999.6 cure.pre", 1_999_999},
+            # RV-34's review: past a lint's range, the value the lint keeps, its low 64
+            # bits (decision 146), where the warning named 1.0e30's own integer.
+            {"lreal_to_lint 1.0e30 cure.pre", 5_076_964_154_930_102_272},
+            {"lreal_trunc_lint -1.0e30 cure.pre", -5_076_964_154_930_102_272}
           ] do
         [read, timed] = beside(rung)
         assert read =~ "reads a literal"
@@ -997,7 +1001,10 @@ defmodule Logex.LongTimerTest do
       for rung <- [
             "lreal_to_lint 1999999.6 cure.pre",
             "lreal_trunc_lint 2000000.9 cure.pre",
-            "real_to_lint 3.0e6 cure.pre"
+            "real_to_lint 3.0e6 cure.pre",
+            # RV-34's review: 2^64, which the lint keeps as 0, where it was warned of
+            # 18446744073709551616 ns.
+            "lreal_to_lint 1.8446744073709552e19 cure.pre"
           ] do
         assert [read] = beside(rung), rung
         assert read =~ "reads a literal"

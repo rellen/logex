@@ -26178,7 +26178,9 @@ now takes 624, 626, 629 and 630, beside 596's review item and 597 to 607. The or
 here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
 
 - **RV-34 — the behaviours DOC-1's close found** (decisions 596 to 607, 624, 626, 629 and
-  630). The review item decision 596 makes, of question 8's findings in three of its
+  630). *(Built 2026-11-26 and 27 in three lanes, merged, reviewed and its review mended
+  on branch `rv34`, "RV-34 as built" and "RV-34 reviewed" below; not yet on `main`.)* The
+  review item decision 596 makes, of question 8's findings in three of its
   groups, each run again on `main`, then mended with a test that fails when the mend is
   reverted, or put to the maintainer where its mend would choose a rule (596):
   - *the store and forcing*: one element of a retained array out of its type's range drops
@@ -26265,6 +26267,121 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
     line each in its `ArgumentError`, where `FunctionClauseError` escapes from
     `Logex.Program.start/1`; `quoted_test.exs`'s hostile walk then giving a tag of the
     table a hostile value, and its comment on `@outside` made true.
+
+  **RV-34 as built** (2026-11-26 and 27, branch `rv34` over `516afd7`, in three lanes and
+  a merge). Each step was run again on `main` first, its output kept, then built with a
+  test that fails when it is reverted, a message or warning pinned whole, or put to the
+  maintainer. No test, walk or oracle was deleted or weakened; each test line taken out is
+  a pin a decision changes, listed in the lanes' reports. `mix.exs` is untouched, no
+  version is set and no tag made. The working files are under `scratchpad/rv34/`.
+
+  - *The language lane* (`backup/rv34-language`, `3625095` to `817b10d`). Decisions
+    636 to 640 recorded, record 0022's claims cited or dropped (640). 626: a `cal`'s
+    output beside an `ote` and two `cal`s, a `move` and an `ote` on one bool, a bool
+    array's element and a word's bit made to agree, `main` giving none of them; 637: the
+    form found, `lreal_to_lint 1500000.0 t.pre`, unwarned on `main`, warned by the
+    conversion's integer; 638: a configuration's `warnings` holding its program types',
+    each prefixed `program type <type>:`. 597, 598 and 599 each reproduced on `main` and
+    built as their decisions say. 601: `print/1` writes a real as its shortest text that
+    reads back to the same value, a seeded walk of 300 configurations. 607: `compile/2`
+    takes `declared:`. 636: the compiler's, `Logex.Declarations`' and the configuration's
+    lists of names told by the first hundred and a count. 624: the one-shots' run on
+    `use-one-shots-and-pulse-coils.md`, an event task missing a press a periodic task
+    sees.
+  - *The host lane* (`backup/rv34-host`, `93bfdb1` to `31993be`). 629: one helper,
+    `Logex.Declarations.named/3,4`, every refusal of the host contract that lists names,
+    100,047 bytes at 10,000 names on `main`, a few kilobytes now. 630 with 639: a tag that
+    is no `%Logex.Tag{}` refused, a line a tag, at every door of decision 616's check,
+    where `FunctionClauseError` escaped on `main`. 596's review item: `Logex.IO.Point`
+    put inside the contract; "the core reads no clock" held on the compiled code; the
+    4-leg branch pinned, not reproducing; the parser's three `case`s given their reason;
+    `instance_array_test.exs`'s line search made a reading of syntax trees;
+    `scripts/page.exs` reading a picture whose alternative text holds brackets. 602: a
+    host path found, five tests failing without the rule, nothing removed, no decision
+    641. 605: the de-energised `ote`'s own test, the toolchain's five pins held to one
+    version, `trip_test.exs`'s 220 ms root-caused and the test named for what it holds.
+    606: `examples/line_device.exs` waiting 200 ms and 250 ms under the runner's 510 ms.
+  - *The second host lane* (`backup/rv34-host2`, `6c12ba1` to `72ac173`, over `31993be`).
+    600: `status/1`'s `forces_unknown_sets`, every set a cut write held, newest first;
+    each problem of a force line told; a linked helper's reason kept in the trip. 603: the
+    warm match and a cold start's judge of the store within `write_limit:`, `{:error,
+    {:retain, :timeout}}` past it, the runner's documentation giving the measured times
+    and the stretched period. 604: `logex retain 4`, a `digest <md5>` line of the value
+    lines before the end line, a hand edit that does not mend it refused with the way out
+    (provisional). Its tests re-sized for load, each root-caused, in `72ac173`.
+  - *The merge* (`9020bfe`, `7eb88a7`, `0eb9909`): both first lanes merged with no
+    textual conflict, the helper once; the changelog's group "The language" named;
+    `0eb9909` gated 4,473. The second host lane was left out by that merge, which the
+    review found (F1 below), and is merged by the review's mend (`ad3bb72`, GATE-OK 4,484,
+    DOCS-OK, `origin/main` unmoved at `516afd7`).
+
+  **RV-34 reviewed** (2026-11-27, of `0eb9909`, by two reviewers, behaviour and tests,
+  each in its own clone; their probes under `scratchpad/rv34/probes/` and
+  `scratchpad/rv34/rt-*`). Each finding and its mend:
+
+  1. *600, 603 and 604 not on `rv34`* (both reviews, F1). Mended: `backup/rv34-host2` at
+     `72ac173` merged (`ad3bb72`), gated and built; its runner and store tests run under
+     `scripts/load.sh` on the merge; §4.13 given 603 and 604. A review of that lane ran
+     beside this mend in another session; its findings are its own.
+  2. *A forged tag, or one missing a key* (behaviour F2): `%{__struct__: Logex.Tag}` and
+     `Map.delete(tag, :type)` escaped `FunctionClauseError` at every door 639 names, and
+     were taken in a held body. Mended: a value that is no whole `%Logex.Tag{}`, its
+     struct's keys and no other, is no tag, refused in 630's words; `quoted_test.exs`
+     pins both, and one with a key too many, at every door and in a held body, and its
+     hostile walk gives every caller both. The clause after it that nothing reached (tests
+     F9) is gone.
+  3. *The recursion chain unbounded* (behaviour F3): 19,006 bytes for a ring of 2,000
+     block files. Mended under decision 636 itself, a chain being a list of names:
+     `Logex.Declarations.chained/1`, the first hundred joined by arrows and a count, from
+     files and among the types given; pinned at 100 and 101 names from both and at 1,000
+     files (`loading_test.exs`, `validation_test.exs`). A ring's load grows faster than
+     its files, on `main` too (1,000, 2,000 and 4,000 files load in 604, 1,521 and 4,264
+     ms on `main`, 187, 652 and 3,060 here), so the ring test stops at a thousand, where
+     10,000 files ran past ExUnit's 60 s under load; the loader's growth in a chain's depth
+     is left to the item that owns its cost. The chain's names stay unquoted, its words
+     DOC-2's.
+  4. *626 short of a `cal`'s bit and element* (behaviour F4): `cal s1 b w.3` beside `move
+     0 w`, `cal s1 b fl[1].3` beside `move 0 fl[1]`, `cal s1 b w.3` beside `ote w.[i]` and
+     `cal s1 b lamps[i]` beside `move 0 lamps[j]` were quiet. Mended: a `cal`'s write of a
+     bool is its coil in every rule of two coils (`coil_target/2`), its other writes
+     writes of their tags whole, each told as the `ote`'s is with "is already written by
+     the `cal`"; one pin of the lane's changes with it, a `cal` after an `ote` told the
+     `ote` as a third coil is. Rows in `validation_test.exs` and cases 81 and 82 of
+     `warnings.md`. Provisional, as 626's `cal` and `move` are.
+  5. *637's value past a lint* (behaviour F5, tests F5): `lreal_to_lint 1.0e30 t.pre`
+     was warned of 1.0e30's integer, the scan writing 5076964154930102272, and
+     `1.8446744073709552e19`, which writes 0, warned falsely. Mended: the value the lint
+     keeps, its low 64 bits as decision 146 has them, pinned with the scan's own value as
+     oracle.
+  6. *596's golden source* (behaviour F6, tests F6). Mended: the generator's curated
+     sources hold `xic a ( xic b | xic c | | xic d ) ote x`, the record regenerated, its
+     diff one line and the header's base, no tree changed, as
+     `frontend_golden_test.exs`'s moduledoc allows a change of the generator on purpose
+     (provisional reading of CLAUDE.md's "only in a commit that changes the language",
+     question 5 below).
+  7. *599's did-you-mean for a word of three letters* (behaviour F7): a question (6).
+  8. *Two mutants of the picture reading survived* (tests F2): mended by a case of
+     `pictures_test.exs`, a mark above a picture whose alternative text holds brackets,
+     and one of `prose_test.exs`, an alternative text with brackets and `![](` that never
+     closes, which is no picture.
+  9. *Two clock mutants survived* (tests F3): `@clock_reads` holds `:erlang.statistics`
+     and `:timer.tc`, each a row of the reading's test; and a test that only the device's
+     process calls through `apply/3`, which the reading cannot see.
+  10. *The warnings page untrue* (tests F4): its "A long list", "The stage", "The
+      sequence" and "The line" rules and the count of its cases made true, the line of a
+      program type's warning said to be the program type's.
+  11. *Cost* (tests F7): recorded, compile +5.5 % on the motor, +7.5 % at 400 `ote w.N`
+      and `move` rungs, `put_inputs/3`'s refusal at 2,000 names cheaper and 20 times
+      shorter; no test holds a compile's cost against `main`'s (the record's practice is
+      same-run bounds, decision 357).
+  12. *Two flakes not RV-34's* (tests F8): `watch-a-runner.md`'s event after its status
+      line, and `io_test.exs:1635`'s bindings' growth at 21.9 times against 20, each
+      passing alone, beside `frontend_test.exs:613` and `:684`, the merge's; left to the
+      item that owns the suite's flakes.
+  13. *Nits* (tests F9): the unreached clause gone (2); a key of the table that is no name
+      a question (7); CLAUDE.md's lines for `runtime_test.exs`, `scripts_test.exs` and
+      `Logex.Configuration.Text` made true.
+
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 

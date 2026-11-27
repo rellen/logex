@@ -382,6 +382,21 @@ defmodule Logex.Program do
 
   defp held_in(blocks), do: {blocks, quiet(blocks)}
 
+  # A %Logex.Tag{} with every key of its struct and no other.
+  defguardp is_whole_tag(tag)
+            when is_struct(tag, Logex.Tag) and map_size(tag) == 7 and is_map_key(tag, :name) and
+                   is_map_key(tag, :type) and is_map_key(tag, :section) and
+                   is_map_key(tag, :initial) and is_map_key(tag, :line) and
+                   is_map_key(tag, :retain)
+
+  # Decision 630 (RV-34), as RV-34's review found it short: a value of the table that is no
+  # whole %Logex.Tag{}, one that names the struct but lacks one of its keys, as `Map.delete/2`
+  # makes one, or holds one more, `%{__struct__: Logex.Tag}` among them, is no tag either, as
+  # the state check refuses such a state (a5-data-model-7), where it passed the struct's
+  # pattern and raised FunctionClauseError out of `tag_destination/2`.
+  defp settle({name, value}, {units, reals, arrays, kept, blocks}) when not is_whole_tag(value),
+    do: {[{:untagged, name, value} | units], reals, arrays, kept, blocks}
+
   # The common tag, elementary and unqualified, first, and passed over as before M6-1.
   defp settle({_name, %Logex.Tag{type: type, retain: nil}}, acc)
        when is_atom(type) and type not in @reals,
@@ -469,12 +484,6 @@ defmodule Logex.Program do
 
   defp settle({name, %Logex.Tag{type: type} = tag}, acc),
     do: instances_kept(tag, unit(per_ms(Logex.FbType.rules(type)), name, acc))
-
-  defp settle({name, value}, {units, reals, arrays, kept, blocks})
-       when not is_struct(value, Logex.Tag),
-       do: {[{:untagged, name, value} | units], reals, arrays, kept, blocks}
-
-  defp settle(_not_a_tag, acc), do: acc
 
   # The held blocks whose bodies retain nothing, by name, once a routine's settling.
   defp quiet(blocks) when map_size(blocks) == 0, do: blocks

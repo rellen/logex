@@ -52,7 +52,11 @@ cases = [
    "var belt seal\nvar roll seal\nxic start cal belt jog motor\nxic stop cal roll jog motor"},
   {"a move and the output operand of a cal on 1 bool tag",
    Enum.map(orders.("cal belt jog motor", "move 0 motor"), &("var belt seal\n" <> &1))},
-  {"an ote and an otl on 1 literal element", orders.("ote lamps[2]", "otl lamps[2]")}
+  {"an ote and an otl on 1 literal element", orders.("ote lamps[2]", "otl lamps[2]")},
+  {"the output operand of a cal on 1 bit and a move of its word",
+   Enum.map(orders.("cal belt jog status.3", "move 0 status"), &("var belt seal\n" <> &1))},
+  {"the output operand of a cal and a move through different tags",
+   Enum.map(orders.("cal belt jog lamps[slot]", "move 0 lamps[sel]"), &("var belt seal\n" <> &1))}
 ]
 
 report.(63, cases, &two_writes.(Logex.compile(&1, name: "panel", types: [seal])),

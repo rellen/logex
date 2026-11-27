@@ -1291,6 +1291,64 @@ defmodule Logex.ValidationTest do
       assert told.("cal g1 1 n\nxic a move 3 n") == []
     end
 
+    # RV-34's review: a `cal`'s write of a bit, of a bit of an element or of an element
+    # through a tag subscript is its coil in every rule of two coils, of a coil and a write
+    # of its word or element whole and of a coil through a tag subscript, as an `ote`'s is;
+    # on 0eb9909 each `cal` row here was taken unwarned. The `cal` is told "is already
+    # written by the `cal`" where the `ote` is told "already has an `ote`".
+    test "a cal's bit and element outputs warned as an ote's, either first" do
+      text =
+        "var_input a bool\nvar_input b bool\nvar s1 seal\nvar s2 seal\nvar w word\n" <>
+          "var lamps bool[4]\nvar i dint\nvar j dint\nvar fl word[2]\n"
+
+      {:ok, seal} =
+        Logex.compile("function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q",
+          name: "seal"
+        )
+
+      told = fn rungs ->
+        {:ok, program} = Logex.compile(text <> rungs, name: "p", types: [seal])
+        for %{line: line, message: m} <- program.warnings, m =~ @later, do: {line, m}
+      end
+
+      ote = "already has an `ote` on line 10"
+      cal = "is already written by the `cal` on line 10"
+      whole = "`w.3` is a bit of `w`, which the `move` on line 10 writes whole"
+      element = "`fl[1].3` is a bit of `fl[1]`, which the `move` on line 10 writes whole"
+      numbered = "`w.3` is a bit of `w`, and the `ote` on line 10 writes one bit of it, `w.[i]`, "
+      through = "is in `lamps`, which the `%s` on line 10 may write through a tag subscript"
+
+      for {first, later, told_later} <- [
+            {"xic a ote w.3", "xic b move 0 w",
+             "`w` is written whole by the `move`, and its bit `w.3` #{ote}"},
+            {"xic a cal s1 b w.3", "xic b move 0 w",
+             "`w` is written whole by the `move`, and its bit `w.3` #{cal}"},
+            {"xic b move 0 w", "xic a ote w.3", whole},
+            {"xic b move 0 w", "xic a cal s1 b w.3", whole},
+            {"xic a ote fl[1].3", "xic b move 0 fl[1]",
+             "`fl[1]` is written whole by the `move`, and its bit `fl[1].3` #{ote}"},
+            {"xic a cal s1 b fl[1].3", "xic b move 0 fl[1]",
+             "`fl[1]` is written whole by the `move`, and its bit `fl[1].3` #{cal}"},
+            {"xic b move 0 fl[1]", "xic a ote fl[1].3", element},
+            {"xic b move 0 fl[1]", "xic a cal s1 b fl[1].3", element},
+            {"xic a ote w.3", "xic b ote w.[i]", "`w.3` #{ote}"},
+            {"xic a cal s1 b w.3", "xic b ote w.[i]", "`w.3` #{cal}"},
+            {"xic b ote w.[i]", "xic a ote w.3", numbered <> "which a tag numbers"},
+            {"xic b ote w.[i]", "xic a cal s1 b w.3", numbered <> "which a tag numbers"},
+            {"xic a ote lamps[i]", "xic b move 0 lamps[j]",
+             "`lamps[j]` " <> String.replace(through, "%s", "ote")},
+            {"xic a cal s1 b lamps[i]", "xic b move 0 lamps[j]",
+             "`lamps[j]` " <> String.replace(through, "%s", "cal")},
+            {"xic b move 0 lamps[j]", "xic a ote lamps[i]",
+             "`lamps[i]` " <> String.replace(through, "%s", "move")},
+            {"xic b move 0 lamps[j]", "xic a cal s1 b lamps[i]",
+             "`lamps[i]` " <> String.replace(through, "%s", "move")}
+          ] do
+        rungs = first <> "\n" <> later
+        assert {rungs, told.(rungs)} == {rungs, [{11, "#{told_later}: #{@later}"}]}
+      end
+    end
+
     test "a coil after a coil is told once, by the second-ote warning" do
       assert shared_warnings("xic a move 1 belt\nxic a ote belt\nxic a ote belt") == [
                {10, "`belt` is already written by the `move` on line 9: #{@later}"},
@@ -1336,9 +1394,11 @@ defmodule Logex.ValidationTest do
     end
 
     test "each write is told the earliest it meets, a coil none where a coil came first" do
+      # Since RV-34's review the `cal` is a coil in every rule, so after the `ote` it is told
+      # the `ote`, by the second-ote warning, as a third coil is.
       assert shared_warnings("xic a move 1 belt\nxic a ote belt\ncal s1 a belt") == [
                {10, "`belt` is already written by the `move` on line 9: #{@later}"},
-               {11, "`belt` is already written by the `move` on line 9: #{@later}"}
+               {11, "`belt` already has an `ote` on line 10: #{@later}"}
              ]
 
       assert shared_warnings("xic a ote belt\nxic a ote belt\nxic a move 1 belt") == [
@@ -1583,6 +1643,49 @@ defmodule Logex.ValidationTest do
                  Enum.map_join(member_names(100), ", then ", formal) <>
                  " and 2 more, not listed: found none"
              ]
+    end
+
+    # RV-34's review: a chain of blocks among the types given, each holding the next and the
+    # last the block compiled, is told by its first hundred names and a count, where it was
+    # every name.
+    test "a chain of blocks given that holds the block compiled, at 100 names and past it" do
+      leaf = "function_block x\nvar_input a bool\nvar_output q bool\n"
+
+      chain = fn n ->
+        {:ok, x} = Logex.compile(leaf <> "xic a ote q", name: "x")
+
+        last =
+          Enum.reduce(1..n, x, fn i, held ->
+            {:ok, block} =
+              Logex.compile(
+                "function_block b#{i}\nvar_input a bool\nvar_output q bool\n" <>
+                  "var h #{held.name}\nxic a cal h a q",
+                name: "b#{i}",
+                types: [held]
+              )
+
+            block
+          end)
+
+        {:error, [diagnostic]} =
+          Logex.compile(leaf <> "var h b#{n}\nxic a cal h a q", name: "x", types: [last])
+
+        Logex.Diagnostic.format(diagnostic)
+      end
+
+      told = fn n, listed ->
+        "line 4: `x` cannot hold an instance of `b#{n}` (#{listed}): " <>
+          "a function block never holds an instance of itself, at any depth"
+      end
+
+      down = fn n -> Enum.map(n..1//-1, &"b#{&1}") end
+
+      # 98 blocks: x → b98 → … → b1 → x, 100 names, every one.
+      assert chain.(98) == told.(98, Enum.join(["x" | down.(98)] ++ ["x"], " → "))
+
+      # 99 blocks: 101 names, the first hundred and the one more.
+      assert chain.(99) ==
+               told.(99, Enum.join(["x" | down.(99)], " → ") <> " and 1 more, not listed")
     end
 
     test "the function blocks given, past a hundred" do

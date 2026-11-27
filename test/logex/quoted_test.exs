@@ -2512,8 +2512,25 @@ defmodule Logex.QuotedTest do
 
     test "instance/1 and /2, check/1, new!/1, start/1 and both edits, a line each" do
       {:ok, box} = Logex.compile(@counter, name: "box")
-      dated = %{box | tags: Map.put(box.tags, "total", ~D[2026-11-24])}
-      line = "`box`'s tag `total` is no %Logex.Tag{}, got: ~D[2026-11-24]" <> @by_hand
+
+      # RV-34's review: a map that names the struct but lacks one of its keys, or holds no
+      # other, is no tag either, as a5-data-model-7 has a state, where it passed the
+      # struct's pattern and raised FunctionClauseError at every door here.
+      keyless = Map.delete(box.tags["total"], :type)
+
+      for {tag, got} <- [
+            {~D[2026-11-24], "~D[2026-11-24]"},
+            {%{__struct__: Logex.Tag}, "%{__struct__: Logex.Tag}"},
+            {keyless, inspect(keyless)},
+            {Map.put(box.tags["total"], :spare, 1),
+             inspect(Map.put(box.tags["total"], :spare, 1))}
+          ] do
+        told_at_doors(box, tag, "`box`'s tag `total` is no %Logex.Tag{}, got: #{got}" <> @by_hand)
+      end
+    end
+
+    defp told_at_doors(box, tag, line) do
+      dated = %{box | tags: Map.put(box.tags, "total", tag)}
       {:ok, c} = Configuration.compile("plant", "program b1 box\n  b1.eye 0\n", %{"box" => box})
       in_c = %{c | programs: %{"box" => dated}}
       s = Runtime.instance(box)
@@ -2556,13 +2573,21 @@ defmodule Logex.QuotedTest do
       {:ok, seal} = Logex.compile(@seal, name: "seal")
       {:ok, m} = Logex.compile(@sealed, name: "m", types: [seal])
       body = m.blocks["seal"].body
-      body = %{body | tags: Map.put(body.tags, "stop", ~T[10:00:00])}
-      held = %{m | blocks: %{"seal" => %{m.blocks["seal"] | body: body}}}
-      error = assert_raise ArgumentError, fn -> Runtime.instance(held) end
 
-      assert error.message ==
-               "`seal`'s body's tag `stop` is no %Logex.Tag{}, got: ~T[10:00:00]: `m` was " <>
-                 "edited by hand after it compiled"
+      # RV-34's review: a forged tag in a held body's table, which was taken.
+      for {tag, got} <- [
+            {~T[10:00:00], "~T[10:00:00]"},
+            {%{__struct__: Logex.Tag}, "%{__struct__: Logex.Tag}"},
+            {Map.delete(body.tags["stop"], :type), inspect(Map.delete(body.tags["stop"], :type))}
+          ] do
+        body = %{body | tags: Map.put(body.tags, "stop", tag)}
+        held = %{m | blocks: %{"seal" => %{m.blocks["seal"] | body: body}}}
+        error = assert_raise ArgumentError, fn -> Runtime.instance(held) end
+
+        assert error.message ==
+                 "`seal`'s body's tag `stop` is no %Logex.Tag{}, got: #{got}: `m` was " <>
+                   "edited by hand after it compiled"
+      end
     end
   end
 
@@ -2642,7 +2667,11 @@ defmodule Logex.QuotedTest do
         # RV-33's review (F2): and one that no lexer takes for one name, with `.` parts or a
         # subscript, which refusals wrote out whole where they quote it themselves.
         long_dotted: String.duplicate("a.", 50_000) <> "a",
-        long_subscripted: String.duplicate("a", 100_000) <> "[1]"
+        long_subscripted: String.duplicate("a", 100_000) <> "[1]",
+        # RV-34's review: a map that names a struct of the contract but lacks its keys, a
+        # tag's above all, which passed a struct's pattern where a tag is due.
+        forged_tag: %{__struct__: Logex.Tag},
+        keyless_tag: Map.delete(%Logex.Tag{name: "x", type: :dint, section: :var}, :type)
       ]
     end
 

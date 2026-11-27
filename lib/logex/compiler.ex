@@ -5388,13 +5388,15 @@ defmodule Logex.Compiler do
   defp headed(false), do: :program
 
   # A cycle's message names the chain of files loaded above it, so the result it gives,
-  # and every result above it, is cyclic.
+  # and every result above it, is cyclic. Since RV-34's review the chain, a list of names
+  # as decision 636 has them, is told by its first hundred and a count, so that a ring of
+  # 2,000 block files is told in a line of a few kilobytes, where it was 19,006 bytes.
   defp cycle(true, {word, line, _file}, {types, problems, {reached, _cyclic}, state}, held) do
     {_set, [own | _] = list} = held
     chain = [own | Enum.drop_while(Enum.reverse(list), &(&1 != word))]
 
     message =
-      "`#{own}` cannot hold an instance of `#{word}` (#{Enum.join(chain, " → ")}): " <>
+      "`#{own}` cannot hold an instance of `#{word}` (#{Declarations.chained(chain)}): " <>
         "a function block never holds an instance of itself, at any depth"
 
     {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems],

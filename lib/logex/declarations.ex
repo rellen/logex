@@ -526,6 +526,11 @@ defmodule Logex.Declarations do
     named_list(Enum.map(shown, quote), length(rest), {last, between})
   end
 
+  # RV-34's review: a chain of blocks each holding the next, `b1 → b2 → b1`, a list of
+  # names too (decision 636), its first hundred joined by arrows and a count.
+  @doc false
+  def chained(chain), do: named(chain, & &1, " → ", " → ")
+
   defp named_list([], 0, _joins), do: ""
   defp named_list([one], 0, _joins), do: one
 
@@ -1600,7 +1605,7 @@ defmodule Logex.Declarations do
 
   defp recursive([block, held | _] = chain),
     do:
-      "`#{block}` cannot hold an instance of `#{held}` (#{Enum.join(chain, " → ")}): " <>
+      "`#{block}` cannot hold an instance of `#{held}` (#{chained(chain)}): " <>
         "a function block never holds an instance of itself, at any depth"
 
   defp type_word?({:name, _, word}, types),

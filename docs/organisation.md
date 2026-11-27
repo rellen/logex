@@ -4791,7 +4791,19 @@ retain r bool` is refused by a clause of its own, and `retain` is not reserved.
   way out told once a refusal, at the first line that tells it (provisional, `PLAN.md`'s
   RV-29), a refusal for what a hand can mend telling none (545). The marks above are these
   decisions' numbers, the line decision 539 refuses at, the `resource` line, decision
-  543's, as built.)*
+  543's, as built.)* *(Decision 604, RV-34, 2026-11-27: the header is `logex retain 4`,
+  and a line `digest <md5>` stands before the end line, counted by it: the MD5 of every
+  line after the configuration's but the naming lines, the digest's and the end line,
+  each ended by LF, so that a fresh start refuses a store whose value lines a hand
+  changed, added or removed without mending it, told the digest its lines give and the
+  way out, once every other line of it reads; a store of version 4 with no digest line is
+  refused at its header, versions 3, 2 and 1 read as before, and `encode/2`, of a store
+  that names no program, still writes version 2. The versioning, the lines covered and
+  the digest told are the builder's proposal, provisional, `PLAN.md`'s RV-34. Decision
+  603 the same day: a warm fresh start's match of the store, and a cold start's judge of
+  it, run within the store's write limit, a warm one past it refused `{:retain,
+  :timeout}` with no device open and the store as it was, a cold one copying the store
+  before it writes over it.)*
 - *An old store against a changed program* (decision 277): a stored value is kept only
   where the configuration has an instance of its name running the same program type,
   whose program declares the path retained, of exactly the stored type (an array of the
@@ -16456,6 +16468,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(Amended by decision 626, 2026-11-25: the group *warnings missing or lost* needs code,
      not wording, so RV-34 builds those warnings and DOC-2 keeps only the wording of the
      warnings that stand.)*
+     *(Landed with RV-34, 2026-11-27, `a957e3f`: the review item's three groups built, each
+     run again on `main` first, or held as a question, `PLAN.md`'s RV-34; RV-34's review
+     added the 4-leg branch to the golden record's generator.)*
 
 597. **Four messages that are not true (DOC-1's close),** DOC-1's close's questions 9, 10,
      13 and 27: `var_input w word / var_output d byte / not w d` is told that `not`
@@ -16470,6 +16485,7 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      16777216.0, and not its spelling, 16777217.0; and an unconnected `var_input` is no
      longer offered a point, a connection to which is refused. Not taken: given to DOC-2;
      left as the pages document them. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `fa77ada`: each message made true and pinned whole.)*
 
 598. **Four warnings, given wrongly or lost (DOC-1's close),** DOC-1's close's questions
      11, 12, 15 and 32: under `task trip single estop interval 30 priority 0` the one-shot,
@@ -16482,6 +16498,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      travel with its type, given through `types:` and by `compile_files/1` to every program
      that holds it; and a configuration's real initial list warns ten and a count, as a
      program's does. Not taken: questions 15 and 32 alone; left. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `fa77ada`: each warning given rightly; a block's
+     warnings carried with its type once a type (provisional, `PLAN.md`'s RV-34).)*
 
 599. **Three refusals that could help more (DOC-1's close),** DOC-1's close's questions 14,
      16 and 28: `xic a otee x` is told "unknown instruction `otee`" with no did-you-mean,
@@ -16493,6 +16511,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      configuration whose program type does not compile still reports its instances'
      connection errors beside the compile's. Not taken: questions 14 and 16 alone; left.
      RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `fa77ada`: the did-you-mean by decision 520's bounded
+     search, the missing file named, a configuration's connection errors told beside its
+     program type's compile.)*
 
 600. **Forcing and an adapter's reason (DOC-1's close),** DOC-1's close's questions 19, 20
      and 21: after two cut force writes `forces_unknown` names the last write's set alone,
@@ -16504,6 +16525,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      and an adapter's linked helper that ends while `init/3` runs keeps its real reason in
      the trip, as `Logex.IO`'s documentation says, where it reads `{:down, :noproc}`. Not
      taken: question 21 alone; left. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `6c12ba1`, merged by RV-34's review at `ad3bb72`:
+     `status/1`'s `forces_unknown_sets` beside `forces_unknown`, each problem of a force
+     line told, a linked helper's reason in the trip (provisional, `PLAN.md`'s RV-34).)*
 
 601. **A configuration the file cannot print (DOC-1's close),** DOC-1's close's question
      17: a real global built from Elixir with `initial: 0.1` is taken by `new!/1`, and
@@ -16513,6 +16537,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      **Taken: `print/1` writes every configuration `new!/1` accepts** (the maintainer,
      2026-11-24), a real as its shortest text that reads back to the same value. Not taken:
      `new!/1` refusing what the file cannot spell; `print/1` left raising. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `8faeec6`: a real printed as its shortest text that
+     reads back to the same value.)*
 
 602. **`Logex.Edit`'s "restart what does not fit" (DOC-1's close),** DOC-1's close's
      question 18: a type change is refused at accept, and a state with a value outside its
@@ -16522,6 +16548,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      one exists a test is pinned to it; if none, the rule and its text are removed, and
      that is recorded as a decision. Not taken: removed now; kept as a guard, marked
      unreachable. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `31993be`: a host path found, a plain swap through
+     `scan/3` and then `Logex.Edit.accept/3`, five tests failing without the rule; nothing
+     removed and no decision recorded.)*
 
 603. **A warm fresh start of a large store (DOC-1's close),** DOC-1's close's question 22:
      a warm fresh start matched 65,536 retained timers in 28 s in the caller, no device
@@ -16532,6 +16561,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      5,239 ms; and the runner's documentation gives the time a plant of its stated size
      takes, and says that a period shorter than a write is stretched. Not taken: documented
      alone; made faster first. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `6bf3150` and `72ac173`, merged by RV-34's review at
+     `ad3bb72`: the warm match and a cold start's judge within `write_limit:`, the runner's
+     documentation giving the times measured (provisional, `PLAN.md`'s RV-34).)*
 
 604. **A store edited by hand (DOC-1's close),** DOC-1's close's question 23: an end line
      added to a store cut short reads the lost values at their initial values, `dropped:
@@ -16543,6 +16575,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      start with the usual way out. It is a change of the store's format: how it is
      versioned beside `logex retain 3` is the builder's to propose, provisional. Not taken:
      said so alone; warned in `status/1` at the start. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `5e9d3fe`, merged by RV-34's review at `ad3bb72`:
+     `logex retain 4` and its `digest` line, the builder's proposal, provisional,
+     `PLAN.md`'s RV-34.)*
 
 605. **Three gaps of the suite (DOC-1's close),** DOC-1's close's questions 24, 25 and 26:
      `evaluation_test.exs` passes the mutant that gives a de-energised `ote` power, which
@@ -16555,6 +16590,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      within the cap", which asserts a trip at 220 ms past a cap of 210, root-caused, then
      its bound the cap or its name saying what it holds, never only a looser bound. Not
      taken: questions 24 and 25 alone; left. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `31993be`: the evaluator's test of a de-energised
+     `ote`, the toolchain's five pins held to one version, and `trip_test.exs`'s test named
+     for the look that finds the card, its bound the cap's.)*
 
 606. **The example adapter's waits (DOC-1's close),** DOC-1's close's question 29:
      `examples/line_device.exs` waits 1,000 ms for its card, past the runner's 510 ms for a
@@ -16565,6 +16603,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      comment tying them to it and the page saying why. Not taken: the runner calling
      `close/1` before it kills a device that timed out; a Warning on the page alone.
      RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `31993be`: `examples/line_device.exs` waits 200 ms
+     and 250 ms, under the runner's 510 ms, a comment tying them to it.)*
 
 607. **A tag declared from Elixir (DOC-1's close),** DOC-1's close's question 30:
      `Logex.Tag.new!/5` is in the host contract, and nothing in the contract takes its
@@ -16574,6 +16614,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      `Logex.Tag.new!/5`'s tags beside the source's declarations. Not taken: `Tag.new!/5`
      taken out of the host contract; left, the page saying it serves `instructionize/3`
      alone. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `73e7a4b`: `compile/2`'s options read in any order,
+     each once.)*
 
 608. **Why the toolchain's bound stands (DOC-1's close),** DOC-1's close's question 31:
      `CLAUDE.md` says the code needs Elixir 1.20, where the newest calls of `lib/` are
@@ -16821,6 +16863,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      by `readme_test.exs` from its file under `examples/`, and the row's words are held to
      what the run shows, changed where it shows them untrue. Not taken: as built, the row
      with no run behind it. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `817b10d`:
+     `examples/use-one-shots-and-pulse-coils-tasks.exs`, run and compared by
+     `readme_test.exs`, the row worded to what it shows.)*
 
 625. **README's length (DOC-1's third step),** DOC-1's third step's review, question 9:
      README has 154 lines, where its template, `docs/templates/readme.md`, says about 120;
@@ -16852,6 +16897,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      settles the real literal in a long timer's `pre`, the form found or the finding
      recorded as covered, and decision 638 `compile_file/1`'s warnings, each program's
      copied into the configuration's, each naming its program.)*
+     *(Landed with RV-34, 2026-11-27, `c60050c`; and by RV-34's review a `cal`'s write of a
+     bool its coil in every rule of two coils, a bit's and an element's among them
+     (provisional, `PLAN.md`'s RV-34).)*
 
 627. **The words of the count line (RV-33),** RV-33's question 1, decision 610's "how many
      more there are": a box counter's bridge sends 100,000 inputs keyed by register number.
@@ -16891,6 +16939,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 636
      reaches this bound to a diagnostic that lists names, a configuration's and a
      compile's, each name still quoted whole as decision 633 has it.)*
+     *(Landed with RV-34, 2026-11-27, `93bfdb1` and `94013ab`:
+     `Logex.Declarations.named/3,4`, the one helper.)*
 
 630. **A tag that is no `%Logex.Tag{}` (RV-33),** RV-33's question 4, found beside decision
      616: a box counter's host puts a `Date` where one tag of a compiled program's table
@@ -16906,6 +16956,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 639
      reaches this refusal to every door decision 616's check runs at, `instance/1`,
      `Logex.Configuration.check/1`, `new!/1`, `start/1` and both edits.)*
+     *(Landed with RV-34, 2026-11-27, `80f9356`; and by RV-34's review a map that names the
+     struct but lacks one of its keys or holds one more refused so too.)*
 
 631. **A did-you-mean for a name past 4,096 bytes (RV-33),** RV-33's question 5, decision
      613 beside decision 520's bound: a bridge sends a megabyte as an input's key.
@@ -16981,6 +17033,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      quotes is quoted whole, so the bound shortens the list and cuts none of its names. IEC
      and Logix have no host API to compare; Logix's editor shows a program's tags in a
      browser, not in a message. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `4f0665a`; and by RV-34's review the chain of a block
+     that would hold itself.)*
 
 637. **A real literal in a long timer's `pre` (RV-34),** decision 626's "a real literal in
      a long timer's `pre`, a time in ns, warned": `ton t 1.5` and `move 1.5 t.pre` on a
@@ -16994,6 +17048,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      covered, with the runs. Not taken: a warning added for every real that reaches an
      `ltime` member, however it gets there, which would warn a `move` of a real tag the
      source states on purpose. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `c60050c`: the form found, `lreal_to_lint 1500000.0
+     t.pre`, warned; and by RV-34's review the value the lint keeps past its range.)*
 
 638. **A configuration file's program warnings (RV-34),** decision 626's
      "`Logex.Configuration.compile_file/1` keeping a program's warnings": on `main` a
@@ -17006,6 +17062,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      is of, so a host that reads one list reads them all. Not taken: the warnings left in
      each program type's struct, the documentation saying where to look; copied as they are,
      naming no program, so that two programs' like warnings read alike. RV-34 builds it.
+     *(Landed with RV-34, 2026-11-27, `c60050c`: each warning prefixed `program type
+     <type>:`, once a type.)*
 
 639. **Where a tag that is no tag is refused (RV-34),** decision 630's "`instance/1`'s
      shape check": decision 616's check of a program edited by hand runs at more doors than
@@ -17017,6 +17075,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      struct as the table, where `FunctionClauseError` escapes now. Not taken: `instance/1` alone, as decision 630 is written, the other doors
      left as they are. In Logix a program is downloaded whole and checked when it is. RV-34
      builds it.
+     *(Landed with RV-34, 2026-11-27, `80f9356`: at `instance/1` and `instance/2`,
+     `check/1`, `new!/1`, `start/1` and both edits, and in a held body.)*
 
 640. **A decision record's claim about another IEC 61131-3 tool (RV-34),** decision 620's
      "this decision does not reach it": record 0022 compares logex's checks with "the tools
@@ -17030,6 +17090,8 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      a function block's internal values is cited to IEC itself, Ed 2 Table 32 and Ed 3
      Figure 13 as decision 33 reads them, and its two claims about the tools, a typed
      interface checked at each compile and no mark that hides a warning, are dropped.
+     *(Landed with RV-34, 2026-11-27, `3625095`: record 0022's claim of a block's internal
+     values cited to IEC, its two claims about the tools dropped.)*
 
 ---
 

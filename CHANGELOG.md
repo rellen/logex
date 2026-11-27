@@ -129,14 +129,22 @@ API".
   beside `ote lamps[slot]` among them, where decision 246 had left it quiet, so a bool
   array's element is told as a word's bit is beside its word. A write after the coil is
   told ``already has an `ote` on line 5``, the coil after it ``is already written by the
-  `move` on line 5``. A `cal` and a `move` on one bool are warned too (provisional,
-  `PLAN.md`'s RV-34); an `otl` and an `otu` beside an `ote`, and two `move`s, stay
-  quiet. Look for: a test or a tool that reads a program's warnings whole.
+  `move` on line 5``. A `cal`'s output on a bool is its coil in every rule of two coils:
+  `cal s1 b w.3` beside `move 0 w`, `cal s1 b fl[1].3` beside `move 0 fl[1]`, `cal s1 b
+  w.3` beside `ote w.[i]` and `cal s1 b lamps[i]` beside `move 0 lamps[j]` are warned as
+  with `ote`, each the `cal` told ``is already written by the `cal` on line 5``. A `cal`
+  and a `move` on one bool are warned too (provisional, `PLAN.md`'s RV-34); an `otl` and
+  an `otu` beside an `ote`, and two `move`s, stay quiet. Look for: a test or a tool that
+  reads a program's warnings whole.
 - **A real literal a conversion writes into a long timer's `.pre` or `.acc` is warned of
   its nanoseconds** (decision 637), as an integer literal is since decision 196, by the
   integer the conversion gives: `lreal_to_lint 1.5e6 cure.pre` on a `ton_ltime` is told
   `1500000 ns is no whole number of milliseconds`, where it was told only that it reads a
-  literal. Look for: a test or a tool that reads such a program's warnings whole.
+  literal. A literal past a lint's range is told the value the lint keeps, its low 64
+  bits, as a scan writes it: `lreal_to_lint 1.0e30 cure.pre` is told of
+  5076964154930102272 ns, and `lreal_to_lint 1.8446744073709552e19 cure.pre`, which
+  writes 0, of nothing. Look for: a test or a tool that reads such a program's warnings
+  whole.
 - **Four messages made true** (decision 597): `not` and the shifts are told they compute
   in their source's type, `` `not` computes in `w`'s type, a word (declared on line 1),
   and writes its result into `d`, a byte `` (decision 214), where they were told the
@@ -164,8 +172,10 @@ API".
   `` ..., `i00100` and 9901 more, not listed ``; and an instance that leaves more than a
   hundred var_inputs unconnected is told the count first, `` `f1` leaves 10000 var_inputs
   unconnected, `i00001`, ... and 9900 more, not listed: connect each ... ``. Each name the
-  list shows is quoted whole (decision 633). Look for: a test or a tool that reads such a
-  list whole.
+  list shows is quoted whole (decision 633). So is the chain of a block that would hold
+  itself, `` `b2000` cannot hold an instance of `b1` (b2000 → b1 → … → b99 and 1901
+  more, not listed) ``, from files or among the types given. Look for: a test or a tool
+  that reads such a list whole.
 - **Three refusals that help more** (decision 599): an unknown instruction is offered the
   nearest mnemonic, ``unknown instruction `otee` — did you mean `ote`?``, by the bounded
   search a tag's name has (decision 520), compared in lowercase; a type word the loader
@@ -373,8 +383,9 @@ API".
   `Logex.Configuration.check/1` and `new!/1`, `Logex.Runtime.start/1`,
   `Logex.Edit.accept/3` and `Logex.Configuration.Edit.accept/2`, where each raised
   `FunctionClauseError` out of `Logex.Program.tag_destination/2`; so is a tag of a held
-  block's body, which was taken. Look for: a `rescue` of `FunctionClauseError` around
-  those calls.
+  block's body, which was taken. So is a map that names `Logex.Tag` but lacks one of its
+  keys or holds one more, `%{__struct__: Logex.Tag}` or `Map.delete(tag, :type)`, which
+  passed for a tag. Look for: a `rescue` of `FunctionClauseError` around those calls.
 
 - **`Logex.Runner.status/1` names every set a cut write of the forces file held**
   (decision 600), a key `forces_unknown_sets`, a list of those sets, newest first and each

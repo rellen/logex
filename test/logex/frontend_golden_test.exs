@@ -18,7 +18,9 @@ defmodule Logex.FrontendGoldenTest do
   other 25, the refusals, stayed lex errors on their lines. Decision 202, a rung keeping a
   literal's spelling, changed 251, each a literal's leaf gaining its spelling and nothing
   else: those 13, `"mov 007 aa"`, `"move -0 aa"` and `"move -007 aa"`, and 235 generated
-  sources whose `042` keeps its leading zero. It exercises the front end far more widely than
+  sources whose `042` keeps its leading zero. RV-34's review added one curated source,
+  `"xic a ( xic b | xic c | | xic d ) ote x"`, a branch of four legs whose third is empty
+  (decision 596), and changed none. It exercises the front end far more widely than
   the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
   boundaries, every unbalanced delimiter.
 

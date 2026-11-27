@@ -3027,7 +3027,10 @@ defmodule Logex.RuntimeTest.Traced do
       {Time, :utc_now},
       {Date, :utc_today},
       {:calendar, :local_time},
-      {:calendar, :universal_time}
+      {:calendar, :universal_time},
+      # RV-34's review: a run's wall clock and a call timed read the time too.
+      {:erlang, :statistics},
+      {:timer, :tc}
     ]
 
     defp clock_readers(clock_reads) do
@@ -3054,14 +3057,34 @@ defmodule Logex.RuntimeTest.Traced do
         Code.compile_string("""
         defmodule Logex.RuntimeTest.Clocked do
           def now, do: {System.monotonic_time(), :os.timestamp()}
+        def ran, do: :erlang.statistics(:wall_clock)
+        def timed(f), do: :timer.tc(f)
         end
         """)
 
       {:ok, {_, [imports: imports]}} = :beam_lib.chunks(binary, [:imports])
       reads = for {m, f, _a} <- imports, {m, f} in @clock_reads, uniq: true, do: {m, f}
 
-      assert {module, reads} ==
-               {Logex.RuntimeTest.Clocked, [{:erlang, :monotonic_time}, {:os, :timestamp}]}
+      assert {module, Enum.sort(reads)} ==
+               {Logex.RuntimeTest.Clocked,
+                Enum.sort([
+                  {:erlang, :monotonic_time},
+                  {:os, :timestamp},
+                  {:erlang, :statistics},
+                  {:timer, :tc}
+                ])}
+    end
+
+    # RV-34's review: a call through `apply/3` names no function the reading can see, so
+    # only the device's process, which calls its adapter's callbacks so, holds one.
+    test "only the device's process calls through apply/3, which the reading cannot see" do
+      applying =
+        for module <- Application.spec(:logex, :modules),
+            {:ok, {_, [imports: imports]}} = :beam_lib.chunks(:code.which(module), [:imports]),
+            {:erlang, :apply, 3} in imports,
+            do: module
+
+      assert applying == [Logex.Runner.Device]
     end
   end
 end

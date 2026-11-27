@@ -9,7 +9,9 @@ defmodule Logex.Warnings do
     decision 626 (RV-34) a `cal`'s write of a tag beside a coil on it or another `cal`'s
     write, and any other write but a latch's of a bool a coil writes, `move 1 belt` beside
     `ote belt`, told "is already written by the `move`" where the coil comes second, the
-    pairs `shared_writes/3` gives;
+    pairs `shared_writes/3` gives; since RV-34's review a `cal`'s write of a bool, a bit or
+    an element among them, is its coil in every rule of two coils below, `cal s1 b w.3`
+    beside `move 0 w` told as `ote w.3` is (provisional, `PLAN.md`'s RV-34);
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`). Since M3-4 so
     is an `osr`'s or an `osf`'s storage bit, and a coil's pulse bit is written as an
@@ -528,7 +530,7 @@ defmodule Logex.Warnings do
   # its number's value and quoted as written, `status.03`. A program with no coil on a bit
   # has no whole write to compare, and none is looked for.
   defp second_otes(instructions, tags, owners) do
-    coils = Enum.flat_map(instructions, &coil_target/1)
+    coils = Enum.flat_map(instructions, &coil_target(&1, tags))
 
     words = Enum.reduce(coils, %{}, &coiled/2)
     {decisions, words} = decisions(instructions, coils, words, tags)
@@ -666,15 +668,19 @@ defmodule Logex.Warnings do
   defp base([container | _]), do: container
   defp base(_literal), do: nil
 
-  defp shared({symbol, _line, _operands} = instruction, _tags) when symbol in @shared_coils,
-    do: instruction |> coil_target() |> Enum.flat_map(&shared_write(&1, :coil))
+  defp shared({symbol, _line, _operands} = instruction, tags) when symbol in @shared_coils,
+    do: instruction |> coil_target(tags) |> Enum.flat_map(&shared_write(&1, :coil))
 
+  # RV-34's review: a `cal`'s write of a bool is its coil, kind `:coil`, which second_otes/3
+  # compares with every other coil, bit, word and element as it compares two `ote`s, and
+  # only a `move` or another write but a coil's meets here; a write of another type, `cal s1
+  # a total` beside `cal s2 a total`, only another `cal`'s.
   defp shared({:cal, _line, _operands} = instruction, tags),
     do:
       for(
         {operand, line, symbol} <- written(instruction, tags),
         write <- target(operand, line, symbol),
-        shared <- shared_write(write, :cal),
+        shared <- shared_write(write, cal_kind(bool?(operand, tags))),
         do: shared
       )
 
@@ -682,11 +688,17 @@ defmodule Logex.Warnings do
     do:
       for(
         {operand, line, symbol} <- written(instruction, tags),
-        Logex.Program.destination(operand, tags, :bitwise) == {:ok, :bool},
+        bool?(operand, tags),
         write <- target(operand, line, symbol),
         shared <- shared_write(write, :other),
         do: shared
       )
+
+  defp cal_kind(true), do: :coil
+  defp cal_kind(false), do: :cal
+
+  defp bool?(operand, tags),
+    do: Logex.Program.destination(operand, tags, :bitwise) == {:ok, :bool}
 
   defp shared_write({:coil, key, _word, tag, at, shown, _places}, kind),
     do: [{key, tag, kind, at, shown}]
@@ -848,7 +860,10 @@ defmodule Logex.Warnings do
   # (coiled/2), each instruction's decisions are kept apart, for told/4 to follow.
   defp decisions(instructions, _coils, words, tags) when is_map_key(words, :mtagged) do
     told =
-      Enum.map(instructions, &(probed(coil_target(&1), words) ++ mword_writes(&1, tags, words)))
+      Enum.map(
+        instructions,
+        &(probed(coil_target(&1, tags), words) ++ mword_writes(&1, tags, words))
+      )
 
     told(
       covered(Enum.reduce(told, {words.mtagged, []}, &tagged_too/2)),
@@ -862,7 +877,7 @@ defmodule Logex.Warnings do
     decisions =
       Enum.flat_map(
         instructions,
-        &(probed(coil_target(&1), words) ++ mword_writes(&1, tags, words))
+        &(probed(coil_target(&1, tags), words) ++ mword_writes(&1, tags, words))
       )
 
     virtual(covered(tagged_too(decisions, {[], []})), decisions, instructions, {words, tags})
@@ -872,7 +887,7 @@ defmodule Logex.Warnings do
     do:
       {Enum.flat_map(
          instructions,
-         &(probed(coil_target(&1), words) ++ whole_writes(&1, tags, words))
+         &(probed(coil_target(&1, tags), words) ++ whole_writes(&1, tags, words))
        ), words}
 
   # M5-12 (§4.12's routine choice): a coil on an element of an array some coil names
@@ -1334,7 +1349,7 @@ defmodule Logex.Warnings do
         covered,
         Enum.map(
           instructions,
-          &(probed(coil_target(&1), words) ++ whole_writes(&1, tags, words))
+          &(probed(coil_target(&1, tags), words) ++ whole_writes(&1, tags, words))
         ),
         instructions,
         {words, tags}
@@ -1344,7 +1359,7 @@ defmodule Logex.Warnings do
   # array's, so that one line's warnings come in rung order (B10); the coils first, which
   # a write of the word array before them reads (coiled/2).
   defp told(covered, told, instructions, {words, tags}) do
-    coils = Enum.map(instructions, &virtual_coils(&1, covered))
+    coils = Enum.map(instructions, &virtual_coils(&1, {covered, tags}))
     virtual = coils |> Enum.concat() |> Enum.reduce(Map.put(words, :virtual, true), &coiled/2)
 
     {[told, coils, instructions]
@@ -1354,11 +1369,20 @@ defmodule Logex.Warnings do
      |> Enum.concat(), virtual}
   end
 
-  defp virtual_coils({:ote, line, [target]}, covered),
+  defp virtual_coils({:ote, line, [target]}, {covered, _tags}),
     do: virtual_coil(target, {line, :ote}, covered)
 
-  defp virtual_coils({symbol, line, [_storage, pulse]}, covered) when symbol in [:osr, :osf],
-    do: virtual_coil(pulse, {line, symbol}, covered)
+  defp virtual_coils({symbol, line, [_storage, pulse]}, {covered, _tags})
+       when symbol in [:osr, :osf],
+       do: virtual_coil(pulse, {line, symbol}, covered)
+
+  defp virtual_coils({:cal, _line, _operands} = instruction, {covered, tags}),
+    do:
+      for(
+        {operand, line, :cal} <- cal_coils(instruction, tags),
+        coil <- virtual_coil(operand, {line, :cal}, covered),
+        do: coil
+      )
 
   defp virtual_coils(_instruction, _covered), do: []
 
@@ -1440,6 +1464,7 @@ defmodule Logex.Warnings do
       for(
         {{:write, _type}, operand} <-
           Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
+        not coiled?(symbol, operand, tags),
         decision <- virtual_write(operand, words, covered, {line, symbol}),
         do: decision
       )
@@ -1901,6 +1926,8 @@ defmodule Logex.Warnings do
   defp as_in(first, {{:mword_of, array, _members}, at, shown}),
     do: as_in(first, {array, at, shown})
 
+  defp as_in({other, {first, :cal}}, write), do: as_in({other, {first, {:writes, :cal}}}, write)
+
   defp as_in({other, {first, :ote}}, {array, {line, _symbol}, shown}),
     do:
       warning(
@@ -1982,6 +2009,9 @@ defmodule Logex.Warnings do
   defp word_shown({:mword_el, _, _, _} = word), do: mword_name(word)
   defp word_shown(word), do: word
 
+  defp bit_coiled(bit, {first, :cal}, line),
+    do: "`#{bit}` is already written by the `cal` #{where(first, line)}"
+
   defp bit_coiled(bit, {first, :ote}, line),
     do: "`#{bit}` already has an `ote` #{where(first, line)}"
 
@@ -2002,6 +2032,7 @@ defmodule Logex.Warnings do
       for(
         {{:write, _type}, operand} <-
           Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
+        not coiled?(symbol, operand, tags),
         decision <- wholes(operand, tags, words, {line, symbol}) ++ mword_write(operand, words),
         do: decision
       )
@@ -2043,6 +2074,7 @@ defmodule Logex.Warnings do
       for(
         {{:write, _type}, operand} <-
           Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
+        not coiled?(symbol, operand, tags),
         decision <- wholes(operand, tags, words, {line, symbol}),
         do: decision
       )
@@ -2222,12 +2254,39 @@ defmodule Logex.Warnings do
 
   defp whole(_bit_or_literal), do: []
 
-  defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
+  defp coil_target({:ote, line, [target]}, _tags), do: target(target, line, :ote)
 
-  defp coil_target({symbol, line, [_storage, pulse]}) when symbol in [:osr, :osf],
+  defp coil_target({symbol, line, [_storage, pulse]}, _tags) when symbol in [:osr, :osf],
     do: target(pulse, line, symbol)
 
-  defp coil_target(_instruction), do: []
+  # Decision 626 (RV-34), as RV-34's review found it short: a `cal`'s write of a bool, a
+  # tag, a bit, an element or a member, is a coil on it, `{line, :cal}`, so that every rule
+  # of two coils, of a coil and a write of its word or its element whole and of a coil
+  # through a tag subscript judges it as an `ote`'s: `cal s1 b w.3` beside `move 0 w`, `cal
+  # s1 b fl[1].3` beside `move 0 fl[1]`, `cal s1 b w.3` beside `ote w.[i]` and `cal s1 b
+  # lamps[i]` beside `move 0 lamps[j]` warned as with `ote` (provisional, PLAN.md's RV-34,
+  # decision 626's `cal` and `move`). Its other writes are writes of their tags whole.
+  defp coil_target({:cal, _line, _operands} = instruction, tags),
+    do:
+      for(
+        {operand, line, :cal} <- cal_coils(instruction, tags),
+        coil <- target(operand, line, :cal),
+        do: coil
+      )
+
+  defp coil_target(_instruction, _tags), do: []
+
+  # A `cal`'s writes of a bool, each its coil.
+  defp cal_coils(instruction, tags),
+    do:
+      for(
+        {operand, _line, _symbol} = write <- written(instruction, tags),
+        bool?(operand, tags),
+        do: write
+      )
+
+  defp coiled?(:cal, operand, tags), do: bool?(operand, tags)
+  defp coiled?(_symbol, _operand, _tags), do: false
 
   defp target({:name, _, name}, line, symbol),
     do: [{:coil, name, nil, name, {line, symbol}, name, nil}]
@@ -2862,12 +2921,22 @@ defmodule Logex.Warnings do
   defp nanoseconds(_symbol, literal) when is_int_lit(literal), do: {:ok, Parser.value(literal)}
 
   defp nanoseconds(symbol, literal) when is_real_lit(literal) and symbol in @truncations,
-    do: {:ok, trunc(Parser.value(literal))}
+    do: {:ok, in_lint(trunc(Parser.value(literal)))}
 
   defp nanoseconds(_symbol, literal) when is_real_lit(literal),
-    do: {:ok, Logex.Real.round_even(Parser.value(literal))}
+    do: {:ok, in_lint(Logex.Real.round_even(Parser.value(literal)))}
 
   defp nanoseconds(_symbol, _tag), do: :error
+
+  # RV-34's review: the integer kept in the member, a lint, as the runtime keeps a
+  # conversion's result (decision 146): its low 64 bits read in two's complement, so that
+  # `lreal_to_lint 1.0e30 t.pre` is warned of the 5076964154930102272 ns a scan writes, not
+  # of 1.0e30's own integer, and `lreal_to_lint 1.8446744073709552e19 t.pre`, which writes
+  # 0, a whole number of milliseconds, of nothing.
+  defp in_lint(value) do
+    <<lint::signed-size(64)>> = <<value::size(64)>>
+    lint
+  end
 
   # What the instruction does with its operands, in its own words.
   defp taking(symbol, [a, b]) when symbol in @comparisons,
@@ -2887,6 +2956,10 @@ defmodule Logex.Warnings do
 
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))
+
+  defp second_ote(name, {first, :cal}, line),
+    do:
+      warning(line, "`#{name}` is already written by the `cal` #{where(first, line)}: #{last()}")
 
   defp second_ote(name, {first, :ote}, line),
     do: warning(line, "`#{name}` already has an `ote` #{where(first, line)}: #{last()}")

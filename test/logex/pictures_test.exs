@@ -391,6 +391,19 @@ defmodule Logex.PicturesTest do
                 ]}
     end
 
+    # RV-34's review: scripts/pictures.exs reads a picture through scripts/page.exs, whose
+    # alternative text holds brackets in pairs (decision 596), where a reading of its own
+    # stopped at the first `]` and told the mark it had no picture.
+    test "a picture whose alternative text holds brackets is its mark's" do
+      text = """
+      <!-- rung: motor.ld 2 -->
+      ![The rung of `t[1]`, and lamps[2].](../assets/t1.svg)
+      """
+
+      assert Pictures.of("guides/tutorials/a.md", text) ==
+               {[{2, "guides/assets/t1.svg", "rung", "motor.ld", [2]}], []}
+    end
+
     test "a mark and a picture inside a code block are a page's text, shown, and not read" do
       text = """
       To name a picture, write its mark on the line above it:
