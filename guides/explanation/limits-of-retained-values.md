@@ -88,10 +88,10 @@ sequence.
 
 - A runner has 1 store. A program [instance](../reference/glossary.md#instance) cannot
   have a separate store.
-- The store has no checksum and no encryption. logex examines only its grammar and its
-  count of lines. Thus logex refuses a store that is cut short. It does not refuse a
-  value that a person or a program changes in the file. The digests in the store
-  identify the programs, not the values.
+- The store has no encryption. logex examines its grammar, its count of lines and the
+  digest of its value lines. Thus logex refuses a store that is cut short. It also
+  refuses a value that a person or a program changes in the file, if the `digest` line
+  is not mended. A person who mends the `digest` line can change any value.
 - logex refuses a second runner on the same file in 1 virtual machine. It also refuses a
   store or a [forces file](../reference/glossary.md#forces-file) that is a symbolic
   link.

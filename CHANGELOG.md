@@ -323,6 +323,18 @@ API".
   held throughout. A cold start's judge of the store, the same match, past the limit
   copies the store before it writes over it. Provisional (`PLAN.md`'s RV-34). Look for: a
   plant whose store's warm start takes near 5000 ms, which needs `write_limit:` more.
+- **The store holds the digest of its value lines, as `logex retain 4`** (decision 604),
+  a line `digest <md5>` before the end line, the MD5 of every line after the
+  configuration's but the naming lines, the digest's and the end line, so that a fresh
+  start refuses a store whose value lines a hand changed, added or removed without
+  mending it, told the digest the lines give and the way out, once every other line of
+  it reads: a box counter's `t1.boxes.cv dint 4` edited to `dint 7`, or a line removed and
+  the count lowered, where it was read and its tag given its initial value unreported. A
+  store of version 4 with no digest line is refused at its header; a store of version 3,
+  2 or 1 is read as before, and the next write makes it version 4. An older logex refuses
+  version 4 and starts it only cold. Provisional (`PLAN.md`'s RV-34). Look for: a script
+  that edits the store, which now writes the digest, and code that matches the header
+  `logex retain 3` or the count of the end line.
 
 ### What it carries, by the work that built it
 

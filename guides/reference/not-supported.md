@@ -221,7 +221,7 @@ retained value. [Retained values](retained-values-and-store.md) and
 | 1 element of an array retained alone | The qualifier is on the [declaration](glossary.md#declaration) of the array. logex retains the whole array. | A separate tag, or a separate array |
 | A count of the time of a stop | A retained timer continues from its `acc`. In the first [scan](glossary.md#scan) after a restart, the timer adds only the time that the host gives to that scan. It does not add the time while logex did not run. | No replacement |
 | A store for each [instance](glossary.md#instance) | `Logex.Runtime` reads and writes no file. A runner with the option `retain:` keeps 1 store for its resource. | A runner |
-| A checksum or an encryption of the store | A start reads the end line of the store, and refuses a store that is cut short. A start does not find a value that a person changed in the store. The store holds digests of the program, and no digest of the text of the store. | No replacement |
+| An encryption of the store, or a protection of its values against a person | A start reads the end line of the store, and refuses a store that is cut short. It refuses a value line that a person changed and whose `digest` line the person did not mend. A person who mends the `digest` line can change each value. | No replacement |
 | Battery-backed memory or safety memory | In `Logex.Runtime`, a retained value is in memory only. A runner started with the option `retain:` keeps it in its store, a file on the disk of the host. A runner without `retain:` keeps it in memory only, and a crash of the runner loses it. | No replacement |
 
 > #### Warning {: .warning}

@@ -119,11 +119,16 @@ $ cp packer.retain packer.retain.bak
 -s1.place dint 8
 +s1.place dint 0
  s1.weights int[8] 410 520 380 600 450 470 390 505
- end 8 lines
+ digest b55a8af61ffeb60fd73c176851b5bec1
+ end 9 lines
 ```
 
 6. Save the store.
 7. Start the runner with the options of the stopped runner. Do not give `start: :cold`.
+   The `digest` line holds a digest of the lines of the store. Thus the first start
+   refuses your edit. Its message gives the new digest: `which is
+   4152966fe558f4a20849e559e613c977` in the example. Write the new digest on the `digest`
+   line, in the place of the old one. Save the store, and start the runner again.
 
 | The runner | Start it with |
 |---|---|
@@ -178,6 +183,7 @@ each message, for example of a tab, a comment line or an empty line.
 | `holds one value, and the line gives` | There is a word after the value, for example a comment | Remove each word after the value. |
 | `holds 8 values, one an element` | An array line has too many or too few values | Write 1 value for each element. |
 | `the store's end line counts` | You added or removed a line | Change only the value. |
+| `is not the digest of the store's value lines` a second time | You changed the store again after you wrote the digest | Write the new digest that the message gives. |
 
 ### The start drops a value
 
@@ -199,7 +205,7 @@ Each row of the table gives 1 entry of `dropped`.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| The tag has its initial value, and `dropped` is `[]` | You removed the line of the tag and changed the end line. The start does not report a lost line. | Stop the runner. Put the backup back. Do steps 4 to 8 again, and change only the value. |
+| The tag has its initial value, and `dropped` is `[]` | You removed the line of the tag, changed the end line and wrote the digest that the start gave. The start does not report a lost line. | Stop the runner. Put the backup back. Do steps 4 to 8 again, and change only the value. |
 | Each value is the initial value, and `dropped` is `[]` | The options give `start: :cold`. The start wrote the initial values over the store. | Stop the runner. Remove the option and put the backup back. Do steps 4 to 8 again. |
 | The plant runs, then trips again with the same fault | The program writes the wrong value again | Correct the program: [Edit a running plant](edit-a-running-plant.md). |
 
@@ -297,8 +303,22 @@ IO.write(File.read!("packer.retain"))
 text = File.read!("packer.retain")
 File.write!("packer.retain", String.replace(text, "s1.place dint 8\n", "s1.place dint 0\n"))
 
-# Step 7: start the runner from the store. Step 8: check the value and dropped.
+# Step 7: start the runner from the store. The start refuses it and tells the digest of
+# its lines now: write that digest on the digest line, as a person does, and start again.
+refused =
+  try do
+    Runner.start_link(opts)
+  rescue
+    error in ArgumentError -> error.message
+  end
+
+IO.puts(refused)
+[_all, old, new] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, refused)
+text = File.read!("packer.retain")
+File.write!("packer.retain", String.replace(text, "digest #{old}\n", "digest #{new}\n"))
 {:ok, runner} = Runner.start_link(opts)
+
+# Step 8: check the value and dropped.
 IO.inspect(Runner.get!(runner, "s1.place"), label: "s1.place")
 IO.inspect(Runner.status(runner).retain.dropped, label: "dropped")
 Manual.advance(clock, 10)
@@ -310,22 +330,25 @@ IO.inspect(Runner.status(runner).status, label: "status")
 $ mix run edit-the-store-by-hand.exs
 trip: s1, edit-the-store-by-hand/packer.ld, line 9, read {8}
 store: packer.retain
-logex retain 3
+logex retain 4
 configuration packer written 2026-10-30T14:00:00Z
 resource 8b63f9773c49e74285e113188acd3831
 program packer 30d7542a6ecbc37ca8d21f8249e33968
 instance s1 packer
 s1.place dint 8
 s1.weights int[8] 410 520 380 600 450 470 390 505
-end 8 lines
+digest b55a8af61ffeb60fd73c176851b5bec1
+end 9 lines
+packer.retain: line 8: `digest b55a8af61ffeb60fd73c176851b5bec1` is not the digest of the store's value lines, which is `4152966fe558f4a20849e559e613c977`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest 4152966fe558f4a20849e559e613c977` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 s1.place: 0
 dropped: []
 status: :running
 ```
 
 The [fault](../reference/glossary.md#fault) is at line 9 of `packer.ld`, whose subscript
-is `place`. The stop writes `s1.place dint 8`. After the edit, the start reads 0 and drops
-nothing, and the plant runs.
+is `place`. The stop writes `s1.place dint 8`. After the edit, the first start refuses the
+store and gives the new digest. The script writes it on the `digest` line. The next start
+reads 0 and drops nothing, and the plant runs.
 
 ## See also
 

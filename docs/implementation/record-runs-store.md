@@ -114,7 +114,9 @@ refused = fn title ->
   try do
     Runner.start_link(opts)
   rescue
-    error in ArgumentError -> IO.puts(error.message)
+    error in ArgumentError ->
+      IO.puts(error.message)
+      error.message
   end
 end
 
@@ -174,9 +176,14 @@ edit.("t1.boxes.cv dint 0\n", "t1.boxes.cv dint 0\nt1.boxes.cv dint 2\n")
 refused.("7. A line added by hand, and the count not changed")
 
 edit.("t1.boxes.cv dint 0\n", "")
+message = refused.("8. The old line taken out, and the digest not mended")
+
+# The digest mended as the refusal gives it.
+[_, stored, digest] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, message)
+edit.("digest #{stored}", "digest #{digest}")
 edit.("\n", "\r\n")
 {:ok, runner} = Runner.start_link(opts)
-show.(runner, "8. The old line taken out, the store saved with CRLF line ends")
+show.(runner, "9. The digest mended, the store saved with CRLF line ends")
 :ok = Runner.stop(runner)
 ```
 
@@ -185,7 +192,7 @@ Run it from the directory `examples/`:
 ```console
 $ mix run 0017-the-store-on-disk.exs
 1. Four boxes, then a stop. The store:
-logex retain 3
+logex retain 4
 configuration tally written 2026-10-30T14:00:08Z
 resource 013cc059392445fdcc1e84c9b0de6118
 program tally bd882e28a8159d8e8a4ea56ade7b36b6
@@ -199,7 +206,8 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 1
 t1.boxes.r bool 0
 t1.full bool 1
-end 15 lines
+digest 8cfa2e4d3e860b659fe02173b2f9f18a
+end 16 lines
 2. A fresh start of the deploy
   t1.boxes.cv=0 copy="tally.retain.dropped.1"
   dropped=[{"t1.boxes", {:retyped, "ctu", "ctu_int"}}, {"t1.full", :unretained}]
@@ -209,7 +217,7 @@ end 15 lines
   dropped=[]
   warning=nil
 4. The store cut short by 40 bytes
-tally.retain: line 13: `t1.box` is the store's last line, and no end line: a store of `logex retain 3` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 15: `digest 8cfa2e` is the store's last line, and no end line: a store of `logex retain 4` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 5. A start with start: :cold
   t1.boxes.cv=0 copy="tally.retain.dropped.2"
   dropped=[]
@@ -219,8 +227,10 @@ tally.retain: line 13: `t1.box` is the store's last line, and no end line: a sto
 tally.retain: line 2: the store is of configuration `line_2`, and this configuration is `tally`: a store starts only the configuration it was written for, so a renamed configuration starts only cold: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 7. A line added by hand, and the count not changed
 tally.retain: line 10: `t1.boxes.cv dint 2` names what line 9 names already
-tally.retain: line 16: the store's end line counts 15 lines, and the store has 16: a line was lost or doubled, or a hand edit added or removed one without changing the count, which counts every line, the end line among them, and the store is not read
-8. The old line taken out, the store saved with CRLF line ends
+tally.retain: line 17: the store's end line counts 16 lines, and the store has 17: a line was lost or doubled, or a hand edit added or removed one without changing the count, which counts every line, the end line among them, and the store is not read
+8. The old line taken out, and the digest not mended
+tally.retain: line 15: `digest d1e15a92bd876216f0fa2e5bf5537c82` is not the digest of the store's value lines, which is `903bc36c4f35937a4479949b473cd42e`: a value line was edited, added or removed by hand and the digest not mended, so the store is not read; to keep the edit write `digest 903bc36c4f35937a4479949b473cd42e` in its place, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+9. The digest mended, the store saved with CRLF line ends
   t1.boxes.cv=2 copy=nil
   dropped=[]
   warning=nil
@@ -228,22 +238,25 @@ tally.retain: line 16: the store's end line counts 15 lines, and the store has 1
 
 Each result shows these rules:
 
-1. The store is text. Its end line counts 15 lines (decisions 276, 355 and 530).
+1. The store is text. Its `digest` line holds the digest of its value lines (decision
+   604). Its end line counts 16 lines (decisions 276, 355 and 530).
 2. The deploy drops 2 values and reports each (decision 277). It copies the store before
    its first write (decision 360). It warns, because the text of `tally` differs
    (decision 528).
 3. With the copy back, the count is 4 again. That start drops nothing, so it makes no
    copy, and `.dropped.1` stays.
-4. The cut leaves line 13 last. The start refuses the store, with the way out (decision
-   417).
+4. The cut leaves part of the `digest` line last. The start refuses the store, with the
+   way out (decision 417).
 5. The cold start copies the cut store to `.dropped.2` first. Then it writes the initial
    values (decision 417).
 6. A store of `line_2` does not start `tally`. The refusal has the way out (decisions 285
    and 545).
 7. The refusal names 2 problems. Neither has the way out, because a person can correct
    both (decision 545).
-8. The correct hand edit, saved with CRLF line ends, starts with a count of 2 (decision
-   410).
+8. The hand edit changes a value line and not the `digest` line. So the start refuses the
+   store. The refusal gives the digest of the value lines and the way out (decision 604).
+9. The hand edit with the digest from the refusal starts with a count of 2. Its CRLF line
+   ends read as LF (decision 410).
 
 ### The count of lines
 
@@ -263,7 +276,8 @@ counts them. It catches each cut:
 and starts from each cut. The store reader refuses each cut, except the cut of the last
 newline. The count also catches a line that is lost or doubled. It catches a hand edit
 that adds or removes a line and does not change the end line, as result 7 shows. A hand
-edit that changes 1 line, and adds or removes none, needs no change to the end line.
+edit that changes 1 line, and adds or removes none, needs no change to the end line. It
+needs a change to the `digest` line, as results 8 and 9 show.
 
 Nothing follows the end line in a store that logex writes. So the store reader refuses
 an empty line after it (decision 411).

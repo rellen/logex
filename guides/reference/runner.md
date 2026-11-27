@@ -320,7 +320,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 <!-- unchecked: the messages of 2 starts that a forces file and a store refuse, copied from a run -->
 ```text
 bad.forces: line 1: `nosuch` is no input point of `packing`
-bad.retain: line 1: `junk` is no store's header: a store's first line is `logex retain 3`
+bad.retain: line 1: `junk` is no store's header: a store's first line is `logex retain 4`
 bad.retain: line 2: the store names no configuration: its second line is `configuration <name> written <time>`
 ```
 

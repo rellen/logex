@@ -101,8 +101,10 @@ or doubled. The store reader refuses an empty line after the end line (decision 
 
 ### A version on the first line
 
-The header gives the version of the text, `logex retain 3`, and the store reader reads
-versions 1, 2 and 3. Version 3 exists for a rollback (decision 530). With a new version, an
+The header gives the version of the text, `logex retain 4`, and the store reader reads
+versions 1 to 4. Version 3 exists for a rollback (decision 530). Version 4 holds the
+digest of the value lines, so that a hand edit that does not mend it is refused (decision
+604, provisional). With a new version, an
 older logex refuses the store for its version first, and then starts only cold. The store
 reader refuses an end line under a header that takes none (decision 536).
 
@@ -204,7 +206,7 @@ This record sums up 53 decisions of
 [`docs/organisation.md`](../organisation.md#7-decisions):
 
 - 276, 307, 309, 410, 411 and 419: the text, the image and its line ends.
-- 355, 409, 530, 534 and 536: the end line and the versions.
+- 355, 409, 530, 534, 536 and 604: the end line, the versions and the digest of the values.
 - 527, 528, 531, 533, 535, 537 to 539, 543 and 544: the naming lines and the warning.
 - 277, 308, 310 to 312, 320, 378, 389 and 425: the matching and the dropped values.
 - 360, 412, 416 to 418, 447 to 454, 456, 483 and 487: the copies.
@@ -213,7 +215,7 @@ This record sums up 53 decisions of
 Later decisions replace parts of the first decisions:
 
 - 355 replaces the header `logex retain 1` of 276 with `logex retain 2` and an end line,
-  and 530 makes it `logex retain 3`.
+  and 530 makes it `logex retain 3`. 604 makes it `logex retain 4` with a `digest` line.
 - 418 replaces the 1 copy of 360 with numbered copies, and 456 makes no copy of the same
   bytes.
 - 417 replaces the warning of the refusal of a cut store with a copy that the cold start

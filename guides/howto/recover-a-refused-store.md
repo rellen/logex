@@ -57,7 +57,7 @@ words:
 |---|---|
 | The backup | The copy of the refused store that you make in step 2, `tally.retain.bak` |
 | A numbered copy | A file `<store>.dropped.<n>` that the runner writes beside the store, for example `tally.retain.dropped.1`. It holds a store that a start did not read whole. [The numbered copies](../reference/store.md#the-numbered-copies) gives the rules. |
-| The end line | The last line of the store, for example `end 15 lines`. Its count includes each line of the store, the end line also. |
+| The end line | The last line of the store, for example `end 16 lines`. Its count includes each line of the store, the end line also. |
 | A digest | The 32 lowercase hexadecimal digits after `resource` or after `program <type>`. A warm start compares them with its configuration and [program](../reference/glossary.md#program). |
 
 ## Steps
@@ -104,10 +104,11 @@ Figure: the decisions of this guide, after step 3. A message that starts with
 | `` comes before any `instance` line `` | Move the line under the line of its instance, or remove it. |
 | `names what line <n> names already` | Remove 1 of the 2 lines. Keep the line with the correct value. |
 | `the store's end line counts` | Find the line that is new, lost or doubled, and mend it. Then write the number of lines in the end line. |
+| `is not the digest of the store's value lines` | A value line changed. If you know each value, write the digest that the message gives on the `digest` line. Else go to step 7. |
 | `is no number` | Write the value as a decimal number, for example `3`. |
 | `is no type of a retained value` | Write the [type](../reference/glossary.md#type) of the [tag](../reference/glossary.md#tag), as its [declaration](../reference/glossary.md#declaration) gives it, for example `dint`. |
 | `is no digest` | Copy the line from an earlier store of the same files, for example a numbered copy. If you have none, go to step 7. |
-| `is no store's header` | Line 1 has a typing error. Write `logex retain 3` on line 1. |
+| `is no store's header` | Line 1 has a typing error. Write `logex retain 4` on line 1, or `logex retain 3` for a store with no `digest` line. |
 | `is an end line, which a store whose first line is` | Mend line 1, as for `is no store's header`. |
 | `the store is of version` | A different version of logex wrote the store. Start the store with that version, or go to step 7. |
 | `names no configuration` | Write line 2 as `configuration <name> written <time>`, for example `configuration tally written 2026-10-30T14:00:06Z`. |
@@ -116,7 +117,7 @@ Figure: the decisions of this guide, after step 3. A message that starts with
 
 > #### Note {: .info}
 >
-> `wc -l tally.retain` prints `15 tally.retain` for a store of 15 lines. If the last line
+> `wc -l tally.retain` prints `16 tally.retain` for a store of 16 lines. If the last line
 > has no newline, it prints 1 less. The line numbers of the text editor are always
 > correct.
 
@@ -125,10 +126,10 @@ Figure: the decisions of this guide, after step 3. A message that starts with
 
 > #### Caution {: .error}
 >
-> Do not add only an end line to a store that is cut short. The start then reads the
-> store. Each lost value starts at its initial value, and `dropped` does not show it.
-> [An example](#an-example-a-comment-and-a-store-cut-short) shows a count of 0 after
-> such a mend.
+> Do not add only an end line and a digest to a store that is cut short. The start then
+> reads the store. Each lost value starts at its initial value, and `dropped` does not
+> show it.
+> [An example](#an-example-a-comment-and-a-store-cut-short) shows the refusal.
 
 | Part of the message | Cause and mend |
 |---|---|
@@ -309,13 +310,13 @@ IO.puts("the copy holds the cut store: #{File.read!("tally.retain.dropped.1") ==
 $ mix run recover-a-refused-store.exs
 -- a comment
 tally.retain: line 6: `# 3 boxes` is a comment, and a store holds none: the runner writes the store whole at every write, so no comment outlives the next
-tally.retain: line 16: the store's end line counts 15 lines, and the store has 16: a line was lost or doubled, or a hand edit added or removed one without changing the count, which counts every line, the end line among them, and the store is not read
+tally.retain: line 17: the store's end line counts 16 lines, and the store has 17: a line was lost or doubled, or a hand edit added or removed one without changing the count, which counts every line, the end line among them, and the store is not read
 -- the comment removed
 t1.boxes.cv=3 total_boxes=3 dropped=[] copy=nil
 -- cut short
-tally.retain: line 8: `t1.boxes.cu bool 0` is the store's last line, and no end line: a store of `logex retain 3` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
+tally.retain: line 8: `t1.boxes.cu bool 0` is the store's last line, and no end line: a store of `logex retain 4` ends with `end <count> lines`, its count of lines, so this one was cut short, and a store cut short is not read: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- an end line added
-t1.boxes.cv=0 total_boxes=3 dropped=[] copy=nil
+tally.retain: line 1: `logex retain 4` heads a store that holds the digest of its value lines, and the store holds no `digest` line: its value lines' digest is `fcd3c375dd21450b0f788ac65c88c01a`, so to keep them write `digest fcd3c375dd21450b0f788ac65c88c01a` just before the end line, counted in it, and to start anyway: start it with start: :cold to start over it, which copies it first to the next `.dropped.<n>` beside it and then writes a new store over it
 -- start: :cold
 t1.boxes.cv=0 total_boxes=0 dropped=[] copy="tally.retain.dropped.1"
 the copy holds the cut store: true
@@ -323,10 +324,10 @@ the copy holds the cut store: true
 
 | Line | What it shows |
 |---|---|
-| `-- a comment` | 2 problems: the comment, and a count of 16 lines in place of 15 |
+| `-- a comment` | 2 problems: the comment, and a count of 17 lines in place of 16 |
 | `-- the comment removed` | The warm start reads the 3 boxes. |
 | `-- cut short` | The last line is not an end line. The message holds `start it with start: :cold`. |
-| `-- an end line added` | The [counter](../reference/glossary.md#counter) `t1.boxes` lost its count of 3 with no report. The [global](../reference/glossary.md#global) `total_boxes` keeps 3. The 2 values do not agree. |
+| `-- an end line added` | The start refuses the store: it has no `digest` line. With the digest of the message, the [counter](../reference/glossary.md#counter) `t1.boxes` loses its count of 3 with no report. |
 | `-- start: :cold` | Each value is 0. The numbered copy holds the store as it was cut. |
 
 ## See also

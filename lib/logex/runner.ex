@@ -300,8 +300,9 @@ defmodule Logex.Runner do
   resource's retained image (`Logex.Runtime.retained/1`), in a file on the host's disk,
   which stands in for battery-backed memory:
   - *Its text* is a person's to read, and to edit by hand where a retained value tripped
-    the plant (decision 284): `logex retain 3`, since decision 530 (RV-26), where it was
-    `logex retain 2`; `configuration <name> written <time>`,
+    the plant (decision 284): `logex retain 4`, since decision 604 (RV-34), where it was
+    `logex retain 3` since decision 530 (RV-26) and `logex retain 2` before;
+    `configuration <name> written <time>`,
     the time of the write on the host's wall clock, in UTC to the second, read through
     the clock's `wall_ms/1` (`Logex.Runner.Clock`), for a person and for `status/1`, never
     for a timer; each retained global, `global total_boxes dint 41`; each retained
@@ -328,16 +329,24 @@ defmodule Logex.Runner do
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
-    types' bytes as it was written (decision 534), and one of `logex retain 3` that names
-    none, a hand edit's, refused at its first line (decision 537), as one that names it
+    types' bytes as it was written (decision 534), and one of `logex retain 3` or `logex
+    retain 4` that names none, a hand edit's, refused at its first line (decision 537), as one that names it
     in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
     names its resource and no program type, which no configuration gives, refused at its
     `resource` line (decision 543), where it was read and warned that each type
     was not in the store, each of the three told only once the store's count reads, since
     decision 544 (RV-29) decision 531's too, a store miscounted or cut short told its end
     line alone, and a naming line that does not read is told as itself; and
-    since decision 355 its end line,
-    `end 11 lines`,
+    since decision 604 (RV-34) the digest of its value lines, `digest <md5>`, just before
+    its end line, the MD5 of every line after the configuration's but the naming lines and
+    itself, each ended by LF, so that a hand edit that does not mend it, a value changed, a
+    line added or removed, its count mended or not, is refused at a fresh start, told the
+    digest its lines give and the way out, once every other line reads, and one of version
+    4 with none refused at its header, where an end line added to a store cut short or a
+    value line removed with the count lowered read the lost values at their initial values
+    unreported; a store of version 3, 2 or 1, which holds none, read as before
+    (provisional, `PLAN.md`'s RV-34); and since decision 355 its end line,
+    `end 12 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
     cut short anywhere, at a line's end or inside a number, is refused at a fresh start,

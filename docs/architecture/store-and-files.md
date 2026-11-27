@@ -157,11 +157,11 @@ for each problem.
 
 ### The text of the store
 
-[Example](#example) gives this store of 15 lines:
+[Example](#example) gives this store of 16 lines:
 
-<!-- unchecked: the first 15 lines of the output of this page's example -->
+<!-- unchecked: the first 16 lines of the output of this page's example -->
 ```text
-logex retain 3
+logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
 resource 013cc059392445fdcc1e84c9b0de6118
 program tally bd882e28a8159d8e8a4ea56ade7b36b6
@@ -175,14 +175,15 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-end 15 lines
+digest 18a0b2493864f5e730cd41029aeaf91c
+end 16 lines
 ```
 
 Each line has 1 of these forms:
 
 | Line | Form | Sequence |
 |---|---|---|
-| Header | `logex retain 3` | Line 1 |
+| Header | `logex retain 4` | Line 1 |
 | Configuration | `configuration <name> written <time>` | Line 2 |
 | Resource | `resource <digest>` | Line 3 |
 | Program type | `program <type> <digest>` | By the name of the type |
@@ -191,6 +192,7 @@ Each line has 1 of these forms:
 | Instance | `instance <name> <program type>` | By name |
 | Instance on the path | `<instance>.<path> <kind>` | After its instance, in path order |
 | Value | `<instance>.<path> <type> <value>` | After its instance, in path order |
+| Digest | `digest <digest>`, the MD5 of the value lines | Before the end line |
 | End line | `end <count> lines` | Last |
 
 - The time is the wall clock of the host in UTC, to the second. The runner gets it from
@@ -203,6 +205,9 @@ Each line has 1 of these forms:
   [subscript](../../guides/reference/glossary.md#subscript) fastest.
 - Only an instance whose program retains a value has an `instance` line.
 - The count of the end line includes the header and the end line, as `wc -l` counts them.
+- The value lines are each line after the `configuration` line, except the naming lines,
+  the `digest` line and the end line. Each has LF at its end in the digest, whatever its
+  line end in the file.
 - The runner ends each line with LF. The reader also takes CRLF and a lone CR.
 
 ## Example
@@ -280,7 +285,7 @@ IO.inspect(Enum.sort(Path.wildcard("box.retain*")), label: "files")
 
 ```console
 $ mix run store-and-files.exs
-logex retain 3
+logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
 resource 013cc059392445fdcc1e84c9b0de6118
 program tally bd882e28a8159d8e8a4ea56ade7b36b6
@@ -294,20 +299,21 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-end 15 lines
-box.retain: line 13: `t1.box` is the store's last line,
-and no end line: a store of `logex retain 3` ends with
-`end <count> lines`, its count of lines, so this one was
-cut short, and a store cut short is not read: start it
-with start: :cold to start over it, which copies it
-first to the next `.dropped.<n>` beside it and then
-writes a new store over it
+digest 18a0b2493864f5e730cd41029aeaf91c
+end 16 lines
+box.retain: line 15: `digest 18a0b2` is the store's last
+line, and no end line: a store of `logex retain 4` ends
+with `end <count> lines`, its count of lines, so this
+one was cut short, and a store cut short is not read:
+start it with start: :cold to start over it, which
+copies it first to the next `.dropped.<n>` beside it and
+then writes a new store over it
 copy: "box.retain.dropped.1"
 files: ["box.retain", "box.retain.dropped.1"]
 ```
 
-The store has 15 lines, and its end line counts them. The cut leaves line 13 last, and
-the start refuses the store ([The end line](store-reading.md#the-end-line)). The cold start keeps the cut store as
+The store has 16 lines, and its end line counts them. The cut leaves part of line 15
+last, and the start refuses the store ([The end line](store-reading.md#the-end-line)). The cold start keeps the cut store as
 `box.retain.dropped.1`.
 
 ## Why it is built this way
@@ -323,14 +329,15 @@ that document.
   310 reports a drop of each element of an array of instances as 1 entry, `g[*].k`.
 - **Text a person can read.** Decision 276 makes the store text, as the forces file is
   (decision 140). Decision 284 lets a person repair a value by hand while the runner does
-  not run.
+  not run. Decision 604 adds the `digest` line, so that a hand edit must mend it. Its
+  header `logex retain 4` is provisional (PLAN.md's RV-34).
 
 ## How to change it
 
 > #### Caution {: .error}
 >
 > If you change the text of the store, keep the reader able to read `logex retain 1`,
-> `logex retain 2` and `logex retain 3`. A plant can hold a store that an earlier logex
+> `logex retain 2`, `logex retain 3` and `logex retain 4`. A plant can hold a store that an earlier logex
 > wrote. If the reader refuses it, the plant can start only cold, and each retained count
 > and total goes back to its initial value.
 

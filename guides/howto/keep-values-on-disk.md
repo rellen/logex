@@ -167,7 +167,7 @@ IO.inspect(written.(runner, ~U[2026-10-30 14:00:04Z]), label: "last write")
 ```
 
 7. Add these lines, which kill the runner, as a crash does. Then they print the store.
-   Step 11 shows this as the line `runner: :killed` and the 15 lines of the store.
+   Step 11 shows this as the line `runner: :killed` and the 16 lines of the store.
 
 <!-- part of: keep-values-on-disk.exs -->
 ```elixir
@@ -309,7 +309,7 @@ first write: ~U[2026-10-30 14:00:00Z]
 3 boxes       total_boxes=3 t1.boxes.cv=3 case_full=1
 last write: ~U[2026-10-30 14:00:04Z]
 runner: :killed
-logex retain 3
+logex retain 4
 configuration tally written 2026-10-30T14:00:04Z
 resource 013cc059392445fdcc1e84c9b0de6118
 program tally bd882e28a8159d8e8a4ea56ade7b36b6
@@ -323,7 +323,8 @@ t1.boxes.pv dint 3
 t1.boxes.q bool 0
 t1.boxes.r bool 0
 t1.full bool 0
-end 15 lines
+digest 18a0b2493864f5e730cd41029aeaf91c
+end 16 lines
 fresh start   total_boxes=2 t1.boxes.cv=2 case_full=0
 stop: :ok
 start: :cold  total_boxes=0 t1.boxes.cv=0 case_full=0
@@ -359,7 +360,7 @@ The kill comes after the last write. Thus the new runner does not get the third 
 | `2 boxes` | The runner wrote the store each second. The write at 14:00:04 holds 2 boxes. |
 | `3 boxes` | The third box came after the last write. |
 | `runner: :killed` | The crash wrote nothing. |
-| `logex retain 3` to `end 15 lines` | The store holds 2 boxes, from the write at 14:00:04. |
+| `logex retain 4` to `end 16 lines` | The store holds 2 boxes, from the write at 14:00:04. |
 | `fresh start` | The new runner has 2 boxes. The crash lost the third box and the [latch](../reference/glossary.md#latch) of `t1.full`, which `case_full` shows. |
 | `start: :cold` | Each retained value is its initial value again. |
 
