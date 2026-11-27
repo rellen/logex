@@ -376,6 +376,50 @@ API".
   block's body, which was taken. Look for: a `rescue` of `FunctionClauseError` around
   those calls.
 
+- **`Logex.Runner.status/1` names every set a cut write of the forces file held**
+  (decision 600), a key `forces_unknown_sets`, a list of those sets, newest first and each
+  once, `[]` where none stands, beside `forces_unknown`, which still gives the newest set
+  or `nil`: an operator's panel whose writes of `eye` and then `estop` are both cut
+  shows both sets, where `forces_unknown` named the second's alone and the disk then
+  landed the first's, `eye` forced in the file and named nowhere. A write that lands or
+  fails empties the list as it clears `forces_unknown`; a restart keeps both. Provisional
+  (`PLAN.md`'s RV-34). Look for: code that pins status/1's map whole.
+- **A refusal of the forces file tells each problem of a line** (decision 600), a line
+  each: a point forced on an earlier line, and then its value that does not fit or its
+  name that names no input point, where the line forced already was told alone: an oven's
+  file of `zone_t 1 2 3` and then `zone_t[4] 1.0e39` is told that `zone_t[4]`
+  is forced on line 1 already and that 1.0e39 does not fit a real. A line with one
+  problem is told as before; the refusal still tells its first 50 problems and a count.
+  Look for: code that counts the lines of such a refusal.
+- **A trip names the reason a linked helper took its device down with** (decision 600),
+  `{:io, device, {:down, reason}}` as `Logex.IO` documents it, where a round's write that
+  found the device gone before the runner took its exit, a helper of `init/3`'s that
+  ended as `init/3` ran among them, tripped `{:io, device, {:down, :noproc}}`. Look for:
+  code that matches `{:down, :noproc}` in a trip.
+
+- **A warm fresh start matches its store within the write limit** (decision 603), the
+  store's text read back and its values laid over the resource in a process of its own,
+  limited to `write_limit:` of real time as the read before it is, so that
+  `Logex.Runner.start_link/1` over a store too large to match in it answers `{:error,
+  {:retain, :timeout}}`, no device opened and the store as it was, where it matched in
+  the caller with no limit: a plant of 32,768 retained timers, the size the runner's
+  documentation states, took 9.9 s on a busy machine, and 327,680 took 171 s, the caller
+  held throughout. A cold start's judge of the store, the same match, past the limit
+  copies the store before it writes over it. Provisional (`PLAN.md`'s RV-34). Look for: a
+  plant whose store's warm start takes near 5000 ms, which needs `write_limit:` more.
+- **The store holds the digest of its value lines, as `logex retain 4`** (decision 604),
+  a line `digest <md5>` before the end line, the MD5 of every line after the
+  configuration's but the naming lines, the digest's and the end line, so that a fresh
+  start refuses a store whose value lines a hand changed, added or removed without
+  mending it, told the digest the lines give and the way out, once every other line of
+  it reads: a box counter's `t1.boxes.cv dint 4` edited to `dint 7`, or a line removed and
+  the count lowered, where it was read and its tag given its initial value unreported. A
+  store of version 4 with no digest line is refused at its header; a store of version 3,
+  2 or 1 is read as before, and the next write makes it version 4. An older logex refuses
+  version 4 and starts it only cold. Provisional (`PLAN.md`'s RV-34). Look for: a script
+  that edits the store, which now writes the digest, and code that matches the header
+  `logex retain 3` or the count of the end line.
+
 ### What it carries, by the work that built it
 
 - **Program organisation and the first online edit** (decisions 1–29). The direction

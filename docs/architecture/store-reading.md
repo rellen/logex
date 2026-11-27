@@ -18,7 +18,8 @@ A fresh start reads the store raw, and checks its text before it uses a value:
 | The end line counts the lines of the store | The start refuses the store |
 | Each line has a form of [the lines of the store](store-and-files.md#the-text-of-the-store) | The start refuses the store |
 | The `configuration` line names the configuration of the start | The start refuses the store |
-| A store of `logex retain 3` has a `resource` line and a `program` line ([The versions](#the-versions)) | The start refuses the store |
+| A store of `logex retain 4` or `logex retain 3` has a `resource` line and a `program` line ([The versions](#the-versions)) | The start refuses the store |
+| The `digest` line of a store of `logex retain 4` holds the digest of its value lines | The start refuses the store |
 | Each digest is the digest of the program of the start | The start continues, and warns |
 
 The internal module [`retain.ex`](../../lib/logex/retain.ex) holds the reader, and
@@ -65,7 +66,7 @@ This table gives what a fresh start does when the store and the start are differ
 | The name on the `configuration` line | Refused, with the cold-start sentence |
 | A `resource` or `program` digest | The start continues, and warns |
 | A program type that only the store or only the start has | The start continues, and warns |
-| A store of `logex retain 3` with no `resource` line or with no `program` line | Refused, with the cold-start sentence |
+| A store of `logex retain 4` or `logex retain 3` with no `resource` line or with no `program` line | Refused, with the cold-start sentence |
 
 The warning is in `retain.warning` of `Logex.Runner.status/1`. The runner also sends it
 as `{:retain, {:warning, message}}` to each subscriber that takes `:retain`. It starts
@@ -80,10 +81,19 @@ differs; ...
 
 ### The versions
 
-The reader takes 3 headers. Each write makes a store of `logex retain 3`.
+The reader takes 4 headers. Each write that names a program makes a store of `logex retain
+4`.
 
-- **`logex retain 3`** has an end line and names its program by printed digests. The
-  reader refuses it in these 3 cases:
+- **`logex retain 4`** is a store of `logex retain 3` with a `digest` line before its end
+  line. The line holds the MD5 of the value lines. The reader computes it again, and
+  refuses a store whose `digest` line does not hold it or that has no `digest` line. The
+  refusal gives the digest of the value lines and the cold-start sentence. It waits for
+  each other problem: for a store with another problem, the refusal gives only that
+  problem. The
+  header is provisional (PLAN.md's RV-34).
+- **`logex retain 3`** has an end line and names its program by printed digests. It has
+  no `digest` line. The reader refuses it, and a store of `logex retain 4`, in these 3
+  cases:
   - It names no program.
   - It names program types and no `resource`.
   - It names its `resource` and no program type.
@@ -158,9 +168,11 @@ to start cold. It gives that sentence 1 time, also when it lists more than 1 pro
 These refusals give it:
 
 - a store that is cut short
-- a store of `logex retain 3` that names no program, names program types and no
-  `resource`, or names its `resource` and no program type
+- a store of `logex retain 4` or `logex retain 3` that names no program, names program
+  types and no `resource`, or names its `resource` and no program type
 - a store of a different configuration
+- a store of `logex retain 4` whose `digest` line does not hold the digest of its value
+  lines, or that has no `digest` line
 
 <!-- unchecked: the end of a refusal, from the run of the example of store-and-files.md, wrapped at 56 columns -->
 ```text
@@ -189,6 +201,8 @@ log.
   program by bytes. Decisions 531, 535 and 539 refuse a store that names a part of its
   program. Decisions 538 and 544 make those refusals wait for the count. Decisions 540
   and 545 give the cold-start sentence.
+- **A hand edit.** Decision 604 adds the digest of the value lines. An end line added to
+  a cut store, or a value line removed with its count mended, read as whole before it.
 
 ## How to change it
 

@@ -44,8 +44,22 @@ IO.write(File.read!("packer.retain"))
 text = File.read!("packer.retain")
 File.write!("packer.retain", String.replace(text, "s1.place dint 8\n", "s1.place dint 0\n"))
 
-# Step 7: start the runner from the store. Step 8: check the value and dropped.
+# Step 7: start the runner from the store. The start refuses it and tells the digest of
+# its lines now: write that digest on the digest line, as a person does, and start again.
+refused =
+  try do
+    Runner.start_link(opts)
+  rescue
+    error in ArgumentError -> error.message
+  end
+
+IO.puts(refused)
+[_all, old, new] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, refused)
+text = File.read!("packer.retain")
+File.write!("packer.retain", String.replace(text, "digest #{old}\n", "digest #{new}\n"))
 {:ok, runner} = Runner.start_link(opts)
+
+# Step 8: check the value and dropped.
 IO.inspect(Runner.get!(runner, "s1.place"), label: "s1.place")
 IO.inspect(Runner.status(runner).retain.dropped, label: "dropped")
 Manual.advance(clock, 10)

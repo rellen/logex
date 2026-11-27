@@ -300,8 +300,9 @@ defmodule Logex.Runner do
   resource's retained image (`Logex.Runtime.retained/1`), in a file on the host's disk,
   which stands in for battery-backed memory:
   - *Its text* is a person's to read, and to edit by hand where a retained value tripped
-    the plant (decision 284): `logex retain 3`, since decision 530 (RV-26), where it was
-    `logex retain 2`; `configuration <name> written <time>`,
+    the plant (decision 284): `logex retain 4`, since decision 604 (RV-34), where it was
+    `logex retain 3` since decision 530 (RV-26) and `logex retain 2` before;
+    `configuration <name> written <time>`,
     the time of the write on the host's wall clock, in UTC to the second, read through
     the clock's `wall_ms/1` (`Logex.Runner.Clock`), for a person and for `status/1`, never
     for a timer; each retained global, `global total_boxes dint 41`; each retained
@@ -328,16 +329,24 @@ defmodule Logex.Runner do
     global's line is (decision 531); since decision 530 the header `logex retain 3`, which
     a logex before RV-26 refuses at a warm start saying that it does not read the store's
     version, a `logex retain 2` store that names its program, RV-21's, compared by its
-    types' bytes as it was written (decision 534), and one of `logex retain 3` that names
-    none, a hand edit's, refused at its first line (decision 537), as one that names it
+    types' bytes as it was written (decision 534), and one of `logex retain 3` or `logex
+    retain 4` that names none, a hand edit's, refused at its first line (decision 537), as one that names it
     in part is (decision 535, RV-27), and since decision 539 (RV-28) one that
     names its resource and no program type, which no configuration gives, refused at its
     `resource` line (decision 543), where it was read and warned that each type
     was not in the store, each of the three told only once the store's count reads, since
     decision 544 (RV-29) decision 531's too, a store miscounted or cut short told its end
     line alone, and a naming line that does not read is told as itself; and
-    since decision 355 its end line,
-    `end 11 lines`,
+    since decision 604 (RV-34) the digest of its value lines, `digest <md5>`, just before
+    its end line, the MD5 of every line after the configuration's but the naming lines and
+    itself, each ended by LF, so that a hand edit that does not mend it, a value changed, a
+    line added or removed, its count mended or not, is refused at a fresh start, told the
+    digest its lines give and the way out, once every other line reads, and one of version
+    4 with none refused at its header, where an end line added to a store cut short or a
+    value line removed with the count lowered read the lost values at their initial values
+    unreported; a store of version 3, 2 or 1, which holds none, read as before
+    (provisional, `PLAN.md`'s RV-34); and since decision 355 its end line,
+    `end 12 lines`,
     its count of lines, the header and the end line among them (the words decision
     409's), so that a store
     cut short anywhere, at a line's end or inside a number, is refused at a fresh start,
@@ -427,7 +436,8 @@ defmodule Logex.Runner do
     provisional). A writer process of the runner's own, linked to it, takes the retained
     image out of it, makes the store's text and writes it by the same rule as every
     write, so that a slow write delays no round: while one is in progress the next waits,
-    the newest replacing the one before, latest wins. Since decision 455 the take-out and
+    the newest replacing the one before, latest wins, so that a period shorter than a
+    write is stretched to the write (decision 603, measured below). Since decision 455 the take-out and
     the text are the writer's, within the write limit from the hand-off, so that the
     runner's own work at a period is the hand-off, where it took the image out itself,
     0.9 s for 32,768 retained timers, and tripped a healthy plant at its first period
@@ -466,7 +476,15 @@ defmodule Logex.Runner do
     read in the caller itself: a store laid over the resource by decision 277's matching
     (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
     path, of exactly its type, and it fits, the rest dropped and reported in `status/1`'s
-    `retain`, and since decision 360 the store, as the start read it, copied before its
+    `retain`; since decision 603 (RV-34) the match, the store's text read back and its
+    image laid over the configuration, made in a process of its own and limited to the
+    write limit of real time too, as the read is, each its own limit, so that a store too
+    large to match within it starts nothing, `{:error, {:retain, :timeout}}`, no device
+    opened and the store as it was, where the caller waited on the match with no limit,
+    a plant of the size below that matched in 9.9 s and ten times it in 171 s; a host
+    whose store needs more gives `write_limit:` more, and a cold start's judge of the
+    store (decision 417), the same match, past the limit takes the store as one to copy
+    before it writes over it (provisional, `PLAN.md`'s RV-34); and since decision 360 the store, as the start read it, copied before its
     first write over it, in the runner's own process once its files are claimed and before
     any device is opened, so that a mistaken deploy's drops can be taken back from the
     copy once the next write has made the store the new configuration's: since decision
@@ -660,7 +678,11 @@ defmodule Logex.Runner do
   held, `forces_unknown`, until a later write of the file lands or fails, and since
   decision 502 (RV-19) a restart's read of the file leaves it so, the cut write able to
   land after the read, where the read made it known, and since decision 440 the key
-  always there, nil where no such write stands. Every start reads it, `start_link/1` in
+  always there, nil where no such write stands; since decision 600 (RV-34) a second cut
+  write's set leaves the first's named, `forces_unknown_sets` listing every set a cut
+  write held, newest first and each once, `forces_unknown` the newest of them as before,
+  the file holding one of them or the runner's `forces` (provisional, `PLAN.md`'s RV-34).
+  Every start reads it, `start_link/1` in
   the caller, after the configuration and the bindings, and `restart/2` before it
   releases anything,
   each raw, off the VM's file server, and limited to the write limit of real time
@@ -692,7 +714,10 @@ defmodule Logex.Runner do
   line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
-  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file
+  `<path>: line <n>: ...`, since decision 600 (RV-34) each problem of a line its own line,
+  a point forced on an earlier line told so and then its value that does not fit or its
+  name that names no input point, where the line forced already was told alone
+  (provisional, `PLAN.md`'s RV-34), the runner not started, or at a restart left tripped: the file
   is read exactly as the runner writes it, a last line with no line end read, and since
   decision 410 a line ended by LF, CRLF or a lone CR read alike, the runner writing LF, so
   that `hz 1.5` saved with CRLF line ends forces 1.5, where its carriage return was no
@@ -971,7 +996,15 @@ defmodule Logex.Runner do
   and 348 ms at 32,768; an array of timers retained, with its period of 1000 ms, written
   every period at 32,768, the period's hand-off a copy of its retained values (above), and
   at 65,536 past the write limit, the store `unknown` and reported each period, its
-  start's write 5.0 s; and an edit's test step over an array of timers in 150 ms at
+  start's write 5.0 s; since decision 603 (RV-34), measured on that machine at a load
+  average of 12 to 20, a store of 32,768 retained timers, 3.6 MB, is read back in 0.9 to
+  1.5 s and matched in 7.7 to 9.4 s, a warm fresh start of it 7.2 s given the time, past
+  the 5000 ms of the default `write_limit:`, which it then answers `{:error, {:retain,
+  :timeout}}`, and one of 327,680, ten times it, 36 MB, is so answered in 5.6 s, where
+  it was matched in the caller in 171 s; a period shorter than a write is stretched to
+  the write, the next write begun only once the one in progress ends (latest wins,
+  above), so that the 32,768 timers' store given a 1000 ms period was replaced every
+  3.5 to 4.4 s; and an edit's test step over an array of timers in 150 ms at
   32,768 and 355 ms at 65,536, 384 to 412 ms on a quiet machine and once 536 ms, past the
   idle watchdog, under the review's load, and over a user block's instances, which moves
   each member, in 255 ms at 10,922 and 576 ms at 21,844, past the idle watchdog some
@@ -1082,6 +1115,7 @@ defmodule Logex.Runner do
           forces: %{optional(String.t()) => Runtime.value()},
           forces_unread: {String.t(), reason :: term} | nil,
           forces_unknown: %{optional(String.t()) => Runtime.value()} | nil,
+          forces_unknown_sets: [%{optional(String.t()) => Runtime.value()}],
           forcing: %{optional(String.t()) => Runtime.value()} | nil,
           edit: Edit.stage() | nil,
           runs: %{optional(String.t() | :none) => {non_neg_integer, pos_integer}},
@@ -1389,7 +1423,9 @@ defmodule Logex.Runner do
   force's write ran past its limit and may yet land, the set it held, until a later write
   of the file lands or fails, a restart's read leaving it since decision 502 (the cut
   write may land after the read), and since decision 440 always there,
-  nil where no such write stands; since decision 466 `forcing`, the set the write of the
+  nil where no such write stands, and since decision 600 `forces_unknown_sets`, every set
+  such a write held, newest first and each once, `forces_unknown` the first of them, `[]`
+  where none stands, as long as `forces_unknown` stands; since decision 466 `forcing`, the set the write of the
   forces file that is out holds, the forces as they will be once it lands, the requests
   joined into it among them (decision 465), always there as the other keys are, nil where
   no write is out, so that a force on its way shows before it is in effect; `edit`, the
@@ -1765,6 +1801,9 @@ defmodule Logex.Runner do
     do: cold_copied(Writer.copied(retain.at, text, start.write_limit), start)
 
   defp cold_copy(%{copy: {:unread, reason}}), do: {:error, reason}
+  # Decision 603 (RV-34): a warm start whose match ran past the write limit starts nothing,
+  # its files given up and the store as it was (store_text!/5).
+  defp cold_copy(%{copy: {:unmatched, reason}}), do: {:error, reason}
   defp cold_copy(start), do: {:ok, start}
 
   defp cold_copied({:ok, n}, %{retain: retain} = start),
@@ -2796,11 +2835,24 @@ defmodule Logex.Runner do
   # claim to be held at the runner's end until its calls have ended (`forces_cut`); a
   # later write that ends by itself, landed or failed, has had every call of the file
   # system made before its own answered, the cut one's among them, and clears it.
+  # Decision 600 (RV-34): every cut write's set is one the file may hold, so each is named,
+  # newest first and each once, `forces_unknown_sets`, `forces_unknown` the newest of them
+  # as before, where a second cut write's set took the place of the first's, which the
+  # disk could still land (provisional, `PLAN.md`'s RV-34).
   defp taken({:error, :timeout}, forces, _names, state),
-    do: {{:error, {:forces, :timeout}}, %{state | forces_unknown: forces, forces_cut: true}}
+    do:
+      {{:error, {:forces, :timeout}},
+       %{
+         state
+         | forces_unknown: forces,
+           forces_unknown_sets: [forces | List.delete(state.forces_unknown_sets, forces)],
+           forces_cut: true
+       }}
 
   defp taken({:error, reason}, _forces, _names, state),
-    do: {{:error, {:forces, reason}}, %{state | forces_unknown: nil, forces_cut: false}}
+    do:
+      {{:error, {:forces, reason}},
+       %{state | forces_unknown: nil, forces_unknown_sets: [], forces_cut: false}}
 
   defp taken(:ok, forces, names, state) do
     before = Enum.map(names, &seen(&1, state))
@@ -2813,6 +2865,7 @@ defmodule Logex.Runner do
       | forces: forces,
         forces_unread: nil,
         forces_unknown: nil,
+        forces_unknown_sets: [],
         forces_cut: false,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     }
@@ -2976,7 +3029,8 @@ defmodule Logex.Runner do
         force_problem(point, name, value, written(text))
       )
 
-  # A point forced twice is told so before its value is judged, as before decision 241.
+  # A point forced twice is told so before its value is judged, as before decision 241,
+  # and since decision 600 its name's problem after it.
   defp read_point({:error, message}, {name, _value, _text}, line, acc),
     do: once(first_line([name], acc), [name], line, acc, [message])
 
@@ -2995,13 +3049,19 @@ defmodule Logex.Runner do
   defp as_written(nil, _text), do: nil
   defp as_written({_name, first}, text), do: {hd(String.split(text, " ")), first}
 
-  defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
+  # Decision 600 (RV-34): each problem of a line told, a point forced on an earlier line
+  # first and then what its value or its name has against it, `zone_t[4] 1.0e39` after
+  # `zone_t 1 2 3` told that `zone_t[4]` is forced on line 1 already and that 1.0e39 does
+  # not fit, where the line forced already was told alone; a line that names several
+  # points forced earlier names the first of them, as before (provisional, `PLAN.md`'s
+  # RV-34).
+  defp once({name, first}, _names, line, {forces, lines, problems}, problem),
     do:
       {forces, lines,
-       [
+       also_told(problem, line, [
          {line, "#{quoted(Logex.Refusal.shown(name))} is forced on line #{first} already"}
          | problems
-       ]}
+       ])}
 
   defp once(nil, names, line, {forces, lines, problems}, problem),
     do:
@@ -3076,6 +3136,9 @@ defmodule Logex.Runner do
   defp written_and_read(spelling, read),
     do: "#{Logex.Refusal.shown(spelling)}, which is #{Logex.Refusal.shown(read)}"
 
+  defp also_told({:take, _taken}, _line, problems), do: problems
+  defp also_told(more, line, problems), do: Enum.reduce(more, problems, &[{line, &1} | &2])
+
   defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
     do: {Enum.into(taken, forces), lines, problems}
 
@@ -3110,6 +3173,7 @@ defmodule Logex.Runner do
       forces: state.forces,
       forces_unread: state.forces_unread,
       forces_unknown: state.forces_unknown,
+      forces_unknown_sets: state.forces_unknown_sets,
       forcing: forcing_of(state.writing),
       edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
@@ -3277,7 +3341,9 @@ defmodule Logex.Runner do
   # write, nil once a later write of the file lands or fails, a stop's own among them, nil
   # at a start, kept by a restart whose read fails, and since decision 502 (RV-19) by one
   # that reads the file or finds none, the cut write able to land after its read, where
-  # such a restart set it nil; a round, a trip and an edit's step leave it as it is; and the
+  # such a restart set it nil; a round, a trip and an edit's step leave it as it is; since
+  # decision 600 (RV-34) `forces_unknown_sets`, every set such a write held, newest first
+  # and each once, [] at a start and set and kept with `forces_unknown`; and the
   # store's `unknown`, under `retain`, set by a write over the store or its copy past its
   # limit and gone once a later write lands or fails, a start having none; a round, an
   # edit's step and a restart refused write nothing of their own, and a trip's, a stop's
@@ -4974,11 +5040,11 @@ defmodule Logex.Runner do
   # gave no time, found so by the write, trips the runner naming the clock, as its exit
   # does (exited/4): one down inside the write by its reason, and one down before it, the
   # write told only that it is gone, by its exit's, which waits in the mailbox and is
-  # taken here, an exit for any other reason left there as it was. So the trip names the
-  # clock whichever of the device's write and its poll comes first in a millisecond, where
-  # a write first named the device gone down.
+  # taken here, and since decision 600 (RV-34) an exit for any other reason too, its reason
+  # the trip's. So the trip names the clock whichever of the device's write and its poll
+  # comes first in a millisecond, where a write first named the device gone down.
   defp in_time({:error, {:down, :noproc}}, _answered, name, pid, _values, state),
-    do: downed(clock_exit(pid), name, state)
+    do: downed(exit_of(pid), name, state)
 
   defp in_time({:error, {:down, reason}}, _answered, name, _pid, _values, state),
     do: downed(reason, name, state)
@@ -4992,10 +5058,15 @@ defmodule Logex.Runner do
 
   defp downed(reason, name, state), do: {:halt, {:trip, {:io, name, {:down, reason}}, state}}
 
-  defp clock_exit(pid) do
+  # Decision 600 (RV-34): the device's exit taken whatever its reason, so that a helper its
+  # adapter linked, which ended and took the device down with its reason, a helper of
+  # init/3's ended while init/3 ran among them, is named by that reason, as `Logex.IO` has
+  # it, `{:io, device, {:down, reason}}`, where only a clock's was taken and the trip read
+  # `{:down, :noproc}`; `:noproc` where no exit waits, the device gone before the runner
+  # could know why.
+  defp exit_of(pid) do
     receive do
-      {:EXIT, ^pid, {:shutdown, {:clock, {kind, _}}} = reason} when kind in [:now_ms, :wall_ms] ->
-        reason
+      {:EXIT, ^pid, reason} -> reason
     after
       0 -> :noproc
     end
@@ -5135,6 +5206,7 @@ defmodule Logex.Runner do
        forces: forces,
        forces_unread: unread,
        forces_unknown: nil,
+       forces_unknown_sets: [],
        retain: retain,
        at: at,
        copy: copy,
@@ -5801,7 +5873,7 @@ defmodule Logex.Runner do
     do:
       {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
        wall!(clock),
-       cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration)}
+       cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration, ms)}
 
   defp store_read!({_given, at} = path, :warm, configuration, runtime, clock, ms),
     do:
@@ -5810,18 +5882,24 @@ defmodule Logex.Runner do
         path,
         configuration,
         runtime,
-        clock
+        {clock, ms}
       )
 
-  defp cold_read({:error, :enoent}, _path, _configuration), do: nil
+  defp cold_read({:error, :enoent}, _path, _configuration, _ms), do: nil
 
-  defp cold_read({:ok, text}, {given, _at}, configuration),
-    do: cold_judged(refused?(text, given, configuration), text)
+  # Decision 603 (RV-34): the judge is the warm match, made within the write limit as the
+  # warm start's is (matched!/5); one past it is taken as refused, the store copied before
+  # it is written over, a copy being harmless where it would have read (provisional,
+  # `PLAN.md`'s RV-34).
+  defp cold_read({:ok, text}, {given, _at}, configuration, ms),
+    do: cold_judged(Writer.read(fn -> refused?(text, given, configuration) end, ms), text)
 
-  defp cold_read({:error, reason}, _path, _configuration), do: {:unread, reason}
+  defp cold_read({:error, reason}, _path, _configuration, _ms), do: {:unread, reason}
 
   defp cold_judged(true, text), do: {:cold, text}
   defp cold_judged(false, _text), do: nil
+  defp cold_judged({:error, :timeout}, text), do: {:cold, text}
+  defp cold_judged({:error, {:down, reason}}, _text), do: exit(reason)
 
   # A store's text judged as a warm fresh start judges it, its refusal caught: refused or
   # not.
@@ -5833,12 +5911,12 @@ defmodule Logex.Runner do
     ArgumentError -> true
   end
 
-  defp store_text!({:error, :enoent}, path, configuration, runtime, clock),
+  defp store_text!({:error, :enoent}, path, configuration, runtime, {clock, _ms}),
     do:
       {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
        wall!(clock), nil}
 
-  defp store_text!({:error, {:timeout, ms}}, {path, _at}, _configuration, _runtime, _clock),
+  defp store_text!({:error, {:timeout, ms}}, {path, _at}, _configuration, _runtime, _clocked),
     do:
       raise(
         ArgumentError,
@@ -5846,7 +5924,7 @@ defmodule Logex.Runner do
           "within " <> limit_told(ms)
       )
 
-  defp store_text!({:error, reason}, {path, _at}, _configuration, _runtime, _clock),
+  defp store_text!({:error, reason}, {path, _at}, _configuration, _runtime, _clocked),
     do:
       raise(
         ArgumentError,
@@ -5859,15 +5937,55 @@ defmodule Logex.Runner do
   # Since decision 530 (RV-26) a store of version 2 or 1 that names its program, RV-21's,
   # is laid beside the start's program digested by its texts' bytes, as it was written
   # (`Logex.Retain.compared/3`, decision 534), every write naming the program printed.
-  defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
+  # Decision 603 (RV-34): the store's text read back and its image laid over the
+  # configuration, the warm match, made in a process of its own within the write limit
+  # of real time, as the read before it is, so that a large store's match holds the caller
+  # no longer than the limit, where 32,768 retained timers took 9.9 s in the caller and
+  # 65,536 some 28 s, no device open meanwhile: one past it starts nothing, `{:error,
+  # {:retain, :timeout}}`, as a store too big to write within the limit at a cold start
+  # is, the store as it was (cold_copy/1); its refusals are raised here, in the caller, as
+  # before (provisional, the match given its own limit, `PLAN.md`'s RV-34).
+  defp store_text!({:ok, text}, {given, _at} = path, configuration, runtime, {_clock, ms}),
+    do:
+      matched!(
+        Writer.read(fn -> matching(text, given, configuration) end, ms),
+        text,
+        path,
+        configuration,
+        runtime
+      )
+
+  defp matching(text, given, configuration) do
     {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
+    {:matched, runtime, written_at, stored, dropped}
+  rescue
+    error in ArgumentError -> {:refused, error.message}
+  end
+
+  defp matched!({:matched, runtime, written_at, stored, dropped}, text, path, configuration, _),
+    do:
+      {runtime, matched_store(path, written_at, stored, dropped, configuration), nil,
+       copied(dropped, text)}
+
+  defp matched!({:refused, message}, _text, _path, _configuration, _runtime),
+    do: raise(ArgumentError, message)
+
+  defp matched!({:error, :timeout}, _text, path, configuration, runtime),
+    do:
+      {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil), nil,
+       {:unmatched, :timeout}}
+
+  defp matched!({:error, {:down, reason}}, _text, _path, _configuration, _runtime),
+    do: exit(reason)
+
+  defp matched_store({given, _at} = path, written_at, stored, dropped, configuration) do
     by = Logex.Retain.written_by(configuration)
 
     warning =
       Logex.Retain.warning(stored, Logex.Retain.compared(stored, by, configuration), given)
 
-    {runtime, retained(path, written_at, dropped, by, warning), nil, copied(dropped, text)}
+    retained(path, written_at, dropped, by, warning)
   end
 
   # Decision 360: the store's text kept for its copy where the start dropped anything,

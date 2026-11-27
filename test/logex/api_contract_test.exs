@@ -15077,6 +15077,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # store with its `resource` and `program` lines taken away and its count mended, as a
   # hand edit leaves it, and is refused at its first line, which says that a store of
   # `logex retain 3` names the program that wrote it, no device read or written, each
+  # (since decision 604, RV-34, of `logex retain 4`, the runner's version, the refusals
+  # waiting the digest's, which a store refused for another line is not told),
   # sim's reads and writes as they were (RV-27's review, where this said no device
   # opened and asserted none of it); the store put back, the start is made from it.
   # Decision 539, restated (RV-28): the other warm fresh start in two, by the same draw, is
@@ -15092,7 +15094,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp unnamed_refused!(w, text, opts),
     do: unnamed_drawn!(rem(:erlang.phash2({text, :unnamed}), 2), w, text, opts)
 
-  defp unnamed_drawn!(0, w, "logex retain 3\n" <> _ = text, opts) do
+  defp unnamed_drawn!(0, w, "logex retain 4\n" <> _ = text, opts) do
     [header, configuration | rest] = String.split(text, "\n")
     kept = Enum.reject(rest, &String.match?(&1, ~r/\A(resource|program) /))
     {lines, ["end " <> _, ""]} = Enum.split(kept, -2)
@@ -15106,7 +15108,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     devices = for {_name, sim} <- Enum.sort(w.sims), do: {Sim.reads(sim), Sim.writes(sim)}
 
     assert_raise ArgumentError,
-                 "#{w.store}: line 1: `logex retain 3` heads a store that names the program " <>
+                 "#{w.store}: line 1: `logex retain 4` heads a store that names the program " <>
                    "that wrote it, and the store names none: a store that names the program " <>
                    "that wrote it gives `resource <digest>` straight after its configuration's " <>
                    "line, and then a `program <type> <digest>` a type: start it with start: " <>
@@ -15121,7 +15123,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_unnamed_refused, true)
   end
 
-  defp unnamed_drawn!(1, w, "logex retain 3\n" <> _ = text, opts) do
+  defp unnamed_drawn!(1, w, "logex retain 4\n" <> _ = text, opts) do
     [header, configuration | rest] = String.split(text, "\n")
     kept = Enum.reject(rest, &String.starts_with?(&1, "program "))
     {lines, ["end " <> _, ""]} = Enum.split(kept, -2)
@@ -15180,7 +15182,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp named_refused!(w, text, opts),
     do: named_drawn!(rem(:erlang.phash2({text, :named}), 2), w, text, opts)
 
-  defp named_drawn!(0, w, "logex retain 3\n" <> _ = text, opts) do
+  defp named_drawn!(0, w, "logex retain 4\n" <> _ = text, opts) do
     {lines, count} = unresourced(text)
     n = length(lines) + 1
 
@@ -15212,7 +15214,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:life_unresourced_counted, true)
   end
 
-  defp named_drawn!(1, w, "logex retain 3\n" <> _ = text, opts) do
+  defp named_drawn!(1, w, "logex retain 4\n" <> _ = text, opts) do
     name = Keyword.fetch!(opts, :configuration).name
 
     renamed =
@@ -15276,7 +15278,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_cut(lines),
     do:
       "line #{length(lines)}: #{life_quoted(List.last(lines))} is the store's last line, and " <>
-        "no end line: a store of `logex retain 3` ends with `end <count> lines`, its count " <>
+        "no end line: a store of `logex retain 4` ends with `end <count> lines`, its count " <>
         "of lines, so this one was cut short, and a store cut short is not read"
 
   defp life_quoted(<<shown::binary-size(60), _, _::binary>>), do: "`#{shown}…`"
@@ -15393,7 +15395,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     cut
   end
 
-  defp cold_cut(3, %{life: true} = w, "logex retain 3\n" <> _ = text) do
+  defp cold_cut(3, %{life: true} = w, "logex retain 4\n" <> _ = text) do
     {kind, unnamed} = unnamed_store(rem(:erlang.phash2({text, :unnamed}), 2), text)
     File.write!(w.store, unnamed)
     reach(kind, true)
@@ -16590,6 +16592,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     rename_waiting(server, writer, until)
   end
 
+  defp unknown_sets(nil), do: []
+  defp unknown_sets(set), do: [set]
+
   # The set the cut write held named unknown through the restart (checked/1), and known
   # once a later write lands: the same force asked again.
   defp cut_known(%{cut_force: nil} = w), do: w
@@ -17415,10 +17420,22 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp misfit_store(:misfit, %{stored: {_kt, k}} = w) when is_integer(k) do
     text = on_disk(w)
     assert text =~ "\nk1.k dint #{k}\n"
-    File.write!(w.store, String.replace(text, "\nk1.k dint #{k}\n", "\nk1.k dint 3000000000\n"))
+    edited = String.replace(text, "\nk1.k dint #{k}\n", "\nk1.k dint 3000000000\n")
+    File.write!(w.store, life_resealed(edited))
   end
 
   defp misfit_store(_change, _w), do: :ok
+
+  # Since decision 604 (RV-34) a hand edit mends the store's digest, as the store's pages
+  # tell an operator to: the MD5 of every line after the configuration's but the naming
+  # lines, the digest's and the end line, each ended by LF; a store of a version that holds
+  # no digest is left as it is.
+  defp life_resealed(text) do
+    [_header, _configuration | lines] = String.split(text, "\n", trim: true)
+    unsealed = ["resource ", "program ", "digest ", "end "]
+    values = for line <- lines, not String.starts_with?(line, unsealed), do: [line, ?\n]
+    Regex.replace(~r/^digest [0-9a-f]{32}$/m, text, "digest #{life_md5(values)}")
+  end
 
   # The model's last write as the hand edit left the store's text.
   defp misfit_shelved(:misfit, %{stored: {_kt, k}, shelf_stored: image} = w) when is_integer(k),
@@ -17508,16 +17525,20 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # line, the header, the configuration's line and the end line among them; and since
   # decision 517 (c) (RV-21) after the configuration's line the program that wrote it, the
   # configuration the resource ran at the model's last write (`life_by/1`), and since
-  # decision 530 (RV-26) under the header `logex retain 3`, a store that names its program.
+  # decision 530 (RV-26) under the header `logex retain 3`, a store that names its program;
+  # and since decision 604 (RV-34) under `logex retain 4`, the MD5 of its value lines, each
+  # after the program's lines ended by LF, just before the end line, counted.
   defp life_body!(image, by, text) do
-    [_text, body, count] =
+    [_text, body, digest, count] =
       Regex.run(
-        ~r/\Alogex retain 3\nconfiguration plant written \S+\n(.*)end (\d+) lines\n\z/s,
+        ~r/\Alogex retain 4\nconfiguration plant written \S+\n(.*)digest ([0-9a-f]{32})\nend (\d+) lines\n\z/s,
         text
       )
 
-    assert body == life_by(by) <> life_body(image)
-    assert String.to_integer(count) == 3 + length(:binary.matches(body, "\n"))
+    values = life_body(image)
+    assert body == life_by(by) <> values
+    assert digest == life_md5(values)
+    assert String.to_integer(count) == 4 + length(:binary.matches(body, "\n"))
 
     reach(
       :life_trigger_kept,
@@ -17667,14 +17688,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp life_rv21(%{shelf_by: nil}, text), do: text
   defp life_rv21(w, text), do: life_rewritten(rem(:erlang.phash2({text, :rv21}), 2), w, text)
 
-  defp life_rewritten(0, w, "logex retain 3\n" <> rest),
+  # Since decision 604 (RV-34) made from the runner's version 4: its digest line, which
+  # version 2 never holds, taken away and the count lowered.
+  defp life_rewritten(0, w, "logex retain 4\n" <> rest),
     do:
       "logex retain 2\n" <>
-        Regex.replace(~r/^program (\S+) [0-9a-f]{32}$/m, rest, fn _line, name ->
+        Regex.replace(~r/^program (\S+) [0-9a-f]{32}$/m, life_unsealed(rest), fn _line, name ->
           "program #{name} #{life_md5(life_bytes(Map.fetch!(w.shelf_by.programs, name)))}"
         end)
 
   defp life_rewritten(_draw, _w, text), do: text
+
+  defp life_unsealed(rest) do
+    [_text, body, count] =
+      Regex.run(~r/\A(.*)digest [0-9a-f]{32}\nend (\d+) lines\n\z/s, rest)
+
+    body <> "end #{String.to_integer(count) - 1} lines\n"
+  end
 
   defp life_type_differs(_name, same, same), do: []
   defp life_type_differs(name, nil, _text), do: ["`#{name}` is not in the store"]
@@ -19444,6 +19474,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # check, every force the walk asks answered before it checks.
     assert Map.fetch!(status, :forces_unread) == w.unread
     assert Map.fetch!(status, :forces_unknown) == w.forces_unknown
+    # Decision 600 (RV-34): every set a cut write held, newest first; the walk cuts one
+    # write before a later write knows it, so its one set or none.
+    assert Map.fetch!(status, :forces_unknown_sets) == unknown_sets(w.forces_unknown)
     assert Map.fetch!(status, :forcing) == nil
     retain_keys!(status.retain)
 

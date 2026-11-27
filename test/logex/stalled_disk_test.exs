@@ -923,6 +923,66 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 600 (RV-34): after two cut writes the file may hold either's set, or the one
+    # before them, so `forces_unknown_sets` names every cut write's set, newest first and
+    # each once, `forces_unknown` the newest as before, where the second's took the
+    # first's place and the file then held the first's, named nowhere; a restart keeps
+    # them (decision 502), a write that lands or fails knows them.
+    test "two cut writes: every set the file may hold named, newest first, until a write " <>
+           "lands or fails",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.status(runner).forces_unknown_sets == []
+      server = held()
+
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert Runner.force(runner, "level", 9) == {:error, {:forces, :timeout}}
+      # The second set again: named once, the newest.
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+
+      first = %{"eye_1" => 1, "level" => 7}
+      second = %{"level" => 9}
+
+      assert %{
+               forces: %{"level" => 7},
+               forces_unknown: ^first,
+               forces_unknown_sets: [^first, ^second]
+             } = Runner.status(runner)
+
+      # The disk back, the killed writes may land: the file holds a set status/1 names.
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      held = File.read!(rig.forces)
+      assert held in ["level 7\n", "eye_1 1\nlevel 7\n", "level 9\n"]
+
+      # A restart reads the file and keeps both named (decision 502).
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert Runner.restart(runner, :warm) == :ok
+
+      assert %{forces_unknown: ^first, forces_unknown_sets: [^first, ^second]} =
+               Runner.status(runner)
+
+      # A write that lands: every set known.
+      assert Runner.unforce(runner, "eye_1") == :ok
+      assert %{forces_unknown: nil, forces_unknown_sets: []} = Runner.status(runner)
+
+      # Two cut writes again; then one that fails, a directory at the `.tmp`: known.
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert Runner.force(runner, "eye_1", 0) == {:error, {:forces, :timeout}}
+      assert length(Runner.status(runner).forces_unknown_sets) == 2
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      File.mkdir!(rig.forces <> ".tmp")
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :eisdir}}
+      assert %{forces_unknown: nil, forces_unknown_sets: []} = Runner.status(runner)
+      File.rmdir!(rig.forces <> ".tmp")
+      assert Runner.stop(runner) == :ok
+    end
+
     # RV-11's review: a restart whose read of the file fails knows no more of what it holds
     # than before (decision 390), so the set a write past its limit held stays unknown,
     # named beside the file the restart could not read, until a force's write lands.
@@ -1317,14 +1377,27 @@ defmodule Logex.StalledDiskTest do
       rig(dir, [configuration: config, forces: nil] ++ extra)
     end
 
+    # Decision 603 (RV-34): a warm start's match is within the write limit too, so a runner
+    # over the 10,000 timers' own store, whose match takes some seconds, would start
+    # nothing; this test's subject is the trip's write, so the store it starts over holds
+    # none of the instance's values, where it was the store a runner of 5000 ms wrote, and
+    # the trip's write makes the 10,000 timers' text as before. The match still starts the
+    # resource, 10,000 timers, within the limit: some 7 ms, and up to 59 ms in 40 tries
+    # here with every core busy, where the trip's write took 500 to 1,500 ms; so the limit
+    # is 150 ms, between them, where 50 ms, below the match's slowest, refused the start
+    # in 3 of 11 runs of scripts/load.sh.
     test "a trip's write is cut off at the limit and reported, the runner answering",
          %{tmp_dir: dir} do
       made = timers(dir, write_limit: 5000)
-      {:ok, runner} = Runner.start_link(made.opts)
-      assert Runner.stop(runner) == :ok
+
+      File.write!(
+        made.store,
+        "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\nend 3 lines\n"
+      )
+
       stored = File.read!(made.store)
 
-      rig = timers(dir, write_limit: 50)
+      rig = timers(dir, write_limit: 150)
       {:ok, runner} = Runner.start_link(rig.opts)
       :ok = Runner.subscribe(runner, [:trip, :retain])
       Sim.fail(rig.panel, :read, {:error, :eio})
@@ -1345,6 +1418,78 @@ defmodule Logex.StalledDiskTest do
       assert Sim.reads(rig.panel) == 0
     end
   end
+
+  # Decision 603 (RV-34): a warm fresh start's match, its store's text read back and laid
+  # over the configuration, is made within the write limit of real time, as the read
+  # before it is, where it was made in the caller with no limit, 32,768 retained timers in
+  # 9.9 s and 327,680 in 171 s, no device open meanwhile: one past it starts nothing,
+  # `{:error, {:retain, :timeout}}`, no device read and the store as it was, its files
+  # given up so that a start with the limit it needs then starts; and a cold start's
+  # judge of the store, the same match, past it takes the store as one to copy before it
+  # writes over it. Each test sizes its plant to what it waits for: a start that
+  # matches whole waits out its match, so its plant is 8,192 retained timers, some 1.8 s
+  # here and 18 times a limit of 100 ms, where the runner's stated plant, 32,768, took 7 s
+  # and the start past ExUnit's 60 s under scripts/load.sh; a judge cut at its limit
+  # waits for none, so its plant is the stated one, its match some 7 s against 1010 ms,
+  # where the store's read and copy, also within the limit, are of 3.6 MB: at 8,192 timers
+  # and 100 or 300 ms the copy was cut in 3 and in 2 of 50 runs, and no `.dropped.1` made.
+  describe "a warm fresh start's match within the write limit (decision 603)" do
+    @match_limit 100
+
+    defp plant_timers(timers),
+      do: """
+      var_input eye bool
+      var_output lamp bool
+      var retain tl ton[#{timers}]
+
+      xic eye ton tl[0] 100
+      xic eye ote lamp
+      """
+
+    defp plant_store(dir, timers, extra) do
+      {:ok, tally} = Logex.compile(plant_timers(timers), name: "tally")
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+      rig = rig(dir, [configuration: config, forces: nil, retain_period: nil] ++ extra)
+      image = Logex.Runtime.retained(Logex.Runtime.start(config))
+
+      File.write!(
+        rig.store,
+        Logex.Retain.encode(image, ~U[2026-10-30 14:00:00Z], Logex.Retain.written_by(config))
+      )
+
+      rig
+    end
+
+    test "a match past the limit starts nothing, {:error, {:retain, :timeout}}, and a start " <>
+           "with the limit it needs then starts",
+         %{tmp_dir: dir} do
+      rig = plant_store(dir, 8192, write_limit: @match_limit)
+      stored = File.read!(rig.store)
+      assert Runner.start_link(rig.opts) == {:error, {:retain, :timeout}}
+      assert Sim.reads(rig.panel) == 0
+      assert File.read!(rig.store) == stored
+      assert Path.wildcard(rig.store <> "*") == [rig.store]
+
+      opts = Keyword.put(rig.opts, :write_limit, 600_000)
+      assert {:ok, runner} = Runner.start_link(opts)
+      assert %{retain: %{dropped: [], copy: nil}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a cold start's judge past the limit copies the store before it writes over it",
+         %{tmp_dir: dir} do
+      rig = plant_store(dir, 32_768, write_limit: @limit, start: :cold)
+      stored = File.read!(rig.store)
+      answer = Runner.start_link(rig.opts)
+      # The copy is made, and only then the store's first write, whose own time is the
+      # write's, landed or cut at the limit, and not this test's.
+      assert File.read!(rig.store <> ".dropped.1") == stored
+      stop(answer)
+    end
+  end
+
+  defp stop({:ok, runner}), do: assert(Runner.stop(runner) == :ok)
+  defp stop({:error, reason}), do: assert(reason == {:retain, :timeout})
 
   # Once the store holds `line`, the period's writer having written it.
   defp holding(store, line), do: held_line(File.read!(store) =~ line, store, line)
@@ -3139,7 +3284,8 @@ defmodule Logex.StalledDiskTest do
         :ok = :file.close(late)
 
         text = File.read!(rig.store)
-        assert text =~ ~r/\Alogex retain 3\nconfiguration plant written /
+        # Since decision 604 (RV-34) of version 4.
+        assert text =~ ~r/\Alogex retain 4\nconfiguration plant written /
         assert text =~ "t1.boxes.cv dint 2\n"
         refute text =~ "junk"
         refute File.exists?(rig.store <> ".tmp")

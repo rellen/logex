@@ -30,7 +30,9 @@ refused = fn title ->
   try do
     Runner.start_link(opts)
   rescue
-    error in ArgumentError -> IO.puts(error.message)
+    error in ArgumentError ->
+      IO.puts(error.message)
+      error.message
   end
 end
 
@@ -90,7 +92,12 @@ edit.("t1.boxes.cv dint 0\n", "t1.boxes.cv dint 0\nt1.boxes.cv dint 2\n")
 refused.("7. A line added by hand, and the count not changed")
 
 edit.("t1.boxes.cv dint 0\n", "")
+message = refused.("8. The old line taken out, and the digest not mended")
+
+# The digest mended as the refusal gives it.
+[_, stored, digest] = Regex.run(~r/`digest (\w+)` is not .*, which is `(\w+)`/U, message)
+edit.("digest #{stored}", "digest #{digest}")
 edit.("\n", "\r\n")
 {:ok, runner} = Runner.start_link(opts)
-show.(runner, "8. The old line taken out, the store saved with CRLF line ends")
+show.(runner, "9. The digest mended, the store saved with CRLF line ends")
 :ok = Runner.stop(runner)

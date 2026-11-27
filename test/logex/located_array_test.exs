@@ -1131,6 +1131,55 @@ defmodule Logex.LocatedArrayTest do
       Runner.stop(runner)
     end
 
+    # Decision 600 (RV-34): each problem of a line is told, a point forced on an earlier
+    # line first and then what its value has against it, where the line forced already was
+    # told alone: DOC-1's close's `temps 1 2 3`, refused for its count, then `temps[4]
+    # 1.0e39`, told that 1.0e39 does not fit as well as the line forced already; a whole
+    # line after an element's, told its count or each misfit beside it; a line refused as
+    # forced already forces nothing of its own, as before, so `temps[6]` on line 3 is no
+    # second force.
+    test "each problem of a line of the forces file is told, the value that does not fit " <>
+           "after the line forced already",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      {:ok, clock} = Manual.start_link()
+      {:ok, card} = Sim.start_link(clock: clock)
+
+      start = fn ->
+        Runner.start_link(
+          configuration: oven(),
+          io: %{"card" => {Sim, sim: card}},
+          clock: {Manual, clock},
+          forces: file
+        )
+      end
+
+      File.write!(file, "temps 1 2 3\ntemps[4] 1.0e39\n")
+
+      raises(
+        "#{file}: line 1: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 3\n" <>
+          "#{file}: line 2: `temps[4]` is forced on line 1 already\n" <>
+          "#{file}: line 2: `temps[4]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39",
+        start
+      )
+
+      File.write!(file, "temps[1] 1\ntemps 1 2 3\ntemps[6] 2\ntemps 1 1 1.0e39 1 1 1 1.0e40 1\n")
+
+      raises(
+        "#{file}: line 2: `temps[1]` is forced on line 1 already\n" <>
+          "#{file}: line 2: `temps` is an array of 8 reals, forced whole on one line, its name and then 8 values in the elements' order: the line holds 3\n" <>
+          "#{file}: line 4: `temps[1]` is forced on line 1 already\n" <>
+          "#{file}: line 4: `temps[2]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39\n" <>
+          "#{file}: line 4: `temps[6]` is a real, forced to a number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e40",
+        start
+      )
+
+      # A line forced already whose value fits is told that alone, as before.
+      File.write!(file, "temps[5] 1\ntemps[5] 2\n")
+      raises("#{file}: line 2: `temps[5]` is forced on line 1 already", start)
+      assert Sim.reads(card) == 0
+    end
+
     # Decision 241: the array named whole is forced to a list, each element then forced, and
     # unforced whole, each element reading its device's last value again; the file keeps
     # each element on its own line, and a whole line is read as each element forced.

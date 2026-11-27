@@ -296,7 +296,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 |---|---|
 | `{:ok, pid}` | Each device opened, and the first round ran. |
 | `{:error, {:io_init, device, reason}}` | The runner cannot open a device, or the first read of the device fails. The runner closes each device that it opened before, and stops. `reason` is the error of `init/3`, or the cause of the failure, as in [The causes of an I/O fault](#the-causes-of-an-io-fault). It is `:timeout` for a device that did not open in its time `open:`. |
-| `{:error, {:retain, reason}}` | The first write of the store failed, or took longer than `write_limit:`. A cold start also gives it if it cannot read the store, or cannot make the copy of a store that a warm start refuses. [The store](store.md#the-numbered-copies) gives the copy. |
+| `{:error, {:retain, reason}}` | The first write of the store failed, or took longer than `write_limit:`. A cold start also gives it if it cannot read the store, or cannot make the copy of a store that a warm start refuses. [The store](store.md#the-numbered-copies) gives the copy. A warm start gives `{:error, {:retain, :timeout}}` if it cannot put the values of the store into the resource in `write_limit:`. |
 | `{:error, {:already_started, pid}}` | A different process has the name of `name:`. The start writes nothing. |
 | An `ArgumentError` | A wrong option. Or the start refuses a forces file or a store. Examples are a line that is no force, and a store that is cut short. Or a store or a forces file that is a symbolic link. Or a file that a different runner of this virtual machine holds. [Forcing](forcing.md) and [Files](#files) give the rules. |
 
@@ -320,7 +320,7 @@ the runner's clock `NoWall` has no wall_ms/1, which a runner given retain: write
 <!-- unchecked: the messages of 2 starts that a forces file and a store refuse, copied from a run -->
 ```text
 bad.forces: line 1: `nosuch` is no input point of `packing`
-bad.retain: line 1: `junk` is no store's header: a store's first line is `logex retain 3`
+bad.retain: line 1: `junk` is no store's header: a store's first line is `logex retain 4`
 bad.retain: line 2: the store names no configuration: its second line is `configuration <name> written <time>`
 ```
 
@@ -632,9 +632,10 @@ answered.(answered, Task.yield(task, 10))
 | `refresh_gap` | The longest time in ms between 2 refreshes of the devices |
 | `unzeroed` | A list of device names: the devices whose outputs can be on after the trip. It is `[]` while running. [What each device keeps](#what-each-device-keeps) gives the rule. |
 | `edit` | `:accepted`, `:testing`, `:untested` or `nil`: the stage of the online edit that the runner holds |
-| `forces` | `%{point => value}`: each force in effect. [Forcing](forcing.md) gives this key and the next 3. |
+| `forces` | `%{point => value}`: each force in effect. [Forcing](forcing.md) gives this key and the next 4. |
 | `forces_unread` | `{path, reason}` or `nil`: the forces file that the last start or restart did not read |
 | `forces_unknown` | A map or `nil`: the forces of a write of the forces file that took longer than `write_limit:` |
+| `forces_unknown_sets` | A list of maps, or `[]`: the forces of each write of the forces file that took longer than `write_limit:`, the newest first |
 | `forcing` | A map or `nil`: the forces of the write of the forces file that is not complete |
 | `retain` | `nil` for a runner with no store. Else a map with the keys `path`, `written_at`, `failed`, `dropped`, `copy`, `unknown` and `warning`. [The store](store.md#the-status-of-the-store) gives each one. |
 
@@ -668,7 +669,7 @@ alias Logex.IO.Sim
 # Prints each key of status/1, in a fixed sequence.
 keys =
   ~w(status trip now rounds runs overlaps latest_wake refresh_gap unzeroed edit forces)a ++
-    ~w(forces_unread forces_unknown forcing retain)a
+    ~w(forces_unread forces_unknown forces_unknown_sets forcing retain)a
 
 status = Runner.status(runner)
 for key <- keys, do: IO.puts("#{key}: #{inspect(status[key])}")
@@ -713,6 +714,7 @@ edit: nil
 forces: %{}
 forces_unread: nil
 forces_unknown: nil
+forces_unknown_sets: []
 forcing: nil
 retain: nil
 start pressed, then advance 1 ms
@@ -1258,6 +1260,7 @@ gives the copies.
 | Paths | The runner makes each path a full path 1 time, at the start, from the working directory of that time. A later `File.cd/1` moves no file. `status/1` and the messages give the path as the host gave it. |
 | The limit of time | Each read and write of a file is a separate process with the limit `write_limit:` of real time. The runner stops a write at its limit, and the answer is `:timeout`. The write can still end later, when the disk answers. |
 | A large store | A store that the runner cannot make and write in `write_limit:` gives `:timeout`. A longer `write_limit:` gives the write more time. |
+| A large store at a warm start | The runner reads the store, and then puts its values into the resource. Each of the 2 has the limit `write_limit:`. A store that the runner cannot put into the resource in the limit gives `{:error, {:retain, :timeout}}`, and the runner does not start. On a busy machine, 32,768 retained timers took 7.2 s, more than the default 5000 ms. |
 
 <!-- unchecked: the messages of 5 wrong files, copied from a run -->
 ```text

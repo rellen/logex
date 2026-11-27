@@ -1233,6 +1233,48 @@ defmodule Logex.IOTest do
       assert Agent.get(agent, &{hd(&1.writes), &1.closes}) == {%{[0] => 0}, 1}
       assert Runner.stop(runner) == :ok
     end
+
+    # Decision 600 (RV-34): a helper init/3 linked that ends takes the device down with its
+    # reason, and the trip keeps that reason, `Logex.IO`'s `{:io, device, {:down, reason}}`,
+    # whichever the runner meets first, the device's exit or a round's write that finds the
+    # device gone; DOC-1's close met the write first, a helper that ended as init/3 ran, and
+    # the trip read `{:down, :noproc}`. The runner held while the device goes down behind
+    # a round's wake acts out that order, as decision 394's test does for a clock, and the
+    # blink's output changes at every round, so that the round writes.
+    test "a linked helper's end found first by a round's write keeps its reason in the trip" do
+      %{agent: agent, clock: clock, opts: opts} = scripted(%{helpers: [:card_lost]})
+      {:ok, blink} = Logex.compile("var_output out bool\nxio out ote out", name: "blink")
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\nvar_global y bool at panel.q.0\n" <>
+            "program b blink with fast\n  b.out y\n",
+          %{"blink" => blink}
+        )
+
+      {:ok, runner} = Runner.start_link(Keyword.put(opts, :configuration, config))
+      Runner.subscribe(runner)
+      [helper] = Agent.get(agent, & &1.linked)
+      device = device_of(runner)
+      ref = Process.monitor(device)
+      Manual.advance(clock, 10)
+
+      :sys.suspend(runner)
+      {_timer, token, _at} = :sys.get_state(runner).wake
+      send(runner, {Runner, :wake, token})
+      send(helper, :go)
+      assert_receive {:DOWN, ^ref, :process, ^device, :card_lost}, 5000
+      Manual.advance(clock, 10)
+      :sys.resume(runner)
+
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:down, :card_lost}}}}, 5000
+
+      assert %{status: :tripped, trip: {:io, "panel", {:down, :card_lost}}} =
+               Runner.status(runner)
+
+      assert Runner.stop(runner) == :ok
+    end
   end
 
   defp error_of({:error, reason, nil}, agent), do: {:error, reason, agent}

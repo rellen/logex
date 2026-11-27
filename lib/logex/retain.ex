@@ -7,9 +7,11 @@ defmodule Logex.Retain do
   #
   # Its text is decision 276's, a person's to read after an incident and, where decision
   # 284 has it, to edit by hand, since decision 355 (RV-5) of version 2 and since decision
-  # 530 (RV-26), as every store the runner writes names its program, of version 3:
+  # 530 (RV-26), as every store the runner writes names its program, of version 3, and
+  # since decision 604 (RV-34), as every one it writes holds the digest of its value lines,
+  # of version 4:
   #
-  #     logex retain 3
+  #     logex retain 4
   #     configuration plant written 2026-10-27T14:00:00Z
   #     resource 3c59dc048e8850243be8079a5c74d079
   #     program motor 7d793037a0760186574b0282f2f435e7
@@ -20,9 +22,10 @@ defmodule Logex.Retain do
   #     m1.boxes.cu bool 1
   #     m1.boxes.cv dint 41
   #     m1.weights int[8] 0 0 12 14 0 0 0 0
-  #     end 12 lines
+  #     digest 9e107d9d372bb6826bd81d3542a419d6
+  #     end 13 lines
   #
-  # a header, `logex retain 3`; the configuration's name and the time of the write on the
+  # a header, `logex retain 4`; the configuration's name and the time of the write on the
   # host's wall clock, in UTC to the second, for a person and for `status/1`, never for a
   # timer; since decision 517 (c) (RV-21) the program the runner ran as it wrote the store,
   # `resource <digest>`, of the configuration's own lines, and `program <type> <digest>`,
@@ -56,7 +59,13 @@ defmodule Logex.Retain do
   # each path the instance's name and then the path inside it, an element by its
   # subscripts' values (decision 312). An integer and a bool are written in decimal, a real
   # in the shortest text that reads back to it, a single's for a `real` (`Logex.Real.
-  # spelled/2`), and a timer's `last` never (decision 273).
+  # spelled/2`), and a timer's `last` never (decision 273); and since decision 604 (RV-34)
+  # the digest of the value lines, `digest <md5>`, just before the end line, the MD5 of
+  # every line after the configuration's but the naming lines and itself, each ended by
+  # LF, so that a hand edit that does not mend it is refused at the next fresh start, told
+  # the digest its lines give and the way out, its version `logex retain 4`, a store of
+  # version 3, 2 or 1, which holds none, read as before and one of 4 with none refused
+  # (seal/2, unsealed/3; provisional, `PLAN.md`'s RV-34).
   #
   # The end line (decision 355): a store's last line is `end <count> lines`, its count of
   # lines, the header and the end line among them, as `wc -l` counts a file whose last
@@ -111,11 +120,16 @@ defmodule Logex.Retain do
   # Decision 530 (RV-26): the header of a store that names its program, as the runner
   # writes every store; and that of one that names none, as encode/2 writes it and every
   # store was written from decision 355 to RV-26, read as it was.
-  @header "logex retain 3"
+  @header "logex retain 4"
+  @named "logex retain 3"
   @unnamed "logex retain 2"
 
-  # The headers this logex reads, the newest first.
-  @headers [@header, @unnamed, "logex retain 1"]
+  # The headers this logex reads, the newest first; those of a store that names its
+  # program, decision 530's and decision 604's (RV-34); and those that end with an end
+  # line, decision 355's.
+  @headers [@header, @named, @unnamed, "logex retain 1"]
+  @naming [@header, @named]
+  @ending [@header, @named, @unnamed]
 
   # Decision 417 (RV-13), and since decision 540 (RV-28) from this one place for every
   # refusal that tells it, the cut-short store's (ending/4), each of the naming lines'
@@ -149,9 +163,10 @@ defmodule Logex.Retain do
     globals = for {name, entry} <- Enum.sort(globals), do: ["global #{name} ", entry(entry), "\n"]
     triggers = for {name, sample} <- Enum.sort(image.triggers), do: "trigger #{name} #{sample}\n"
     instances = for {name, lone} <- Enum.sort(instances), do: instance(name, lone)
+    sealed = seal(by, [globals, triggers, instances])
 
     count =
-      3 + length(by) + length(globals) + length(triggers) +
+      3 + length(by) + length(sealed) + length(globals) + length(triggers) +
         Enum.sum(Enum.map(instances, &length/1))
 
     IO.iodata_to_binary([
@@ -162,9 +177,19 @@ defmodule Logex.Retain do
       globals,
       triggers,
       instances,
+      sealed,
       "end #{count} lines\n"
     ])
   end
+
+  # Decision 604 (RV-34): a store that names its program, every store the runner writes,
+  # holds the digest of its value lines, `digest <md5>` just before its end line, the MD5
+  # of every line after the configuration's but the naming lines, each ended by LF, in 32
+  # lowercase hexadecimal digits, so that a hand edit that does not mend it is told at the
+  # next fresh start; a store that names none, encode/2's, holds none, as before
+  # (provisional, its version `logex retain 4`, `PLAN.md`'s RV-34).
+  defp seal([], _values), do: []
+  defp seal(_by, values), do: ["digest #{digest(values)}\n"]
 
   defp header_of([]), do: @unnamed
   defp header_of(_by), do: @header
@@ -518,10 +543,18 @@ defmodule Logex.Retain do
       problems: Enum.reverse(marked ++ before_end(problems, last)),
       unprintable: Refusal.pattern(),
       ended: last != nil,
-      unread_by: %{}
+      unread_by: %{},
+      sealed: match?([{@header, 1} | _rest], lines),
+      digest: nil
     }
 
-    acc = body |> Enum.drop(2) |> Enum.reduce(acc, &line/2) |> naming(lines, ending)
+    values = Enum.drop(body, 2)
+
+    acc =
+      values
+      |> Enum.reduce(acc, &line/2)
+      |> naming(lines, ending)
+      |> unsealed(ending, values)
 
     refused!(
       told_once(Enum.sort_by(Enum.reverse(acc.problems), &elem(&1, 0)) ++ ending ++ trailed),
@@ -554,14 +587,14 @@ defmodule Logex.Retain do
   # names none is read as it was, one relabelled so by hand among them; and one whose
   # `resource` or `program` line does not read is told that line, and not that it names
   # none (unread_by/2).
-  defp owed(%{by: nil, unread_by: unread} = acc, [{@header, 1} | _rest])
-       when map_size(unread) == 0,
+  defp owed(%{by: nil, unread_by: unread} = acc, [{header, 1} | _rest])
+       when map_size(unread) == 0 and header in @naming,
        do:
          problem(
            acc,
            1,
            unnamed(
-             "`#{@header}` heads a store that names the program that wrote it, and the " <>
+             "`#{header}` heads a store that names the program that wrote it, and the " <>
                "store names none"
            )
          )
@@ -583,9 +616,10 @@ defmodule Logex.Retain do
   # back only by a line of the kind it says is missing.
   defp owed(
          %{by: %{resource: resource, programs: programs}, unread_by: unread} = acc,
-         [{@header, 1} | _rest]
+         [{header, 1} | _rest]
        )
-       when is_binary(resource) and map_size(programs) == 0 and not is_map_key(unread, :program),
+       when is_binary(resource) and map_size(programs) == 0 and not is_map_key(unread, :program) and
+              header in @naming,
        do:
          problem(
            acc,
@@ -597,6 +631,62 @@ defmodule Logex.Retain do
          )
 
   defp owed(acc, _lines), do: acc
+
+  # Decision 604 (RV-34): a store of `logex retain 4` holds the digest of its value lines
+  # (seal/2), judged once its count reads and every other line of it does, the last thing
+  # told of a store, so that a store cut short, miscounted or holding a line that does not
+  # read is told that alone, as the naming lines wait for the count (naming/3): one whose
+  # digest is not its lines', a value line a hand edited, added or removed, its count
+  # mended or not, and the digest not mended to it, is refused
+  # at its digest line, told the digest its lines give, so that an edit meant is kept by
+  # writing it there, and the way out; one with no digest line is refused at its header,
+  # told the same; and one whose digest line does not read is told that line alone
+  # (provisional, `PLAN.md`'s RV-34). A store of version 3, 2 or 1 holds none and is read
+  # as before.
+  defp unsealed(%{sealed: true, digest: nil, problems: []} = acc, [], values),
+    do:
+      problem(
+        acc,
+        1,
+        way_out(
+          "`#{@header}` heads a store that holds the digest of its value lines, and the " <>
+            "store holds no `digest` line: its value lines' digest is " <>
+            "`#{lines_digest(values)}`, so to keep them write `digest " <>
+            "#{lines_digest(values)}` just before the end line, counted in it, and to start " <>
+            "anyway"
+        )
+      )
+
+  defp unsealed(%{sealed: true, digest: {given, n}, problems: []} = acc, [], values),
+    do: sealed_by(lines_digest(values), given, n, acc)
+
+  defp unsealed(acc, _ending, _values), do: acc
+
+  defp sealed_by(same, same, _n, acc), do: acc
+
+  defp sealed_by(digest, given, n, acc),
+    do:
+      problem(
+        acc,
+        n,
+        way_out(
+          "`digest #{given}` is not the digest of the store's value lines, which is " <>
+            "`#{digest}`: a value line was edited, added or removed by hand and the digest " <>
+            "not mended, so the store is not read; to keep the edit write `digest #{digest}` " <>
+            "in its place, and to start anyway"
+        )
+      )
+
+  # The value lines as seal/2 digests them: every line after the configuration's but a
+  # `resource`, a `program` and a `digest` line, as read, each ended by LF, whatever line
+  # end the store holds (decision 410).
+  defp lines_digest(values),
+    do: digest(for({text, _n} <- values, not sealing?(text), do: [text, ?\n]))
+
+  defp sealing?("resource " <> _rest), do: true
+  defp sealing?("program " <> _rest), do: true
+  defp sealing?("digest " <> _rest), do: true
+  defp sealing?(_text), do: false
 
   # Each refusal of the naming lines, decision 531's, 535's and 539's: what is missing,
   # then what a store that names its program gives, and since decision 540 (RV-28) the way
@@ -642,7 +732,7 @@ defmodule Logex.Retain do
   # printed; one of version 2 or 1 that names one, as RV-21's logex wrote it, marked as
   # digested by its bytes (compared/3).
   defp versioned(nil, _lines), do: nil
-  defp versioned(by, [{@header, 1} | _rest]), do: by
+  defp versioned(by, [{header, 1} | _rest]) when header in @naming, do: by
   defp versioned(by, _lines), do: Map.put(by, :bytes, true)
 
   # Decision 517 (c), RV-21, and decision 527 (RV-26): what a warm fresh start warns of,
@@ -731,7 +821,7 @@ defmodule Logex.Retain do
   # empty lines after it come apart, so that the naming lines wait for the count alone
   # (naming/3, decision 538), an empty line after an end line whose count reads told
   # beside them (RV-28's review).
-  defp ended([{header, 1} | _rest] = lines) when header in [@header, @unnamed],
+  defp ended([{header, 1} | _rest] = lines) when header in @ending,
     do: trailing(Enum.reverse(lines), [], header)
 
   defp ended(lines), do: {lines, [], [], nil}
@@ -815,15 +905,16 @@ defmodule Logex.Retain do
   defp headed([{first, 1} | rest], name),
     do: {written_at(rest), header(String.split(first, " "), first) ++ named(rest, name)}
 
-  defp header(["logex", "retain", version], _text) when version in ["1", "2", "3"], do: []
+  defp header(["logex", "retain", version], _text) when version in ["1", "2", "3", "4"],
+    do: []
 
   # Decision 530 (RV-26): a version past 3 told plainly, as a logex before RV-26 tells a
-  # store of version 3.
+  # store of version 3, and since decision 604 (RV-34) one past 4.
   defp header(["logex", "retain", version], _text),
     do: [
       {1,
        "the store is of version #{Refusal.shown(version)}, which this logex does not " <>
-         "read: it reads `#{@header}`, `#{@unnamed}` and `logex retain 1`"}
+         "read: it reads `#{@header}`, `#{@named}`, `#{@unnamed}` and `logex retain 1`"}
     ]
 
   defp header(_other, text),
@@ -940,6 +1031,30 @@ defmodule Logex.Retain do
   # configuration's lines differed, which nothing said.
   defp line(["resource", digest], at, acc), do: by_entered(digested(digest), :resource, at, acc)
 
+  # Decision 604 (RV-34): the digest of a store of `logex retain 4`'s value lines, read
+  # wherever it stands, once, as the naming lines are; one that does not read told as
+  # itself, and the store not told also that it holds none; one in a store of another
+  # version told so, which holds none.
+  defp line(["digest", digest], at, %{sealed: true} = acc),
+    do: sealed_entered(digested(digest), at, acc)
+
+  defp line(["digest" | _words], {text, n}, %{sealed: true} = acc),
+    do:
+      problem(
+        %{acc | digest: :unread},
+        n,
+        "#{quoted(text)} is no digest's line: it is `digest <digest>`"
+      )
+
+  defp line(["digest" | _words], {text, n}, acc),
+    do:
+      problem(
+        acc,
+        n,
+        "#{quoted(text)} is a digest line, which a store whose first line is `#{@header}` " <>
+          "holds, and this store's first line is not"
+      )
+
   defp line(["program", name, digest], {_text, n} = at, acc),
     do:
       by_entered(
@@ -989,8 +1104,8 @@ defmodule Logex.Retain do
       problem(
         acc,
         n,
-        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}` or " <>
-          "`#{@unnamed}` ends with, and this store's first line is neither"
+        "#{quoted(text)} is an end line, which a store whose first line is `#{@header}`, " <>
+          "`#{@named}` or `#{@unnamed}` ends with, and this store's first line is none of them"
       )
 
   defp line([path, kind], at, acc), do: under(acc.instance, path, {:kind, kind}, at, acc)
@@ -1229,6 +1344,12 @@ defmodule Logex.Retain do
 
   defp no_digest(digest),
     do: {:error, "#{quoted(digest)} is no digest: a store's is 32 lowercase hexadecimal digits"}
+
+  defp sealed_entered({:error, message}, {_text, n}, acc),
+    do: problem(%{acc | digest: :unread}, n, message)
+
+  defp sealed_entered({:ok, digest}, {_text, n} = at, acc),
+    do: once(acc, :digest, at, &%{&1 | digest: {digest, n}})
 
   defp by_entered({:error, message}, key, {_text, n}, acc),
     do: problem(unread_by(acc, by_kind(key)), n, message)

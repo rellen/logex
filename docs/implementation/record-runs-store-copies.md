@@ -13,21 +13,22 @@ These tables support [0017. The store on disk](../adr/0017-the-store-on-disk.md)
 
 ### The versions, and an older logex
 
-The header gives the version of the text. Each write of this logex makes `logex retain
-3`. The store reader reads 3 versions:
+The header gives the version of the text. Each write of this logex that names a program
+makes `logex retain 4`. The store reader reads 4 versions:
 
 | Header | What the store holds | What this logex does |
 |---|---|---|
-| `logex retain 3` | An end line and the naming lines | Reads it |
-| `logex retain 2` | An end line. Naming lines are possible, each `program` digest of the bytes of its files | Reads it, and writes version 3 next |
-| `logex retain 1` | No end line and no naming lines | Reads it, and writes version 3 next |
+| `logex retain 4` | An end line, the naming lines and a `digest` line | Reads it |
+| `logex retain 3` | An end line and the naming lines | Reads it, with no digest to compare, and writes version 4 next |
+| `logex retain 2` | An end line. Naming lines are possible, each `program` digest of the bytes of its files | Reads it, and writes version 4 next |
+| `logex retain 1` | No end line and no naming lines | Reads it, and writes version 4 next |
 | Each other header | | Refuses it |
 
 A store of version 1 has no end line, so the store reader cannot find a cut in it. That
 risk lasts until the first write of this logex. The store reader refuses an end line
 under a header that takes none (decision 536). Thus a store with the header `logex
-retain 4` has 2 problems. This logex does not read the version, and the header takes no
-end line.
+retain 5` has 3 problems. This logex does not read the version, the header takes no
+`digest` line and it takes no end line.
 
 Version 3 exists for a rollback (decision 530). The first logex that wrote naming lines
 wrote them under `logex retain 2`. An older logex reads that header, but not the naming
@@ -49,7 +50,18 @@ tally.retain: line 1: the store is of version 3, which this logex does not read:
 tally.retain: line 15: `end 15 lines` is an end line, which a store whose first line is `logex retain 2` ends with, and this store's first line is not
 ```
 
-In both runs, the older logex then starts only cold. It copies the store to
+Version 4 exists for the digest of the value lines (decision 604). It is provisional
+(PLAN.md's RV-34). An older logex names the version first again. A run of commit 516afd7,
+the last before the digest, on the store of result 1 gives this:
+
+<!-- unchecked: a message of logex at commit 516afd7, from a run on the store of result 1 -->
+```text
+tally.retain: line 1: the store is of version 4, which this logex does not read: it reads `logex retain 3`, `logex retain 2` and `logex retain 1`
+tally.retain: line 15: `digest 8cfa2e4d3e860b659fe02173b2f9f18a` is not under the instance `t1` whose lines it follows
+tally.retain: line 16: `end 16 lines` is an end line, which a store whose first line is `logex retain 3` or `logex retain 2` ends with, and this store's first line is neither
+```
+
+In each of these runs, the older logex then starts only cold. It copies the store to
 `tally.retain.dropped.1` and starts the count at 0. The count stays lost until a person
 puts the copy back.
 
