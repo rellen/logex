@@ -166,6 +166,15 @@ API".
 
 ### The host's API
 
+- **`Logex.Configuration.Text.print/1` prints every configuration `new!/1` accepts**
+  (decision 601): a real global's initial value that is no value of its type, `initial:
+  0.1` on a `real`, is printed as the shortest text that reads back to the value the
+  global holds, `var_global sp real 0.1`, where `print/1` raised that it is "not an entry
+  a configuration file can say"; `compile/3` reads it back holding that value, its
+  `initial` the nearest real, `0.10000000149011612`. `Text.entries!/1` takes any float the
+  type holds, and refuses one past its range or one written as 0.0 in the words "one its
+  type holds, within its range and not written as 0.0". Look for: code that rescues
+  `print/1`'s `ArgumentError`, or matches the old words.
 - **A configuration's `warnings` hold its program types' warnings** (decision 638), after
   its own, each program type's once, in the order its instances first name them, each
   message naming its type, ``program type `conveyor`: `belt` already has an `ote` on line

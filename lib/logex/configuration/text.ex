@@ -1140,7 +1140,11 @@ defmodule Logex.Configuration.Text do
   real constant, held as the double its text writes and printed as that double's shortest
   text, comes back warned again, quoted as printed, only where that text holds more digits
   than its member's real keeps. A configuration from
-  `Logex.Configuration.new!/1` comes back with its elements numbered from line 1. Its name and its programs are `compile/3`'s arguments,
+  `Logex.Configuration.new!/1` comes back with its elements numbered from line 1. Since
+  decision 601 (RV-34) every configuration `new!/1` accepts prints: a real global's
+  initial value that is no value of its type, `initial: 0.1` on a `real`, is printed as the
+  shortest text that reads back to the value the global holds, `0.1`, its nearest real, and
+  comes back holding that value, its `initial` the nearest real, `0.10000000149011612`. Its name and its programs are `compile/3`'s arguments,
   which no line says, and its warnings `compile/3`'s to give, so none of them is printed.
 
   Entries no configuration line could say raise `ArgumentError`, as `entries!/1` does, and
@@ -1248,11 +1252,12 @@ defmodule Logex.Configuration.Text do
   defp flagged(false), do: []
 
   # M5-10 (decision 156): a real global's float initial value in the shortest text that reads
-  # back to it, a `real`'s the shortest whose nearest single it is, and any other float, a
-  # constant's, whose type the line does not say, `Float.to_string/1`'s, the shortest that
-  # reads back to the double.
+  # back to the value it holds, its nearest, since decision 601 (RV-34) one that is no value
+  # of its type, a `real`'s `0.1`, among them: a `real`'s the shortest whose nearest single
+  # it is; and any other float, a constant's, whose type the line does not say,
+  # `Float.to_string/1`'s, the shortest that reads back to the double.
   defp spelled(type, value) when type in @reals and is_float(value),
-    do: Logex.Real.spelled(type, value)
+    do: Logex.Real.spelled(type, Logex.Real.nearest(type, value))
 
   defp spelled(_type, value) when is_float(value), do: Float.to_string(value)
   defp spelled(_type, value), do: value
@@ -1277,7 +1282,8 @@ defmodule Logex.Configuration.Text do
     keyword; its `retain` nil, `:retain` or `:non_retain` (M6-3); its type an
     elementary type, `:bool`, `:dint` or since M5-3 any integer type, or since M5-11 an
     array of one, `{:array, :int, [4, 8]}`, its sizes a non-empty list of integers; its
-    initial value nil or an integer, a real's a float of its values too, and an array's
+    initial value nil or an integer, a real's any float its type holds too, as `new!/1`
+    takes it (`Logex.Declarations.holds?/2`, decision 601), and an array's
     nil or a non-empty list of its elements' values, each as a global's own; its location
     nil or one name token;
   - a `%Logex.Configuration.Instance{}`, its name, its type and its task, if it has one,
@@ -1463,10 +1469,12 @@ defmodule Logex.Configuration.Text do
   defp one_name!({:ok, [{:name, _, word}], _end_line}, word, _entry), do: :ok
   defp one_name!(_lexed, _word, entry), do: unsaid!("a name lexes as one name token", entry)
 
-  # M5-10: a real global's initial value may be a float, as a line reads one: its nearest
-  # value, which `print/1` spells so that it reads back as it is.
+  # M5-10: a real global's initial value may be a float, as a line reads one: since
+  # decision 601 (RV-34) any its type holds, as `Logex.Configuration.new!/1` judges it, a
+  # `real`'s `0.1` among them, which a line reads as its nearest value, so `print/1` spells
+  # that value, and the text reads back to the value the global holds.
   defp initial!(type, initial, entry) when type in @reals and is_float(initial),
-    do: real_value!(Logex.Real.value?(type, initial), entry)
+    do: real_value!(Declarations.holds?(type, initial), entry)
 
   # M5-11: an array's initial list, a literal an element, each as a global's own value is,
   # and never empty, since a line with no initial value says nil.
@@ -1490,7 +1498,8 @@ defmodule Logex.Configuration.Text do
   defp real_value!(false, entry),
     do:
       unsaid!(
-        "a real global's real initial value is one of its type's values, as a line reads it",
+        "a real global's real initial value is one its type holds, within its range and " <>
+          "not written as 0.0",
         entry
       )
 

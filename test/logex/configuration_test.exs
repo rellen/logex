@@ -4905,6 +4905,59 @@ defmodule Logex.ConfigurationTest do
       end
     end
 
+    # Decision 601 (RV-34): every real initial value new!/1 accepts, its type's values or
+    # not, `0.1` in a `real` among them, prints as the shortest text that reads back to the
+    # value the global holds, and compile/3 reads that text back to a global that holds
+    # the very value, a scalar's and an array's element's alike.
+    test "every real initial value new!/1 accepts prints as the shortest text of the value it holds" do
+      :rand.seed(:exsss, {2026, 11, 601})
+      {:ok, blink} = Logex.compile("var_output q bool\nxio q ote q", name: "blink")
+
+      for _ <- 1..300 do
+        type = Enum.random([:real, :lreal])
+        values = for _ <- 1..3, do: accepted_real(type)
+        scalar = Global.new!("g", type, initial: hd(values))
+        array = Global.new!("gs", {:array, type, [3]}, initial: values)
+
+        config =
+          Configuration.new!(
+            name: "plant",
+            globals: [scalar, array],
+            instances: [%Instance{name: "b1", type: "blink"}],
+            programs: [blink]
+          )
+
+        text = Text.print(config)
+        assert {:ok, back} = compiled(text, %{"blink" => blink}), text
+        held = Enum.map(values, &Logex.Real.nearest(type, &1))
+        assert Enum.map(back.globals, & &1.initial) == [hd(held), held], text
+
+        # Each value's text is the shortest that reads back to it.
+        [_var_global, _g, _type | [spelled]] =
+          text |> String.split("\n") |> hd() |> String.split()
+
+        assert spelled == Logex.Real.spelled(type, hd(held))
+
+        # The runtime holds the same values from either.
+        assert globals_held(config) == globals_held(back)
+        assert Text.print(back) == text
+      end
+
+      # The question's own: `0.1` in a `real`, printed `0.1`, held as the real nearest it.
+      config =
+        Configuration.new!(
+          name: "plant",
+          globals: [Global.new!("sp", :real, initial: 0.1)],
+          instances: [%Instance{name: "b1", type: "blink"}],
+          programs: [blink]
+        )
+
+      assert Text.print(config) == "var_global sp real 0.1\nprogram b1 blink\n"
+
+      assert {:ok, %{globals: [%Global{initial: 0.10000000149011612}]}} =
+               compiled(Text.print(config), %{"blink" => blink})
+    end
+
     # The same configurations written as a person might write them: keywords in any case,
     # words spaced and indented, comments, blank lines, and every line ending. What
     # compile/3 accepts prints to the canonical text line for line, which compiles back to
@@ -4921,6 +4974,25 @@ defmodule Logex.ConfigurationTest do
         assert compiled(expected, programs) == {:ok, config}
       end
     end
+  end
+
+  # Decision 601: a real a host may give a global, its type's value or not: of any
+  # magnitude its type holds or a whole number, each one new!/1 takes (`holds?/2`).
+  defp accepted_real(type), do: held_real(type, accepted_real(type, :rand.uniform(4)))
+
+  defp held_real(type, value), do: held_real(Logex.Declarations.holds?(type, value), type, value)
+  defp held_real(true, _type, value), do: value
+  defp held_real(false, type, _value), do: accepted_real(type)
+
+  defp accepted_real(_type, 1), do: Float.round(:rand.uniform() * 1000.0, :rand.uniform(6))
+  defp accepted_real(_type, 2), do: (:rand.uniform(2_000_001) - 1_000_001) * 1.0
+  defp accepted_real(:real, 3), do: :rand.uniform() * :math.pow(10, :rand.uniform(76) - 38)
+  defp accepted_real(:lreal, 3), do: :rand.uniform() * :math.pow(10, :rand.uniform(600) - 300)
+  defp accepted_real(type, 4), do: -accepted_real(type, 1) - 1.0e-3
+
+  defp globals_held(config) do
+    runtime = Logex.Runtime.start(config)
+    Map.new(config.globals, &{&1.name, Logex.Runtime.get(runtime, &1.name)})
   end
 
   defp unsaid(rule, entry),
@@ -6333,7 +6405,8 @@ defmodule Logex.ConfigurationTest do
               "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `non_retain`, `real`, `retain`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                 "word as its keyword",
               "a number is an integer",
-              "a real global's real initial value is one of its type's values, as a line reads it",
+              "a real global's real initial value is one its type holds, within its range and " <>
+                "not written as 0.0",
               "a task's continuous is true or false",
               "a global's retain is :retain, :non_retain or nil"
             ]

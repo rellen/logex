@@ -736,10 +736,15 @@ defmodule Logex.Configuration.TextTest do
             {%{start | member: :start}, "a name lexes as one name token"},
             {%{start | to: "x y"}, "a name lexes as one name token"},
             # M5-10: a constant may be a real, `m1.sp 37.5`, so a float is one; a real
-            # global's real initial value is one of its type's values, as a line reads it.
+            # global's real initial value is one its type holds, since decision 601 (RV-34)
+            # `0.1` in a `real` among them, which the line spells as its nearest value.
             {%{start | to: [1]}, "a connection is to a global, by its name, or to a constant"},
-            {%{a | type: :real, initial: 0.1},
-             "a real global's real initial value is one of its type's values, as a line reads it"},
+            {%{a | type: :real, initial: 1.0e39},
+             "a real global's real initial value is one its type holds, within its range and " <>
+               "not written as 0.0"},
+            {%{a | type: :real, initial: 1.0e-40},
+             "a real global's real initial value is one its type holds, within its range and " <>
+               "not written as 0.0"},
             {%{start | to: {:global, "g"}},
              "a connection is to a global, by its name, or to a constant"},
             # A keyword a line reads in a global's name place: no line can say these.

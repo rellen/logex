@@ -1312,6 +1312,29 @@ defmodule Logex.ValidationTest do
       end
     end
 
+    # A coil on a member of an element, `ote cs[1].r`, beside a write of it, as on a
+    # scalar instance's member, is told as the scalar's is (decision 626).
+    test "a write beside a coil on a member of an element, as on a scalar's member" do
+      warned = fn source ->
+        {:ok, program} = Logex.compile("var_input a bool\n" <> source, name: "p")
+        Enum.map(program.warnings, &Logex.Diagnostic.format/1)
+      end
+
+      assert warned.(
+               "var cs ctu[2]\nxic a ote cs[1].r\nxic a move 1 cs[1].r\nxic a ctu cs[1] 3\nxic a ctu cs[0] 3"
+             ) ==
+               ["line 4: warning: `cs[1].r` already has an `ote` on line 3: #{@later}"]
+
+      assert warned.("var c ctu\nxic a ote c.r\nxic a move 1 c.r\nxic a ctu c 3") ==
+               ["line 4: warning: `c.r` already has an `ote` on line 3: #{@later}"]
+
+      # Another element's member is another bool.
+      assert warned.(
+               "var cs ctu[2]\nxic a ote cs[1].r\nxic a move 1 cs[0].r\nxic a ctu cs[1] 3\nxic a ctu cs[0] 3"
+             ) ==
+               []
+    end
+
     test "each write is told the earliest it meets, a coil none where a coil came first" do
       assert shared_warnings("xic a move 1 belt\nxic a ote belt\ncal s1 a belt") == [
                {10, "`belt` is already written by the `move` on line 9: #{@later}"},
