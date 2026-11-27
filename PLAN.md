@@ -26383,6 +26383,59 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
       `Logex.Configuration.Text` made true.
 
 
+  The mend's mutation table (`scratchpad/rv34/fixmut/`, `scripts/mutate.sh` on each
+  mutant's named files, a mutant killed there killed by the full suite that holds them),
+  17 mutants, 17 killed: the tag's guard of its keys and the struct alone (x01, x02,
+  `quoted_test.exs`); each chain whole again, from files and among the types given (x03,
+  `loading_test.exs`; x04, `validation_test.exs`); a `cal` no coil, its kind `:cal`
+  again, its bool writes whole writes too, no virtual coil, its own words in
+  `second_ote/3`, `bit_coiled/3` and `as_in/2`, every write a coil (x05 to x11 and x13,
+  `validation_test.exs`); the value unwrapped (x12, `long_timer_test.exs`); and the
+  review's survivors m51, m52, m65 and m66 (`prose_test.exs`, `pictures_test.exs`,
+  `runtime_test.exs`). x07, x08 and x11 survived the first table and are killed by
+  "a cal's coils in an array and a member's word", added for them. Cost against
+  `0eb9909`, in reductions (`rt-cost.exs`): the motor's compile 9,419 to 9,432, 400 rungs
+  of `ote w.N` and `move` 443,894 to 445,107, `print/1` 1,317 to 1,326, every other path
+  the same. Load: `scripts/load.sh` over the second host lane's runner, forcing and store
+  tests on the merge, beside another session's load runs on the same four cores
+  (`load-fix-merge.out`). The gate on `52e80d4` was GATE-OK, 4,490 tests, and DOCS-OK.
+
+  The questions of the lanes, the merge and the review, the recommended option first,
+  each provisional where it is built (`PLAN.md`'s RV-34):
+  1. *The lists capped at ten* (the merge): keep decisions 239's and 243's ten and a
+     count; or tell them a hundred and ", not listed" as 636 does.
+  2. *A did-you-mean for a conversion logex lacks* (the language lane), `int_to_bool`
+     offered `int_to_lword`: keep it; none for a word shaped as a conversion; or the
+     conversions from the source type listed.
+  3. *A did-you-mean for a mnemonic of three letters* (the review, F7), `otx` offered
+     nothing: the mnemonic one edit away, the coils first; or decision 520's search as
+     built.
+  4. *A `cal`'s coil and a `move`* (626, the lane and the review): warned as a coil's, as
+     built; or a `cal` and a `move` left quiet as two `move`s are.
+  5. *The golden record's generator changed for a source alone* (the review, F6): as
+     built, under `frontend_golden_test.exs`'s moduledoc, a curated source added and the
+     record regenerated in a commit that changes no language; or CLAUDE.md's rule read to
+     its letter, the source held by a test beside the record.
+  6. *A ring of block files* (the mend): its load grows faster than its files, on `main`
+     too; left to the item that owns the loader's cost; or made linear here.
+  7. *A key of the tag table that is no name* (the review, F9), `:total` taken into the
+     env beside the runtime's own keys: refused by `instance/1`, a line a key, as 630
+     refuses a value; or left outside the contract.
+  8. *The first host lane's eight*: the count's words; a retained array with one element
+     out of range; the copy an earlier start made; a public function for the files'
+     digests; `child_spec/1`; a host's state with no timer; `with` and `&&` in the clauses
+     check; the parser's three `case`s, each as that lane's report puts it.
+  9. *The second host lane's fourteen*: `forces_unknown_sets` or a list in
+     `forces_unknown`; fifty problems or a hundred; which earlier line a line forcing
+     several points names; one limit for the read and the match; a cold judge past the
+     limit copying or refusing; the default limit for a plant of the stated size; `logex
+     retain 4` and its digest line; the lines the digest covers; the refusal giving the
+     digest; the digest told last; a store naming no program left at version 2; §4.13
+     (made here); the digest's cost in reductions; the limit over the resource's start.
+  10. *The language lane's four readings*: two `cal`s on one tag; a block's warnings once
+      a type; an unbuilt instance's far end checked as a name alone; a block's warnings
+      after the program's own.
+
 ### Milestones 6 to 13 — proposed 2026-10-27
 
 The maintainer asked for these after Milestone 5 closed, taken from README's "What logex

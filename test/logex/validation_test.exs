@@ -1349,6 +1349,47 @@ defmodule Logex.ValidationTest do
       end
     end
 
+    # RV-34's review, its mutation table: a `cal`'s coil through a tag subscript and on a
+    # member's word judged as a word array (decision 431), told once and in its own words.
+    test "a cal's coils in an array and a member's word, told once, as the cal's" do
+      text =
+        "var_input a bool\nvar_input b bool\nvar_input i dint\nvar_input n dint\n" <>
+          "var s1 seal\nvar s2 seal\nvar w word\nvar lamps bool[4]\nvar lc ctu[3]\n"
+
+      {:ok, seal} =
+        Logex.compile("function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q",
+          name: "seal"
+        )
+
+      told = fn rungs ->
+        {:ok, program} =
+          Logex.compile(
+            text <> rungs <> "\nxic a ctu lc[0] 3\nxic a ctu lc[1] 3\nxic a ctu lc[2] 3",
+            name: "p",
+            types: [seal]
+          )
+
+        for %{line: line, message: m} <- program.warnings, m =~ @later, do: {line, m}
+      end
+
+      for {rungs, warned} <- [
+            # Two cals on a bit and on a bit a tag numbers: once, not again as a whole write.
+            {"xic a cal s1 b w.3\nxic b cal s2 b w.[n]",
+             "`w.3` is already written by the `cal` on line 10"},
+            # A literal element, then a coil through a tag subscript: the cal named as a write.
+            {"xic a cal s1 b lamps[2]\nxic b ote lamps[i]",
+             "`lamps[i]` is in `lamps`, as `lamps[2]` is, which the `cal` on line 10 writes"},
+            # A member's word of an element, judged as a word array, either first.
+            {"xic a cal s1 b lc[1].pv.3\nxic b move 0 lc[i].pv",
+             "`lc[i].pv` is in `lc`, as `lc[1].pv.3` is, which the `cal` on line 10 writes"},
+            {"xic b move 0 lc[i].pv\nxic a cal s1 b lc[1].pv.3",
+             "`lc[1].pv.3` is in `lc`, which the `move` on line 10 may write through a tag " <>
+               "subscript"}
+          ] do
+        assert {rungs, told.(rungs)} == {rungs, [{11, "#{warned}: #{@later}"}]}
+      end
+    end
+
     test "a coil after a coil is told once, by the second-ote warning" do
       assert shared_warnings("xic a move 1 belt\nxic a ote belt\nxic a ote belt") == [
                {10, "`belt` is already written by the `move` on line 9: #{@later}"},
