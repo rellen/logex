@@ -292,6 +292,27 @@ API".
   block's body, which was taken. Look for: a `rescue` of `FunctionClauseError` around
   those calls.
 
+- **`Logex.Runner.status/1` names every set a cut write of the forces file held**
+  (decision 600), a key `forces_unknown_sets`, a list of those sets, newest first and each
+  once, `[]` where none stands, beside `forces_unknown`, which still gives the newest set
+  or `nil`: an operator's panel whose writes of `eye` and then `estop` are both cut
+  shows both sets, where `forces_unknown` named the second's alone and the disk then
+  landed the first's, `eye` forced in the file and named nowhere. A write that lands or
+  fails empties the list as it clears `forces_unknown`; a restart keeps both. Provisional
+  (`PLAN.md`'s RV-34). Look for: code that pins status/1's map whole.
+- **A refusal of the forces file tells each problem of a line** (decision 600), a line
+  each: a point forced on an earlier line, and then its value that does not fit or its
+  name that names no input point, where the line forced already was told alone: an oven's
+  file of `zone_t 1 2 3` and then `zone_t[4] 1.0e39` is told that `zone_t[4]`
+  is forced on line 1 already and that 1.0e39 does not fit a real. A line with one
+  problem is told as before; the refusal still tells its first 50 problems and a count.
+  Look for: code that counts the lines of such a refusal.
+- **A trip names the reason a linked helper took its device down with** (decision 600),
+  `{:io, device, {:down, reason}}` as `Logex.IO` documents it, where a round's write that
+  found the device gone before the runner took its exit, a helper of `init/3`'s that
+  ended as `init/3` ran among them, tripped `{:io, device, {:down, :noproc}}`. Look for:
+  code that matches `{:down, :noproc}` in a trip.
+
 ### What it carries, by the work that built it
 
 - **Program organisation and the first online edit** (decisions 1–29). The direction

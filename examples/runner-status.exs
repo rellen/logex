@@ -16,7 +16,7 @@ alias Logex.IO.Sim
 # Prints each key of status/1, in a fixed sequence.
 keys =
   ~w(status trip now rounds runs overlaps latest_wake refresh_gap unzeroed edit forces)a ++
-    ~w(forces_unread forces_unknown forcing retain)a
+    ~w(forces_unread forces_unknown forces_unknown_sets forcing retain)a
 
 status = Runner.status(runner)
 for key <- keys, do: IO.puts("#{key}: #{inspect(status[key])}")

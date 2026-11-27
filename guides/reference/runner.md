@@ -632,9 +632,10 @@ answered.(answered, Task.yield(task, 10))
 | `refresh_gap` | The longest time in ms between 2 refreshes of the devices |
 | `unzeroed` | A list of device names: the devices whose outputs can be on after the trip. It is `[]` while running. [What each device keeps](#what-each-device-keeps) gives the rule. |
 | `edit` | `:accepted`, `:testing`, `:untested` or `nil`: the stage of the online edit that the runner holds |
-| `forces` | `%{point => value}`: each force in effect. [Forcing](forcing.md) gives this key and the next 3. |
+| `forces` | `%{point => value}`: each force in effect. [Forcing](forcing.md) gives this key and the next 4. |
 | `forces_unread` | `{path, reason}` or `nil`: the forces file that the last start or restart did not read |
 | `forces_unknown` | A map or `nil`: the forces of a write of the forces file that took longer than `write_limit:` |
+| `forces_unknown_sets` | A list of maps, or `[]`: the forces of each write of the forces file that took longer than `write_limit:`, the newest first |
 | `forcing` | A map or `nil`: the forces of the write of the forces file that is not complete |
 | `retain` | `nil` for a runner with no store. Else a map with the keys `path`, `written_at`, `failed`, `dropped`, `copy`, `unknown` and `warning`. [The store](store.md#the-status-of-the-store) gives each one. |
 
@@ -668,7 +669,7 @@ alias Logex.IO.Sim
 # Prints each key of status/1, in a fixed sequence.
 keys =
   ~w(status trip now rounds runs overlaps latest_wake refresh_gap unzeroed edit forces)a ++
-    ~w(forces_unread forces_unknown forcing retain)a
+    ~w(forces_unread forces_unknown forces_unknown_sets forcing retain)a
 
 status = Runner.status(runner)
 for key <- keys, do: IO.puts("#{key}: #{inspect(status[key])}")
@@ -713,6 +714,7 @@ edit: nil
 forces: %{}
 forces_unread: nil
 forces_unknown: nil
+forces_unknown_sets: []
 forcing: nil
 retain: nil
 start pressed, then advance 1 ms

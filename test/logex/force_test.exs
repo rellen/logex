@@ -616,6 +616,9 @@ defmodule Logex.ForceTest do
           [
             "#{file}: line 1: `#{String.duplicate("z", 60)}…` is no input point of `plant`",
             "#{file}: line 2: `#{String.duplicate("z", 60)}…` is forced on line 1 already",
+            # Decision 600 (RV-34): each problem of a line told, its name's after the
+            # line forced already, where the line forced already was told alone.
+            "#{file}: line 2: `#{String.duplicate("z", 60)}…` is no input point of `plant`",
             "#{file}: line 3: `level` is a dint, forced to an integer from -2147483648 to " <>
               "2147483647, got: #{String.duplicate("7", 60)}…",
             "#{file}: line 4: `level` is forced on line 3 already",
@@ -641,6 +644,35 @@ defmodule Logex.ForceTest do
       assert hd(lines) == "#{file}: line 2: `x` is forced on line 1 already"
       assert List.last(lines) == "#{file}: and 9949 more problems, not listed"
       assert {Sim.reads(panel), Sim.writes(panel), Sim.writes(drive)} == {0, [], []}
+    end
+
+    # Decision 600 (RV-34): each problem of a line is told, a point forced on an earlier
+    # line and then its value that does not fit, or its name that names no input point,
+    # where the line forced already was told alone.
+    test "a point forced twice is told so, and then what its value or its name has against it",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      File.write!(file, "level 7\nlevel 5000000000\nx 1\nx 2\nx 1.5\nlevle 1\nlevle 0\nlevel 3\n")
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 2: `level` is forced on line 1 already",
+            "#{file}: line 2: `level` is a dint, forced to an integer from -2147483648 to " <>
+              "2147483647, got: 5000000000",
+            "#{file}: line 4: `x` is forced on line 3 already",
+            "#{file}: line 4: `x` is a bool, forced to 0 or 1, got: 2",
+            "#{file}: line 5: `x` is forced on line 3 already",
+            "#{file}: line 5: `x` is a bool, forced to 0 or 1, got: 1.5",
+            "#{file}: line 6: `levle` is no input point of `plant` — did you mean `level`?",
+            "#{file}: line 7: `levle` is forced on line 6 already",
+            "#{file}: line 7: `levle` is no input point of `plant` — did you mean `level`?",
+            "#{file}: line 8: `level` is forced on line 1 already"
+          ],
+          "\n"
+        ),
+        fn -> started(dir) end
+      )
     end
 
     test "a last line with no newline is a line", %{tmp_dir: dir} do
@@ -723,6 +755,8 @@ defmodule Logex.ForceTest do
             "#{file}: line 12: `seen` is no input point of `plant`",
             "#{file}: line 13: `level` is forced on line 5 already",
             "#{file}: line 14: `levle` is forced on line 1 already",
+            # Decision 600 (RV-34): and its name's problem after it.
+            "#{file}: line 14: `levle` is no input point of `plant` — did you mean `level`?",
             # A comment or a tab after the value, which the lexer passes over, is no part of
             # a force (M5-11's review): the line holds the number's text alone.
             "#{file}: line 15: `level 1//c` is no force: a line holds an input point's name " <>

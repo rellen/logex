@@ -660,7 +660,11 @@ defmodule Logex.Runner do
   held, `forces_unknown`, until a later write of the file lands or fails, and since
   decision 502 (RV-19) a restart's read of the file leaves it so, the cut write able to
   land after the read, where the read made it known, and since decision 440 the key
-  always there, nil where no such write stands. Every start reads it, `start_link/1` in
+  always there, nil where no such write stands; since decision 600 (RV-34) a second cut
+  write's set leaves the first's named, `forces_unknown_sets` listing every set a cut
+  write held, newest first and each once, `forces_unknown` the newest of them as before,
+  the file holding one of them or the runner's `forces` (provisional, `PLAN.md`'s RV-34).
+  Every start reads it, `start_link/1` in
   the caller, after the configuration and the bindings, and `restart/2` before it
   releases anything,
   each raw, off the VM's file server, and limited to the write limit of real time
@@ -692,7 +696,10 @@ defmodule Logex.Runner do
   line that is no force, a point forced twice, and a force the configuration
   cannot take, on a point it does not have as an input point or of a value that does not
   fit, are the host's mistake, every one named in one `ArgumentError`, a line each,
-  `<path>: line <n>: ...`, the runner not started, or at a restart left tripped: the file
+  `<path>: line <n>: ...`, since decision 600 (RV-34) each problem of a line its own line,
+  a point forced on an earlier line told so and then its value that does not fit or its
+  name that names no input point, where the line forced already was told alone
+  (provisional, `PLAN.md`'s RV-34), the runner not started, or at a restart left tripped: the file
   is read exactly as the runner writes it, a last line with no line end read, and since
   decision 410 a line ended by LF, CRLF or a lone CR read alike, the runner writing LF, so
   that `hz 1.5` saved with CRLF line ends forces 1.5, where its carriage return was no
@@ -1082,6 +1089,7 @@ defmodule Logex.Runner do
           forces: %{optional(String.t()) => Runtime.value()},
           forces_unread: {String.t(), reason :: term} | nil,
           forces_unknown: %{optional(String.t()) => Runtime.value()} | nil,
+          forces_unknown_sets: [%{optional(String.t()) => Runtime.value()}],
           forcing: %{optional(String.t()) => Runtime.value()} | nil,
           edit: Edit.stage() | nil,
           runs: %{optional(String.t() | :none) => {non_neg_integer, pos_integer}},
@@ -1389,7 +1397,9 @@ defmodule Logex.Runner do
   force's write ran past its limit and may yet land, the set it held, until a later write
   of the file lands or fails, a restart's read leaving it since decision 502 (the cut
   write may land after the read), and since decision 440 always there,
-  nil where no such write stands; since decision 466 `forcing`, the set the write of the
+  nil where no such write stands, and since decision 600 `forces_unknown_sets`, every set
+  such a write held, newest first and each once, `forces_unknown` the first of them, `[]`
+  where none stands, as long as `forces_unknown` stands; since decision 466 `forcing`, the set the write of the
   forces file that is out holds, the forces as they will be once it lands, the requests
   joined into it among them (decision 465), always there as the other keys are, nil where
   no write is out, so that a force on its way shows before it is in effect; `edit`, the
@@ -2796,11 +2806,24 @@ defmodule Logex.Runner do
   # claim to be held at the runner's end until its calls have ended (`forces_cut`); a
   # later write that ends by itself, landed or failed, has had every call of the file
   # system made before its own answered, the cut one's among them, and clears it.
+  # Decision 600 (RV-34): every cut write's set is one the file may hold, so each is named,
+  # newest first and each once, `forces_unknown_sets`, `forces_unknown` the newest of them
+  # as before, where a second cut write's set took the place of the first's, which the
+  # disk could still land (provisional, `PLAN.md`'s RV-34).
   defp taken({:error, :timeout}, forces, _names, state),
-    do: {{:error, {:forces, :timeout}}, %{state | forces_unknown: forces, forces_cut: true}}
+    do:
+      {{:error, {:forces, :timeout}},
+       %{
+         state
+         | forces_unknown: forces,
+           forces_unknown_sets: [forces | List.delete(state.forces_unknown_sets, forces)],
+           forces_cut: true
+       }}
 
   defp taken({:error, reason}, _forces, _names, state),
-    do: {{:error, {:forces, reason}}, %{state | forces_unknown: nil, forces_cut: false}}
+    do:
+      {{:error, {:forces, reason}},
+       %{state | forces_unknown: nil, forces_unknown_sets: [], forces_cut: false}}
 
   defp taken(:ok, forces, names, state) do
     before = Enum.map(names, &seen(&1, state))
@@ -2813,6 +2836,7 @@ defmodule Logex.Runner do
       | forces: forces,
         forces_unread: nil,
         forces_unknown: nil,
+        forces_unknown_sets: [],
         forces_cut: false,
         pending: Enum.into(Map.take(state.values, unforced), state.pending)
     }
@@ -2976,7 +3000,8 @@ defmodule Logex.Runner do
         force_problem(point, name, value, written(text))
       )
 
-  # A point forced twice is told so before its value is judged, as before decision 241.
+  # A point forced twice is told so before its value is judged, as before decision 241,
+  # and since decision 600 its name's problem after it.
   defp read_point({:error, message}, {name, _value, _text}, line, acc),
     do: once(first_line([name], acc), [name], line, acc, [message])
 
@@ -2995,13 +3020,19 @@ defmodule Logex.Runner do
   defp as_written(nil, _text), do: nil
   defp as_written({_name, first}, text), do: {hd(String.split(text, " ")), first}
 
-  defp once({name, first}, _names, line, {forces, lines, problems}, _problem),
+  # Decision 600 (RV-34): each problem of a line told, a point forced on an earlier line
+  # first and then what its value or its name has against it, `zone_t[4] 1.0e39` after
+  # `zone_t 1 2 3` told that `zone_t[4]` is forced on line 1 already and that 1.0e39 does
+  # not fit, where the line forced already was told alone; a line that names several
+  # points forced earlier names the first of them, as before (provisional, `PLAN.md`'s
+  # RV-34).
+  defp once({name, first}, _names, line, {forces, lines, problems}, problem),
     do:
       {forces, lines,
-       [
+       also_told(problem, line, [
          {line, "#{quoted(Logex.Refusal.shown(name))} is forced on line #{first} already"}
          | problems
-       ]}
+       ])}
 
   defp once(nil, names, line, {forces, lines, problems}, problem),
     do:
@@ -3076,6 +3107,9 @@ defmodule Logex.Runner do
   defp written_and_read(spelling, read),
     do: "#{Logex.Refusal.shown(spelling)}, which is #{Logex.Refusal.shown(read)}"
 
+  defp also_told({:take, _taken}, _line, problems), do: problems
+  defp also_told(more, line, problems), do: Enum.reduce(more, problems, &[{line, &1} | &2])
+
   defp taken_from_file({:take, taken}, _line, {forces, lines, problems}),
     do: {Enum.into(taken, forces), lines, problems}
 
@@ -3110,6 +3144,7 @@ defmodule Logex.Runner do
       forces: state.forces,
       forces_unread: state.forces_unread,
       forces_unknown: state.forces_unknown,
+      forces_unknown_sets: state.forces_unknown_sets,
       forcing: forcing_of(state.writing),
       edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
@@ -3277,7 +3312,9 @@ defmodule Logex.Runner do
   # write, nil once a later write of the file lands or fails, a stop's own among them, nil
   # at a start, kept by a restart whose read fails, and since decision 502 (RV-19) by one
   # that reads the file or finds none, the cut write able to land after its read, where
-  # such a restart set it nil; a round, a trip and an edit's step leave it as it is; and the
+  # such a restart set it nil; a round, a trip and an edit's step leave it as it is; since
+  # decision 600 (RV-34) `forces_unknown_sets`, every set such a write held, newest first
+  # and each once, [] at a start and set and kept with `forces_unknown`; and the
   # store's `unknown`, under `retain`, set by a write over the store or its copy past its
   # limit and gone once a later write lands or fails, a start having none; a round, an
   # edit's step and a restart refused write nothing of their own, and a trip's, a stop's
@@ -4974,11 +5011,11 @@ defmodule Logex.Runner do
   # gave no time, found so by the write, trips the runner naming the clock, as its exit
   # does (exited/4): one down inside the write by its reason, and one down before it, the
   # write told only that it is gone, by its exit's, which waits in the mailbox and is
-  # taken here, an exit for any other reason left there as it was. So the trip names the
-  # clock whichever of the device's write and its poll comes first in a millisecond, where
-  # a write first named the device gone down.
+  # taken here, and since decision 600 (RV-34) an exit for any other reason too, its reason
+  # the trip's. So the trip names the clock whichever of the device's write and its poll
+  # comes first in a millisecond, where a write first named the device gone down.
   defp in_time({:error, {:down, :noproc}}, _answered, name, pid, _values, state),
-    do: downed(clock_exit(pid), name, state)
+    do: downed(exit_of(pid), name, state)
 
   defp in_time({:error, {:down, reason}}, _answered, name, _pid, _values, state),
     do: downed(reason, name, state)
@@ -4992,10 +5029,15 @@ defmodule Logex.Runner do
 
   defp downed(reason, name, state), do: {:halt, {:trip, {:io, name, {:down, reason}}, state}}
 
-  defp clock_exit(pid) do
+  # Decision 600 (RV-34): the device's exit taken whatever its reason, so that a helper its
+  # adapter linked, which ended and took the device down with its reason, a helper of
+  # init/3's ended while init/3 ran among them, is named by that reason, as `Logex.IO` has
+  # it, `{:io, device, {:down, reason}}`, where only a clock's was taken and the trip read
+  # `{:down, :noproc}`; `:noproc` where no exit waits, the device gone before the runner
+  # could know why.
+  defp exit_of(pid) do
     receive do
-      {:EXIT, ^pid, {:shutdown, {:clock, {kind, _}}} = reason} when kind in [:now_ms, :wall_ms] ->
-        reason
+      {:EXIT, ^pid, reason} -> reason
     after
       0 -> :noproc
     end
@@ -5135,6 +5177,7 @@ defmodule Logex.Runner do
        forces: forces,
        forces_unread: unread,
        forces_unknown: nil,
+       forces_unknown_sets: [],
        retain: retain,
        at: at,
        copy: copy,

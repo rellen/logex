@@ -16590,6 +16590,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     rename_waiting(server, writer, until)
   end
 
+  defp unknown_sets(nil), do: []
+  defp unknown_sets(set), do: [set]
+
   # The set the cut write held named unknown through the restart (checked/1), and known
   # once a later write lands: the same force asked again.
   defp cut_known(%{cut_force: nil} = w), do: w
@@ -19444,6 +19447,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     # check, every force the walk asks answered before it checks.
     assert Map.fetch!(status, :forces_unread) == w.unread
     assert Map.fetch!(status, :forces_unknown) == w.forces_unknown
+    # Decision 600 (RV-34): every set a cut write held, newest first; the walk cuts one
+    # write before a later write knows it, so its one set or none.
+    assert Map.fetch!(status, :forces_unknown_sets) == unknown_sets(w.forces_unknown)
     assert Map.fetch!(status, :forcing) == nil
     retain_keys!(status.retain)
 

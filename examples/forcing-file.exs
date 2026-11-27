@@ -36,7 +36,7 @@ IO.inspect(File.read!("packing.forces"), label: "none  ")
 # A file that the start refuses: each line that is wrong.
 File.write!(
   "packing.forces",
-  "eye 1 // blocked\nk1 1\npb_reset 2\npb_start_1 1_0\n\nestop 1\nestop 0\nnosuch 1\n"
+  "eye 1 // blocked\nk1 1\npb_reset 2\npb_start_1 1_0\n\nestop 1\nestop 2\nnosuch 1\n"
 )
 
 attempt.(fn -> start.(forces: "packing.forces") end)

@@ -923,6 +923,66 @@ defmodule Logex.StalledDiskTest do
       assert Runner.stop(runner) == :ok
     end
 
+    # Decision 600 (RV-34): after two cut writes the file may hold either's set, or the one
+    # before them, so `forces_unknown_sets` names every cut write's set, newest first and
+    # each once, `forces_unknown` the newest as before, where the second's took the
+    # first's place and the file then held the first's, named nowhere; a restart keeps
+    # them (decision 502), a write that lands or fails knows them.
+    test "two cut writes: every set the file may hold named, newest first, until a write " <>
+           "lands or fails",
+         %{tmp_dir: dir} do
+      rig = rig(dir, retain: nil, retain_period: nil)
+      {:ok, runner} = Runner.start_link(rig.opts)
+      assert Runner.force(runner, "level", 7) == :ok
+      assert Runner.status(runner).forces_unknown_sets == []
+      server = held()
+
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert Runner.force(runner, "level", 9) == {:error, {:forces, :timeout}}
+      # The second set again: named once, the newest.
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+
+      first = %{"eye_1" => 1, "level" => 7}
+      second = %{"level" => 9}
+
+      assert %{
+               forces: %{"level" => 7},
+               forces_unknown: ^first,
+               forces_unknown_sets: [^first, ^second]
+             } = Runner.status(runner)
+
+      # The disk back, the killed writes may land: the file holds a set status/1 names.
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      held = File.read!(rig.forces)
+      assert held in ["level 7\n", "eye_1 1\nlevel 7\n", "level 9\n"]
+
+      # A restart reads the file and keeps both named (decision 502).
+      Sim.fail(rig.panel, :read, {:error, :eio})
+      Manual.advance(rig.clock, 10)
+      assert Runner.restart(runner, :warm) == :ok
+
+      assert %{forces_unknown: ^first, forces_unknown_sets: [^first, ^second]} =
+               Runner.status(runner)
+
+      # A write that lands: every set known.
+      assert Runner.unforce(runner, "eye_1") == :ok
+      assert %{forces_unknown: nil, forces_unknown_sets: []} = Runner.status(runner)
+
+      # Two cut writes again; then one that fails, a directory at the `.tmp`: known.
+      server = held()
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :timeout}}
+      assert Runner.force(runner, "eye_1", 0) == {:error, {:forces, :timeout}}
+      assert length(Runner.status(runner).forces_unknown_sets) == 2
+      :sys.resume(server)
+      wait_for_tmp_gone(rig.forces <> ".tmp")
+      File.mkdir!(rig.forces <> ".tmp")
+      assert Runner.force(runner, "eye_1", 1) == {:error, {:forces, :eisdir}}
+      assert %{forces_unknown: nil, forces_unknown_sets: []} = Runner.status(runner)
+      File.rmdir!(rig.forces <> ".tmp")
+      assert Runner.stop(runner) == :ok
+    end
+
     # RV-11's review: a restart whose read of the file fails knows no more of what it holds
     # than before (decision 390), so the set a write past its limit held stays unknown,
     # named beside the file the restart could not read, until a force's write lands.
