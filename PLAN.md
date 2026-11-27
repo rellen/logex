@@ -26553,13 +26553,21 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   copy cut in 3 of 50 at 100 ms and 2 of 50 at 300 ms, and RV-5's refusal of a
   100,000-line store answered `{:retain, :timeout}` in 2 of 24, each root-caused in
   `72ac173`, then 50 runs of 50 each. The review: 29 runs of 30, the one failure finding
-  5. The mend's own runner tests (the two helper tests of `io_test.exs`, the three
-  refusals of `force_test.exs`, eight tests of `stalled_disk_test.exs`, `status/1`'s pin
-  and the runner's walk): 2 runs of 2 on the lane's clone, stopped there to give the
-  machine's cores to the merge; their fifty runs, and thirty of every runner, forcing
-  and store test the lane changed, are run on the merged tree, whose runner, store and
-  forcing code and tests are the lane's to the line, and recorded by the commit after
-  the merge.
+  5. The mends and the merge (RV-34's close, on the merged tree `0b77bb1`, whose runner,
+  store and forcing code and tests are the lane's to the line; no other load run or full
+  suite on the machine, the decision-641 build's single test files and its screen of
+  mutants over `retain_store_test.exs` beside the last 9 runs and the 20): every runner,
+  forcing and store test the lane changed, 152 tests a run (the two helper tests of
+  `io_test.exs`, the three refusals of `force_test.exs`, `located_array_test.exs`'s
+  lines of the forces file, `status/1`'s pin, twelve tests of `stalled_disk_test.exs`,
+  decisions 455's and 603's among them, the runner's walk and the store's life walk, and
+  all of `retain_store_test.exs`), 30 runs of 30 passed, some 5 to 6 minutes a run
+  (`load-close-L1.out`, 21 runs before the session's two-hour limit on a background
+  command stopped the 22nd, and `load-close-L1b.out`, the 9 that were left); and the
+  mend's own runner tests, 16 a run, 20 runs of 20 more (`load-close-L2.out`), so that
+  each test the mends changed or added ran 50 times under load on the merged tree,
+  beside 2 runs of 2 on the lane's clone, stopped there to give the machine's cores to
+  the merge (`load-h2-fix.out`). No failure, so nothing to root-cause.
 
   The questions of the lanes, the merge and the reviews, whole, the recommended option
   first, each provisional where it is built (`PLAN.md`'s RV-34); "as built" says the
@@ -26610,8 +26618,9 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
   10. *The copy an earlier start made.* An operator's panel shows the `.dropped` copy
       this start made alone. (a) Left, the copies' numbered names on disk telling the
       rest; (b) a key of `status/1` that lists every copy. As built.
-  11. *The files' digests.* (a) No public function, as built; (b) one that gives the
-      digests of the store and the forces file. As built.
+  11. *The files' digests.* A maintenance script wants the digest of a box counter's
+      store. (a) No public function; (b) one that gives the digests of the store and the
+      forces file. As built.
   12. *`child_spec/1` given an option `start_link/1` refuses.* A conveyor's supervisor
       is given `io: :none`. (a) The spec made and the start refusing the option, as
       `child_spec/1`'s documentation has it; (b) refused at the call. As built.
@@ -26645,9 +26654,9 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
       in 1 s and matches in 7 s. (a) One option, `write_limit:`, each of the two limited
       by it, so a start waits up to twice it; (b) one limit over both together; (c) an
       option of the match's own. As built.
-  20. *A cold start whose judge of the store runs past the limit.* (a) The store copied
-      before the new one is written over it, and the start goes on; (b) the start
-      refused. As built.
+  20. *A cold start whose judge of the store runs past the limit.* A conveyor started
+      cold over a very large store. (a) The store copied before the new one is written
+      over it, and the start goes on; (b) the start refused. As built.
   21. *A plant of the size the runner's documentation states, at the default limit.* A
       plant of 32,768 retained timers took 7 to 17 s to start warm on a busy machine and
       no longer starts with the default 5000 ms: its host sees `{:error, {:retain,
@@ -26655,9 +26664,10 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
       naming it under "What no longer compiles, loads or starts"; (b) the default
       raised; (c) the default sized from the plant. As built.
   22. *Whether the limit covers the resource's own start.* `Logex.Runtime.start/2`
-      starts the resource inside the limited match. (a) Kept, the limit sized to the
-      plant; (b) the resource started outside the limit and its image alone laid within
-      it, a new internal function of the runtime. As built.
+      starts the resource inside the limited match, so a plant of 10,000 timers no
+      longer starts warm at 50 ms. (a) Kept, the limit sized to the plant; (b) the
+      resource started outside the limit and its image alone laid within it, a new
+      internal function of the runtime. As built.
   23. *The store's version for the digest.* (a) `logex retain 4`, a line `digest <md5>`
       before the end line, counted by it; (b) the digest in the end line; (c) the digest
       in version 3. An older logex refuses version 4 for its version first. As built.
@@ -26682,10 +26692,11 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
       `status/1` telling that no digest was checked; (b) read with nothing told, as every
       store of version 3 is; (c) a header of version 3 refused. Needs building; (b) is
       the code's, and no page advises the relabelling now.
-  29. *When the digest is told.* (a) Once the store has no other problem; (b) beside the
-      others. As built.
-  30. *A store that names no program.* (a) Written as version 2, no digest; (b) as
-      version 4. As built.
+  29. *When the digest is told.* A lamp panel's store holds a line that does not read
+      and a digest that is not its lines'. (a) The line alone told, the digest once the
+      store has no other problem; (b) both told. As built.
+  30. *A store that names no program*, as `Logex.Retain.encode/2` writes one. (a)
+      Written as version 2, no digest; (b) as version 4. As built.
   31. *The digest's cost.* `:erlang.md5` makes the store's making and reading some 11
       and 10 times the reductions at 32,768 timers, 15 to 65 ms of time. (a) Kept; (b)
       `:crypto.hash/2`, some 150 times fewer reductions and the `crypto` application
@@ -26703,8 +26714,9 @@ here: RV-34; then RV-23, RV-25 alone, and DOC-2 last.
       connects `pb` to `pbb`. (a) Its far end checked as a global's or a location's name
       alone, constants, uses and drives unchecked; (b) nothing checked until the type
       compiles. As built.
-  35. *Where a block's warnings stand.* (a) After the program's own, in its table's
-      order; (b) at their lines among them. As built.
+  35. *Where a block's warnings stand*, a fan block's in a program given `types:`. (a)
+      After the program's own, in its table's order; (b) at their lines among them. As
+      built.
 
 ### Milestones 6 to 13 — proposed 2026-10-27
 
