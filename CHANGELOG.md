@@ -313,6 +313,17 @@ API".
   ended as `init/3` ran among them, tripped `{:io, device, {:down, :noproc}}`. Look for:
   code that matches `{:down, :noproc}` in a trip.
 
+- **A warm fresh start matches its store within the write limit** (decision 603), the
+  store's text read back and its values laid over the resource in a process of its own,
+  limited to `write_limit:` of real time as the read before it is, so that
+  `Logex.Runner.start_link/1` over a store too large to match in it answers `{:error,
+  {:retain, :timeout}}`, no device opened and the store as it was, where it matched in
+  the caller with no limit: a plant of 32,768 retained timers, the size the runner's
+  documentation states, took 9.9 s on a busy machine, and 327,680 took 171 s, the caller
+  held throughout. A cold start's judge of the store, the same match, past the limit
+  copies the store before it writes over it. Provisional (`PLAN.md`'s RV-34). Look for: a
+  plant whose store's warm start takes near 5000 ms, which needs `write_limit:` more.
+
 ### What it carries, by the work that built it
 
 - **Program organisation and the first online edit** (decisions 1–29). The direction

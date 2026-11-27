@@ -1377,11 +1377,20 @@ defmodule Logex.StalledDiskTest do
       rig(dir, [configuration: config, forces: nil] ++ extra)
     end
 
+    # Decision 603 (RV-34): a warm start's match is within the write limit too, so a runner
+    # of 50 ms over the 10,000 timers' own store, whose match takes some seconds, starts
+    # nothing; this test's subject is the trip's write, so the store it starts over holds
+    # none of the instance's values, matched at once, where it was the store a runner of
+    # 5000 ms wrote, and the trip's write makes the 10,000 timers' text as before.
     test "a trip's write is cut off at the limit and reported, the runner answering",
          %{tmp_dir: dir} do
       made = timers(dir, write_limit: 5000)
-      {:ok, runner} = Runner.start_link(made.opts)
-      assert Runner.stop(runner) == :ok
+
+      File.write!(
+        made.store,
+        "logex retain 2\nconfiguration plant written 2026-10-30T14:00:00Z\nend 3 lines\n"
+      )
+
       stored = File.read!(made.store)
 
       rig = timers(dir, write_limit: 50)
@@ -1405,6 +1414,70 @@ defmodule Logex.StalledDiskTest do
       assert Sim.reads(rig.panel) == 0
     end
   end
+
+  # Decision 603 (RV-34): a warm fresh start's match, its store's text read back and laid
+  # over the configuration, is made within the write limit of real time, as the read
+  # before it is, where it was made in the caller with no limit, 32,768 retained timers in
+  # 9.9 s and 327,680 in 171 s, no device open meanwhile: one past it starts nothing,
+  # `{:error, {:retain, :timeout}}`, no device read and the store as it was, its files
+  # given up so that a start with the limit it needs then starts; and a cold start's
+  # judge of the store, the same match, past it takes the store as one to copy before it
+  # writes over it. 32,768 retained timers, the runner's stated plant, match in seconds,
+  # far past 1010 ms, and their 3.6 MB store reads, and is copied, well within it.
+  describe "a warm fresh start's match within the write limit (decision 603)" do
+    @plant_timers """
+    var_input eye bool
+    var_output lamp bool
+    var retain tl ton[32768]
+
+    xic eye ton tl[0] 100
+    xic eye ote lamp
+    """
+
+    defp plant_store(dir, extra) do
+      {:ok, tally} = Logex.compile(@plant_timers, name: "tally")
+      {:ok, config} = Configuration.compile("plant", @plant, %{"tally" => tally})
+      rig = rig(dir, [configuration: config, forces: nil, retain_period: nil] ++ extra)
+      image = Logex.Runtime.retained(Logex.Runtime.start(config))
+
+      File.write!(
+        rig.store,
+        Logex.Retain.encode(image, ~U[2026-10-30 14:00:00Z], Logex.Retain.written_by(config))
+      )
+
+      rig
+    end
+
+    test "a match past the limit starts nothing, {:error, {:retain, :timeout}}, and a start " <>
+           "with the limit it needs then starts",
+         %{tmp_dir: dir} do
+      rig = plant_store(dir, write_limit: @limit)
+      stored = File.read!(rig.store)
+      assert Runner.start_link(rig.opts) == {:error, {:retain, :timeout}}
+      assert Sim.reads(rig.panel) == 0
+      assert File.read!(rig.store) == stored
+      assert Path.wildcard(rig.store <> "*") == [rig.store]
+
+      opts = Keyword.put(rig.opts, :write_limit, 600_000)
+      assert {:ok, runner} = Runner.start_link(opts)
+      assert %{retain: %{dropped: [], copy: nil}} = Runner.status(runner)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a cold start's judge past the limit copies the store before it writes over it",
+         %{tmp_dir: dir} do
+      rig = plant_store(dir, write_limit: @limit, start: :cold)
+      stored = File.read!(rig.store)
+      answer = Runner.start_link(rig.opts)
+      # The copy is made, and only then the store's first write, whose own time is the
+      # write's, landed or cut at the limit, and not this test's.
+      assert File.read!(rig.store <> ".dropped.1") == stored
+      stop(answer)
+    end
+  end
+
+  defp stop({:ok, runner}), do: assert(Runner.stop(runner) == :ok)
+  defp stop({:error, reason}), do: assert(reason == {:retain, :timeout})
 
   # Once the store holds `line`, the period's writer having written it.
   defp holding(store, line), do: held_line(File.read!(store) =~ line, store, line)

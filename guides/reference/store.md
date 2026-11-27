@@ -901,7 +901,10 @@ Each write has the write limit, 5000 ms if not set. This limit is separate from 
   round, and it does not move the [due](glossary.md#due) time of a round.
 - A writer process of the runner makes the text and writes it. Thus a slow disk does not
   delay a round.
-- While a write runs, the next waits. A newer write replaces a write that waits.
+- While a write runs, the next waits. A newer write replaces a write that waits. Thus a
+  period that is shorter than a write becomes as long as the write. An example on a busy
+  machine: a store of 32,768 retained timers, 3.6 MB, with a period of 1000 ms. The
+  runner wrote it each 3.5 to 4.4 s.
 - If the writer process stops, each subscriber gets `{:retain, {:error, {:down,
   reason}}}`. A new writer process does the next write.
 - While the runner is tripped, it does no periodic write. Only the write of the trip

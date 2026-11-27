@@ -464,7 +464,7 @@ To get the events of the store as messages, subscribe to `:retain`:
 | What you see | Cause | What to do |
 |---|---|---|
 | `{:error, {:retain, :enoent}}` | The directory of the store does not exist. | Make the directory. |
-| `{:error, {:retain, :timeout}}` | The disk did not read or write the store in the write limit. | Give a longer `write_limit:`, or repair the disk. |
+| `{:error, {:retain, :timeout}}` | The store was not read, used or written in the write limit. | Give a longer `write_limit:`, or repair the disk. |
 
 ### `start_link/1` raises an `ArgumentError`
 

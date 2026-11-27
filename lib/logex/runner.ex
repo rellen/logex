@@ -427,7 +427,8 @@ defmodule Logex.Runner do
     provisional). A writer process of the runner's own, linked to it, takes the retained
     image out of it, makes the store's text and writes it by the same rule as every
     write, so that a slow write delays no round: while one is in progress the next waits,
-    the newest replacing the one before, latest wins. Since decision 455 the take-out and
+    the newest replacing the one before, latest wins, so that a period shorter than a
+    write is stretched to the write (decision 603, measured below). Since decision 455 the take-out and
     the text are the writer's, within the write limit from the hand-off, so that the
     runner's own work at a period is the hand-off, where it took the image out itself,
     0.9 s for 32,768 retained timers, and tripped a healthy plant at its first period
@@ -466,7 +467,15 @@ defmodule Logex.Runner do
     read in the caller itself: a store laid over the resource by decision 277's matching
     (`Logex.Runtime.start/2`), each value kept only where the configuration retains its
     path, of exactly its type, and it fits, the rest dropped and reported in `status/1`'s
-    `retain`, and since decision 360 the store, as the start read it, copied before its
+    `retain`; since decision 603 (RV-34) the match, the store's text read back and its
+    image laid over the configuration, made in a process of its own and limited to the
+    write limit of real time too, as the read is, each its own limit, so that a store too
+    large to match within it starts nothing, `{:error, {:retain, :timeout}}`, no device
+    opened and the store as it was, where the caller waited on the match with no limit,
+    a plant of the size below that matched in 9.9 s and ten times it in 171 s; a host
+    whose store needs more gives `write_limit:` more, and a cold start's judge of the
+    store (decision 417), the same match, past the limit takes the store as one to copy
+    before it writes over it (provisional, `PLAN.md`'s RV-34); and since decision 360 the store, as the start read it, copied before its
     first write over it, in the runner's own process once its files are claimed and before
     any device is opened, so that a mistaken deploy's drops can be taken back from the
     copy once the next write has made the store the new configuration's: since decision
@@ -978,7 +987,15 @@ defmodule Logex.Runner do
   and 348 ms at 32,768; an array of timers retained, with its period of 1000 ms, written
   every period at 32,768, the period's hand-off a copy of its retained values (above), and
   at 65,536 past the write limit, the store `unknown` and reported each period, its
-  start's write 5.0 s; and an edit's test step over an array of timers in 150 ms at
+  start's write 5.0 s; since decision 603 (RV-34), measured on that machine at a load
+  average of 12 to 20, a store of 32,768 retained timers, 3.6 MB, is read back in 0.9 to
+  1.5 s and matched in 7.7 to 9.4 s, a warm fresh start of it 7.2 s given the time, past
+  the 5000 ms of the default `write_limit:`, which it then answers `{:error, {:retain,
+  :timeout}}`, and one of 327,680, ten times it, 36 MB, is so answered in 5.6 s, where
+  it was matched in the caller in 171 s; a period shorter than a write is stretched to
+  the write, the next write begun only once the one in progress ends (latest wins,
+  above), so that the 32,768 timers' store given a 1000 ms period was replaced every
+  3.5 to 4.4 s; and an edit's test step over an array of timers in 150 ms at
   32,768 and 355 ms at 65,536, 384 to 412 ms on a quiet machine and once 536 ms, past the
   idle watchdog, under the review's load, and over a user block's instances, which moves
   each member, in 255 ms at 10,922 and 576 ms at 21,844, past the idle watchdog some
@@ -1775,6 +1792,9 @@ defmodule Logex.Runner do
     do: cold_copied(Writer.copied(retain.at, text, start.write_limit), start)
 
   defp cold_copy(%{copy: {:unread, reason}}), do: {:error, reason}
+  # Decision 603 (RV-34): a warm start whose match ran past the write limit starts nothing,
+  # its files given up and the store as it was (store_text!/5).
+  defp cold_copy(%{copy: {:unmatched, reason}}), do: {:error, reason}
   defp cold_copy(start), do: {:ok, start}
 
   defp cold_copied({:ok, n}, %{retain: retain} = start),
@@ -5844,7 +5864,7 @@ defmodule Logex.Runner do
     do:
       {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
        wall!(clock),
-       cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration)}
+       cold_read(Writer.read(fn -> :file.read_file(at, [:raw]) end, ms), path, configuration, ms)}
 
   defp store_read!({_given, at} = path, :warm, configuration, runtime, clock, ms),
     do:
@@ -5853,18 +5873,24 @@ defmodule Logex.Runner do
         path,
         configuration,
         runtime,
-        clock
+        {clock, ms}
       )
 
-  defp cold_read({:error, :enoent}, _path, _configuration), do: nil
+  defp cold_read({:error, :enoent}, _path, _configuration, _ms), do: nil
 
-  defp cold_read({:ok, text}, {given, _at}, configuration),
-    do: cold_judged(refused?(text, given, configuration), text)
+  # Decision 603 (RV-34): the judge is the warm match, made within the write limit as the
+  # warm start's is (matched!/5); one past it is taken as refused, the store copied before
+  # it is written over, a copy being harmless where it would have read (provisional,
+  # `PLAN.md`'s RV-34).
+  defp cold_read({:ok, text}, {given, _at}, configuration, ms),
+    do: cold_judged(Writer.read(fn -> refused?(text, given, configuration) end, ms), text)
 
-  defp cold_read({:error, reason}, _path, _configuration), do: {:unread, reason}
+  defp cold_read({:error, reason}, _path, _configuration, _ms), do: {:unread, reason}
 
   defp cold_judged(true, text), do: {:cold, text}
   defp cold_judged(false, _text), do: nil
+  defp cold_judged({:error, :timeout}, text), do: {:cold, text}
+  defp cold_judged({:error, {:down, reason}}, _text), do: exit(reason)
 
   # A store's text judged as a warm fresh start judges it, its refusal caught: refused or
   # not.
@@ -5876,12 +5902,12 @@ defmodule Logex.Runner do
     ArgumentError -> true
   end
 
-  defp store_text!({:error, :enoent}, path, configuration, runtime, clock),
+  defp store_text!({:error, :enoent}, path, configuration, runtime, {clock, _ms}),
     do:
       {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil),
        wall!(clock), nil}
 
-  defp store_text!({:error, {:timeout, ms}}, {path, _at}, _configuration, _runtime, _clock),
+  defp store_text!({:error, {:timeout, ms}}, {path, _at}, _configuration, _runtime, _clocked),
     do:
       raise(
         ArgumentError,
@@ -5889,7 +5915,7 @@ defmodule Logex.Runner do
           "within " <> limit_told(ms)
       )
 
-  defp store_text!({:error, reason}, {path, _at}, _configuration, _runtime, _clock),
+  defp store_text!({:error, reason}, {path, _at}, _configuration, _runtime, _clocked),
     do:
       raise(
         ArgumentError,
@@ -5902,15 +5928,55 @@ defmodule Logex.Runner do
   # Since decision 530 (RV-26) a store of version 2 or 1 that names its program, RV-21's,
   # is laid beside the start's program digested by its texts' bytes, as it was written
   # (`Logex.Retain.compared/3`, decision 534), every write naming the program printed.
-  defp store_text!({:ok, text}, {given, _at} = path, configuration, _runtime, _clock) do
+  # Decision 603 (RV-34): the store's text read back and its image laid over the
+  # configuration, the warm match, made in a process of its own within the write limit
+  # of real time, as the read before it is, so that a large store's match holds the caller
+  # no longer than the limit, where 32,768 retained timers took 9.9 s in the caller and
+  # 65,536 some 28 s, no device open meanwhile: one past it starts nothing, `{:error,
+  # {:retain, :timeout}}`, as a store too big to write within the limit at a cold start
+  # is, the store as it was (cold_copy/1); its refusals are raised here, in the caller, as
+  # before (provisional, the match given its own limit, `PLAN.md`'s RV-34).
+  defp store_text!({:ok, text}, {given, _at} = path, configuration, runtime, {_clock, ms}),
+    do:
+      matched!(
+        Writer.read(fn -> matching(text, given, configuration) end, ms),
+        text,
+        path,
+        configuration,
+        runtime
+      )
+
+  defp matching(text, given, configuration) do
     {image, written_at, stored} = Logex.Retain.decoded!(text, {given, configuration.name})
     {runtime, dropped} = started!(configuration, image, given)
+    {:matched, runtime, written_at, stored, dropped}
+  rescue
+    error in ArgumentError -> {:refused, error.message}
+  end
+
+  defp matched!({:matched, runtime, written_at, stored, dropped}, text, path, configuration, _),
+    do:
+      {runtime, matched_store(path, written_at, stored, dropped, configuration), nil,
+       copied(dropped, text)}
+
+  defp matched!({:refused, message}, _text, _path, _configuration, _runtime),
+    do: raise(ArgumentError, message)
+
+  defp matched!({:error, :timeout}, _text, path, configuration, runtime),
+    do:
+      {runtime, retained(path, nil, [], Logex.Retain.written_by(configuration), nil), nil,
+       {:unmatched, :timeout}}
+
+  defp matched!({:error, {:down, reason}}, _text, _path, _configuration, _runtime),
+    do: exit(reason)
+
+  defp matched_store({given, _at} = path, written_at, stored, dropped, configuration) do
     by = Logex.Retain.written_by(configuration)
 
     warning =
       Logex.Retain.warning(stored, Logex.Retain.compared(stored, by, configuration), given)
 
-    {runtime, retained(path, written_at, dropped, by, warning), nil, copied(dropped, text)}
+    retained(path, written_at, dropped, by, warning)
   end
 
   # Decision 360: the store's text kept for its copy where the start dropped anything,
