@@ -166,6 +166,111 @@ pulse, but `index_pb` and `eye` are 1 in it.
 | 8 | The box leaves, and the operator releases the button. | `box_left` is 1, and `held_lamp` is 0. |
 | 9 | The operator presses the button. | `position` is 2. |
 
+## Under an event task and under a periodic task
+
+A one-shot sees the power flow only when its program runs. In a
+[configuration](../reference/glossary.md#configuration), the
+[task](../reference/glossary.md#task) of the instance decides when the program runs. This
+example runs 1 program under 2 tasks. Each instance counts the presses of the same push
+button `pb`.
+
+1. Make the file `use-one-shots-and-pulse-coils/lamp.ld`, with this text:
+
+<!-- file: use-one-shots-and-pulse-coils/lamp.ld -->
+```text
+var_input pb bool
+var_output presses dint
+var s1 bool
+
+xic pb ons s1 add presses 1 presses
+```
+
+2. Make the file `use-one-shots-and-pulse-coils/lamp.logex`, with this text. The
+   instance `event_lamp` runs under the [event task](../reference/glossary.md#event-task)
+   `on_tick`, which runs when `tick` rises. The instance `period_lamp` runs under the
+   [periodic task](../reference/glossary.md#periodic-task) `fast`, every 10 ms.
+
+<!-- file: use-one-shots-and-pulse-coils/lamp.logex -->
+```text
+task on_tick single tick priority 0
+task fast interval 10 priority 1
+
+var_global pb bool at panel.i.0
+var_global tick bool at panel.i.1
+var_global by_event dint
+var_global by_period dint
+
+program event_lamp lamp with on_tick
+  event_lamp.pb pb
+  event_lamp.presses by_event
+
+program period_lamp lamp with fast
+  period_lamp.pb pb
+  period_lamp.presses by_period
+```
+
+3. Make the file `use-one-shots-and-pulse-coils-tasks.exs`, with this text. It prints
+   the warnings of the configuration, then runs 10 cycles. Each cycle prints the time in
+   ms, the 2 inputs, the 2 counts and the tasks that ran.
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("use-one-shots-and-pulse-coils/lamp.logex")
+Enum.each(plant.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+
+# Each entry gives the ms since the last cycle, the globals at input points that change
+# before the cycle, and what the operator or the machine does.
+entries = [
+  {0, %{}, "start"},
+  {10, %{"pb" => 1}, "press"},
+  {10, %{"pb" => 0}, "release"},
+  {10, %{"tick" => 1}, "tick"},
+  {10, %{"tick" => 0, "pb" => 1}, "press"},
+  {10, %{"tick" => 1}, "tick, held"},
+  {10, %{"pb" => 0, "tick" => 0}, "release"},
+  {5, %{"pb" => 1}, "short press"},
+  {3, %{"pb" => 0}, "release"},
+  {12, %{"tick" => 1}, "tick"}
+]
+
+IO.puts("time  pb  tick  by_event  by_period  ran")
+
+Enum.reduce(entries, {Logex.Runtime.start(plant), 0}, fn {ms, changes, what}, {plant, time} ->
+  {plant, _outputs, events} = Logex.Runtime.cycle(plant, ms, changes)
+  ran = for {:ran, task, _instance, _time} <- events, do: task
+  values = [time + ms] ++ Enum.map(~w(pb tick by_event by_period), &Logex.Runtime.get!(plant, &1))
+  cells = Enum.zip_with(values, [4, 4, 6, 10, 11], &String.pad_leading("#{&1}", &2))
+  IO.puts("#{cells}  #{String.pad_trailing(Enum.join(ran, " "), 13)} #{what}")
+  {plant, time + ms}
+end)
+```
+
+4. Run the script:
+
+```console
+$ mix run use-one-shots-and-pulse-coils-tasks.exs
+use-one-shots-and-pulse-coils/lamp.logex: line 9: warning: `event_lamp` runs under the event task `on_tick`, and `lamp` runs an `ons` on line 5 of `lamp.ld`, whose storage bit is `s1`: an ons sees its rung only at the task's runs, so a pulse between two runs never fires it, and a rung that is the task's trigger is true at every run and never fires it
+time  pb  tick  by_event  by_period  ran
+   0   0     0         0          0  fast          start
+  10   1     0         0          1  fast          press
+  20   0     0         0          1  fast          release
+  30   0     1         0          1  on_tick fast  tick
+  40   1     0         0          2  fast          press
+  50   1     1         1          2  on_tick fast  tick, held
+  60   0     0         1          2  fast          release
+  65   1     0         1          2                short press
+  68   0     0         1          2                release
+  80   0     1         1          2  on_tick fast  tick
+```
+
+| Time | What happens | What the counts show |
+|---|---|---|
+| 10 to 20 | The operator presses and releases `pb` between 2 runs of `on_tick`. | `period_lamp` counts the press. `event_lamp` does not run, and does not see it. |
+| 40 to 60 | The operator holds `pb` while `tick` rises. | `event_lamp` sees the press at its run at 50, and counts it. |
+| 65 to 68 | A press of 3 ms, shorter than the 10 ms of `fast`. | No task runs while `pb` is 1. Neither instance counts it. |
+
+The warning of `event_lamp` gives this result before the program runs. A periodic task
+sees each press that lasts longer than its interval.
+
 ## If it does not work
 
 The column **What you see** gives some words of each message. Look for these words in
@@ -189,7 +294,7 @@ gives each [diagnostic](../reference/glossary.md#diagnostic) and each
 |---|---|---|
 | `` the one-shot then fires on the wrong scans `` | A different instruction writes the storage bit. | Remove that write. A contact can read the storage bit. |
 | `` the last one in the scan decides it `` | An `ote` or a second pulse coil writes the pulse bit. | Write the pulse bit with 1 pulse coil only. To keep the event, [latch](../reference/glossary.md#latch) a different tag on the next rung: `xic index otl moving`. |
-| `` sees its rung only at the task's runs `` | The program runs under an [event task](../reference/glossary.md#event-task). A one-shot sees an edge only when the [task](../reference/glossary.md#task) runs. A pulse bit stays 1 until the next run of the task. | If the one-shot must see each edge, run the program under a [periodic task](../reference/glossary.md#periodic-task). [Use an event task](use-an-event-task.md) gives the rules. |
+| `` sees its rung only at the task's runs `` | The program runs under an [event task](../reference/glossary.md#event-task). A one-shot sees an edge only when the [task](../reference/glossary.md#task) runs. A pulse bit stays 1 until the next run of the task. | If the one-shot must see each press, run the program under a [periodic task](../reference/glossary.md#periodic-task) whose interval is shorter than the shortest press. [Under an event task and under a periodic task](#under-an-event-task-and-under-a-periodic-task) shows both. [Use an event task](use-an-event-task.md) gives the rules. |
 
 ### When you run the scans
 

@@ -1,0 +1,15 @@
+task on_tick single tick priority 0
+task fast interval 10 priority 1
+
+var_global pb bool at panel.i.0
+var_global tick bool at panel.i.1
+var_global by_event dint
+var_global by_period dint
+
+program event_lamp lamp with on_tick
+  event_lamp.pb pb
+  event_lamp.presses by_event
+
+program period_lamp lamp with fast
+  period_lamp.pb pb
+  period_lamp.presses by_period
