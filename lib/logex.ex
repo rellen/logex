@@ -101,10 +101,12 @@ defmodule Logex do
           {:ok, Logex.Program.t() | Logex.FbType.t()} | {:error, [Logex.Diagnostic.t(), ...]}
 
   @typedoc """
-  `compile/2`'s options, in either order: the program's `name:`, which it needs, and the
-  `types:` its source may declare instances of, none by default.
+  `compile/2`'s options, in any order, each once: the program's `name:`, which it needs;
+  the `types:` its source may declare instances of, none by default; and since decision 607
+  (RV-34) the tags `declared:` from Elixir with `Logex.Tag.new!/5`, none by default.
   """
-  @type option :: {:name, String.t()} | {:types, [Logex.FbType.t()]}
+  @type option ::
+          {:name, String.t()} | {:types, [Logex.FbType.t()]} | {:declared, [Logex.Tag.t()]}
 
   # Decision 432 (RV-15): the three are Logex.Compiler's, so that the loader and its own
   # compile of a file over the blocks it compiled itself are private code of the module
@@ -129,8 +131,17 @@ defmodule Logex do
   `Logex.FbType.user?/1`), a type the tables of several of them share compiled again once
   (`Logex.FbType.check/2`). The
   program, or the block's type, holds every type its instances reach, at any depth, once,
-  in one table, its `blocks`, and each instance's tag names its type (decision 53). The
-  options come in either order, and `types` defaults to none.
+  in one table, its `blocks`, and each instance's tag names its type (decision 53).
+
+  `declared` (decision 607, RV-34) are tags built in Elixir with `Logex.Tag.new!/5`,
+  entered in the table before the source's own, as `Logex.Compiler.instructionize/3`
+  takes them: `Logex.compile(source, name: "belt", declared: [Logex.Tag.new!("start",
+  :bool, :var_input)])` compiles a source whose rungs read `start` and whose lines do not
+  declare it. A tag the source declares too is a diagnostic at the source's line, "`start`
+  is declared twice: the caller's table already has it"; a `declared` that is no list of
+  `%Logex.Tag{}`, or a tag `Logex.Declarations.check/1` refuses, raises `ArgumentError`,
+  in `instructionize/3`'s words. The options come in any order, each once, and `types` and
+  `declared` default to none; any other option, or one given twice, raises.
 
   A name is required, because a configuration refers to a program type by its name. It is
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises
@@ -189,8 +200,9 @@ defmodule Logex do
   among them, in the order the loader compiled them: a block's after those of the blocks
   it holds. They stay in each block's type too. A block's file compiles to a type
   `compile/2` could give, its body's warnings its own (`Logex.FbType.user?/1`), so it
-  hands back no other. `compile/2`, whose host compiled each block, gives only the
-  program's.
+  hands back no other. Since decision 598 (RV-34) `compile/2`, whose host compiled each
+  block, gives the program's own and then those of every block type its table holds, in
+  the table's order, each as its type carries it.
 
   `path` is a `.ld` file's, exactly, since the extension says what kind of file it is
   (M2-2): any other, `seal.txt`, `seal.LD` or `seal` among them, is a `:file`
@@ -221,10 +233,10 @@ defmodule Logex do
   @doc """
   Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
   in their order. One memo serves the call (decision 34, M2-2), so a block that several of
-  the files hold, at any depth, is read and compiled once, and its warnings are handed
-  back once, among those of the first program in `paths` that holds it and compiles: a
-  block's own file in `paths` hands back nothing, so a program after it still hands its
-  blocks' warnings back. A chain of files that holds itself is found again for each path,
+  the files hold, at any depth, is read and compiled once, and since decision 598 (RV-34)
+  its warnings are handed back among those of every program in `paths` that holds it and
+  compiles, where only the first's held them: a block's own file in `paths` hands back
+  nothing. A chain of files that holds itself is found again for each path,
   since what it cites depends on the file it was reached from. A path given twice gives
   its one result twice. `Logex.Configuration.compile_file/1` loads a configuration's
   program types through it.

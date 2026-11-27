@@ -158,7 +158,7 @@ name `jmp`, `Jmp`, `lbl`, `LBL`, `cal` or `Cal`.
 | After a [restart](glossary.md#restart) | The same as on each other scan. A `jmp` keeps no value. |
 | Faults | None |
 | Diagnostics | The label: [wrong rungs 1 to 8](#wrong-rungs-1-to-8-the-label). The target rung and the place: [wrong rungs 9 to 22](#wrong-rungs-9-to-22-where-a-jump-goes). In a function block: [wrong rungs 23 to 27](#wrong-rungs-23-to-27-in-a-function-block). |
-| Warnings | A `jmp` gives no warning. [Programs 2 and 3](#programs-1-to-9-warnings) show that a jump does not stop the warning of a second `ote`. |
+| Warnings | A `jmp` gives no warning. [Programs 2 and 3](#programs-1-to-12-warnings) show that a jump does not stop the warning of a second `ote`. |
 
 A `jmp` that is first on its rung has no condition. It jumps in each scan.
 
@@ -200,10 +200,10 @@ This drawing shows rung 1 of [the program `jog.ld`](#the-program-jogld). The run
 | After a restart | The same as on each other scan. A `lbl` keeps no value. |
 | Faults | None |
 | Diagnostics | The label: [wrong rungs 1 to 8](#wrong-rungs-1-to-8-the-label). The place, 2 labels and a label alone: [wrong rungs 9 to 22](#wrong-rungs-9-to-22-where-a-jump-goes). In a function block: [wrong rungs 23 to 27](#wrong-rungs-23-to-27-in-a-function-block). |
-| Warnings | A label that no `jmp` names: [program 1](#programs-1-to-9-warnings) |
+| Warnings | A label that no `jmp` names: [program 1](#programs-1-to-12-warnings) |
 
 A label and a tag can have the same name. In `xic lamp jmp lamp`, the first `lamp` is a
-tag and the second is a label. [Program 11](#programs-10-to-16-no-warning) shows this.
+tag and the second is a label. [Program 14](#programs-13-to-16-no-warning) shows this.
 
 ### A label alone
 
@@ -234,7 +234,7 @@ for each rung.
 | After a restart | The members of the instance get their [initial values](glossary.md#initial-value) again, as each tag does. [Retained values](retained-values-and-store.md) gives what a [warm restart](glossary.md#warm-restart) keeps. |
 | Faults | An operand with a tag as a subscript or as a bit number: see [Faults of `cal`](#faults-of-cal). A fault in the body: the fault names the instance. |
 | Diagnostics | In a body: [wrong rungs 26 and 27](#wrong-rungs-23-to-27-in-a-function-block). The instance: [wrong rungs 28 to 41](#wrong-rungs-28-to-41-the-instance). The operands: [wrong rungs 42 to 60](#wrong-rungs-42-to-60-the-operands). |
-| Warnings | An instance that no `cal` runs: [programs 4 to 7](#programs-1-to-9-warnings). A `cal` that writes the storage bit of a one-shot: [program 8](#programs-1-to-9-warnings). A real literal that the type of its input cannot hold exactly: [program 9](#programs-1-to-9-warnings). The warning names the value that the input gets. |
+| Warnings | An instance that no `cal` runs: [programs 4 to 7](#programs-1-to-12-warnings). A `cal` that writes the storage bit of a one-shot: [program 8](#programs-1-to-12-warnings). A real literal that the type of its input cannot hold exactly: [program 9](#programs-1-to-12-warnings). The warning names the value that the input gets. |
 
 This drawing shows the 4 rungs of [the program `belts.ld`](#the-programs-sealld-and-beltsld).
 Each of the first 3 rungs has a `cal`. The third `cal` comes after the contact `auto`.
@@ -343,7 +343,7 @@ for 2 instructions that run 1 instance.
 | An element of an array of instances | `cal lanes[1]` runs only the element `lanes[1]`. Each element of the array needs its `cal`. |
 | A timer or a counter | `cal` does not run a timer or a counter. Its instruction, such as `ton`, runs it. |
 | An instance that no `cal` runs | The program compiles with a warning. The instance never runs, and its members keep their initial values. |
-| 1 tag that 2 instructions write | A `cal` and an `ote` can write the same tag. 2 `cal` instructions can write the same tag. logex gives no warning. The last write in the scan decides the value. |
+| 1 tag that 2 instructions write | A `cal` and an `ote` can write the same tag, and so can 2 `cal` instructions. logex gives a warning, as for 2 `ote` instructions: the last write in the scan decides the value. [Programs 10 to 12](#programs-1-to-12-warnings) show this. |
 
 ### Faults of `cal`
 
@@ -1385,12 +1385,12 @@ field `warnings`, and `Logex.Diagnostic.format/1` gives the text of a warning.
 | No rung names an instance. | 7 | Yes |
 | A `cal` writes the storage bit of a one-shot. | 8 | Yes |
 | A real literal goes into an `lreal` input, and an `lreal` cannot hold it exactly. | 9 | Yes |
-| A `jmp` has no condition. | 10 | No |
-| A label has the name of a tag. | 11 | No |
-| A `cal` is on a skipped rung. | 12 | No |
-| A `cal` and an `ote` write the same tag. | 13 | No |
-| 2 `cal` instructions write the same tag. | 14 | No |
-| An `ote` after a `cal` writes the output tag of the `cal`. | 15 | No |
+| A `cal` and an `ote` write the same tag. | 10 | Yes |
+| 2 `cal` instructions write the same tag. | 11 | Yes |
+| An `ote` after a `cal` writes the output tag of the `cal`. | 12 | Yes |
+| A `jmp` has no condition. | 13 | No |
+| A label has the name of a tag. | 14 | No |
+| A `cal` is on a skipped rung. | 15 | No |
 | A `cal` widens an `int` and a `real` into its inputs. | 16 | No |
 
 logex finds the warnings in the text of the program. It does not know which rungs a jump
@@ -1399,7 +1399,7 @@ a second `ote`.
 
 [Warnings](warnings.md) gives each warning of logex.
 
-### Programs 1 to 9: warnings
+### Programs 1 to 12: warnings
 
 ```elixir
 {report, _} = Code.eval_file("instructions-contacts-and-coils/report.exs")
@@ -1418,7 +1418,13 @@ programs = [
   "var_input eye bool\nvar_output lamp bool\nvar s1 seal\nxic eye jmp done\nlbl done ote lamp",
   "var_input eye bool\nvar_output lamp bool\nvar seen bool\nvar s1 seal\n" <>
     "xic eye ons seen ote lamp\ncal s1 eye 0 seen",
-  "var_output total lreal\nvar g gain\ncal g 2 9007199254740993.0 total"
+  "var_output total lreal\nvar g gain\ncal g 2 9007199254740993.0 total",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
+    "cal s1 eye skip lamp\nxic skip ote lamp",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\nvar s2 seal\n" <>
+    "cal s1 eye skip lamp\ncal s2 skip eye lamp",
+  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
+    "xic eye cal s1 eye skip lamp ote lamp"
 ]
 
 report.(1, programs, &Logex.compile(&1, name: "warned", types: [seal, gain]))
@@ -1487,9 +1493,33 @@ $ mix run instructions-jump-and-call-warnings.exs
     cal g 2 9007199254740993.0 total
       line 3: warning: `9007199254740993.0` is more precise than an lreal keeps:
       it is held as 9.007199254740992e15
+10  var_input eye bool
+    var_input skip bool
+    var_output lamp bool
+    var s1 seal
+    cal s1 eye skip lamp
+    xic skip ote lamp
+      line 6: warning: `lamp` is already written by the `cal` on line 5: the
+      last one in the scan decides it
+11  var_input eye bool
+    var_input skip bool
+    var_output lamp bool
+    var s1 seal
+    var s2 seal
+    cal s1 eye skip lamp
+    cal s2 skip eye lamp
+      line 7: warning: `lamp` is already written by the `cal` on line 6: the
+      last one in the scan decides it
+12  var_input eye bool
+    var_input skip bool
+    var_output lamp bool
+    var s1 seal
+    xic eye cal s1 eye skip lamp ote lamp
+      line 5: warning: `lamp` is already written by the `cal` in this rung: the
+      last one in the scan decides it
 ```
 
-### Programs 10 to 16: no warning
+### Programs 13 to 16: no warning
 
 ```elixir
 {report, _} = Code.eval_file("instructions-contacts-and-coils/report.exs")
@@ -1501,59 +1531,32 @@ programs = [
   "var_input lamp bool\nvar_output belt bool\nxic lamp jmp lamp\nlbl lamp xic lamp ote belt",
   "var_input skip bool\nvar_input eye bool\nvar_output lamp bool\nvar s1 seal\n" <>
     "xic skip jmp done\ncal s1 eye 0 lamp\nlbl done",
-  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
-    "cal s1 eye skip lamp\nxic skip ote lamp",
-  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\nvar s2 seal\n" <>
-    "cal s1 eye skip lamp\ncal s2 skip eye lamp",
-  "var_input eye bool\nvar_input skip bool\nvar_output lamp bool\nvar s1 seal\n" <>
-    "xic eye cal s1 eye skip lamp ote lamp",
   "var_input speed int\nvar_input rate real\nvar_output total lreal\nvar g gain\n" <>
     "cal g speed rate total"
 ]
 
-report.(10, programs, &Logex.compile(&1, name: "quiet", types: [seal, gain]))
+report.(13, programs, &Logex.compile(&1, name: "quiet", types: [seal, gain]))
 ```
 
 ```console
 $ mix run instructions-jump-and-call-no-warning.exs
-10  var_input eye bool
+13  var_input eye bool
     var_output lamp bool
     jmp done
     lbl done xic eye ote lamp
       the text compiles, and logex gives no warning
-11  var_input lamp bool
+14  var_input lamp bool
     var_output belt bool
     xic lamp jmp lamp
     lbl lamp xic lamp ote belt
       the text compiles, and logex gives no warning
-12  var_input skip bool
+15  var_input skip bool
     var_input eye bool
     var_output lamp bool
     var s1 seal
     xic skip jmp done
     cal s1 eye 0 lamp
     lbl done
-      the text compiles, and logex gives no warning
-13  var_input eye bool
-    var_input skip bool
-    var_output lamp bool
-    var s1 seal
-    cal s1 eye skip lamp
-    xic skip ote lamp
-      the text compiles, and logex gives no warning
-14  var_input eye bool
-    var_input skip bool
-    var_output lamp bool
-    var s1 seal
-    var s2 seal
-    cal s1 eye skip lamp
-    cal s2 skip eye lamp
-      the text compiles, and logex gives no warning
-15  var_input eye bool
-    var_input skip bool
-    var_output lamp bool
-    var s1 seal
-    xic eye cal s1 eye skip lamp ote lamp
       the text compiles, and logex gives no warning
 16  var_input speed int
     var_input rate real

@@ -296,7 +296,7 @@ Each item of this table is an item of [the nearest name](#example-the-nearest-na
 | This comparison counts an uppercase letter and its lowercase letter as different letters. A type word is correct in uppercase, lowercase or a mix. But `Dnt` gets no nearest name, and `dnt` gets `dint`. | J, K |
 | For the label of a `jmp`, logex looks only at the labels after the `jmp`. A [jump](glossary.md#jump) goes forward only. | G, I |
 | A [member](glossary.md#member) with no near name gets the list of the members of its type. | F |
-| logex gives no nearest name for an [instruction](glossary.md#instruction), except for `mov`. `mov` is the [mnemonic](glossary.md#mnemonic) of the [conventional set](glossary.md#conventional-set). logex uses the [IEC 61131-3](glossary.md#iec-61131-3) name, `move`. | M |
+| An unknown [instruction](glossary.md#instruction) gets the nearest [mnemonic](glossary.md#mnemonic). logex compares the word in lowercase, because a mnemonic is correct in any case: `otee` and `OTEE` get `ote`. `mov` is the mnemonic of the [conventional set](glossary.md#conventional-set), and gets the [IEC 61131-3](glossary.md#iec-61131-3) name, `move`. | M |
 | A program type that a configuration does not know, with no near name, gets a list. For a configuration text, the message gives the program types that the host gives. For a configuration file, the message names the `.ld` file that is not there. | P, and [Configuration file: messages](configuration-file-messages.md) |
 | In 1 text, logex looks for a nearest name for the first 100 names that it cannot find, in the sequence of the lines. A name after the first 100 gets no nearest name. This rule applies also to a name that is different only in case. | Q, `Fan` |
 | In a configuration, the first word of a line and the type of a `var_global` always get their nearest name. The limit of 100 names does not apply to them. | R, for the type |
@@ -311,6 +311,7 @@ logex looks for the nearest name of these names in a program:
 - a [label](glossary.md#label)
 - a [type](glossary.md#type)
 - a [function block type](glossary.md#function-block-type)
+- an instruction
 
 In a configuration, logex looks for the nearest name of these names:
 
@@ -870,7 +871,7 @@ $ mix run diagnostics-order.exs
     line 6: `fna` is not declared
     line 7: `hott` is not declared — did you mean `hot`?
  7  an unknown instruction, then a name that is not declared, on 2 lines
-    line 4: unknown instruction `otee`
+    line 4: unknown instruction `otee` — did you mean `ote`?
     line 5: `fna` is not declared
  8  a file whose function block has an error
     wrong/seal.ld: line 7: `stp` is not declared — did you mean `stop`?
@@ -890,9 +891,9 @@ $ mix run diagnostics-order.exs
 12  a task line that logex cannot read
     line 1, column 11: unexpected `intervl` on the line of task `fast`: a task takes `continuous`, `single`, `interval`, `priority` and `watchdog`
 13  an instance with 2 var_inputs that no line connects
-    line 2: `f1` leaves its var_inputs `fan_on` and `hot` unconnected: connect each to a global, a point or a constant, as in `f1.fan_on 0`
+    line 2: `f1` leaves its var_inputs `fan_on` and `hot` unconnected: connect each to a global or a constant, as in `f1.fan_on 0`
 14  the configuration of item 13, as Elixir data
-    `f1` leaves its var_inputs `fan_on` and `hot` unconnected: connect each to a global, a point or a constant, as in `f1.fan_on 0`
+    `f1` leaves its var_inputs `fan_on` and `hot` unconnected: connect each to a global or a constant, as in `f1.fan_on 0`
 15  a character that logex cannot read, and 2 more errors
     line 2, column 26: illegal character "@"
 16  an online edit of a configuration
@@ -1040,7 +1041,7 @@ K  A type with an uppercase letter: 1 diagnostic
 L  A function block: only the case is different: 1 diagnostic
    line 5: unknown type `Seal`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword`, `lword`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`, and the function block `seal` — did you mean `seal`? (type names are case-sensitive)
 M  Instructions: 2 diagnostics
-   line 5: unknown instruction `otee`
+   line 5: unknown instruction `otee` — did you mean `ote`?
    line 6: unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)
 N  A program that declares no tags: 2 diagnostics
    line 1: `a` is not declared (this program declares no tags: each is now declared before the first rung, as in `var a bool` or `var a dint`)

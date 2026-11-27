@@ -442,8 +442,7 @@ defmodule Logex.RetainConfigurationTest do
       # Its instance is declared, so a use of it is checked against its program type.
       assert messages(compiled("var_global e bool\nprogram retain p1 plain\np1.zz e\n")) == [
                "2:9 #{told.("retain")}",
-               "2: `p1` leaves its var_input `eye` unconnected: connect it to a global, a " <>
-                 "point or a constant, as in `p1.eye 0`",
+               "2: `p1` leaves its var_input `eye` unconnected: connect it to a global or a constant, as in `p1.eye 0`",
                "3: `p1` runs `plain`, which declares no `zz`: its var_inputs and var_outputs " <>
                  "are `eye` and `lamp`"
              ]

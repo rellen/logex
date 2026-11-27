@@ -16774,6 +16774,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      source of its claims about the tools of IEC 61131-3 is not recorded is no claim about
      Logix, and this decision does not reach it. Its mark, decision 592's landed note, made
      the number with this record.
+     *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 640
+     reaches this rule to any tool of IEC 61131-3, and record 0022 cites or drops its
+     claims about them, its sentence that their source is not recorded gone.)*
 
 621. **A reference page that shows a type changed by hand (DOC-1's third step),** DOC-1's
      third step's review, question 5: `function-blocks.md`'s text 35 renames a compiled
@@ -16845,6 +16848,10 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      with a test that fails when it is reverted, or put to the maintainer where it would
      choose a rule. DOC-2 keeps the wording of the warnings that stand. Not taken: the group
      left to DOC-2, the pages stating the warnings as they are. It amends decision 596.
+     *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 637
+     settles the real literal in a long timer's `pre`, the form found or the finding
+     recorded as covered, and decision 638 `compile_file/1`'s warnings, each program's
+     copied into the configuration's, each naming its program.)*
 
 627. **The words of the count line (RV-33),** RV-33's question 1, decision 610's "how many
      more there are": a box counter's bridge sends 100,000 inputs keyed by register number.
@@ -16881,6 +16888,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      bounds the lines and decision 520 the did-you-mean. Not taken: as built, every name in
      one line, as decision 520's lists were given once. IEC and Logix have no host API to
      compare. RV-34 builds it.
+     *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 636
+     reaches this bound to a diagnostic that lists names, a configuration's and a
+     compile's, each name still quoted whole as decision 633 has it.)*
 
 630. **A tag that is no `%Logex.Tag{}` (RV-33),** RV-33's question 4, found beside decision
      616: a box counter's host puts a `Date` where one tag of a compiled program's table
@@ -16893,6 +16903,9 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      an `ArgumentError`. Not taken: as built, outside the contract, as `Logex.Runtime`'s
      moduledoc has a program edited by hand. In Logix a program is downloaded whole and
      checked when it is. RV-34 builds it.
+     *(Since the answers to the recording of decisions 617 to 635, 2026-11-26: decision 639
+     reaches this refusal to every door decision 616's check runs at, `instance/1`,
+     `Logex.Configuration.check/1`, `new!/1`, `start/1` and both edits.)*
 
 631. **A did-you-mean for a name past 4,096 bytes (RV-33),** RV-33's question 5, decision
      613 beside decision 520's bound: a bridge sends a megabyte as an input's key.
@@ -16950,6 +16963,73 @@ timer at 62 hours, the fan in its run-on and the conveyor running, and comes bac
      Not taken: that line always told after the hundred, 101 lines and a count of 50; that
      line first, which changes the order the pins below a hundred hold. IEC and Logix have
      no host API to compare. Its mark made the number with this record.
+
+636. **A diagnostic that lists names (RV-34),** the recording of decisions 617 to 635,
+     decision 629's "a line of a refusal of the host contract that lists names": a fan
+     plant's configuration wires an instance to `fan_speed`, a var_input its program of
+     10,000 var_inputs does not declare, and `check/1` tells it in one diagnostic that
+     lists every var_input and var_output of the program; a compile's "its members are",
+     for a block of as many members, is as long.
+
+     **Taken: 629's bound reaches diagnostics too (b)** (the maintainer, 2026-11-26): a
+     list of names in a refusal or in a diagnostic, a configuration's "its var_inputs and
+     var_outputs are" and a compile's "its members are" among them, shows the first hundred
+     names in its order and how many more there are, as decision 629 has a refusal's. It is
+     not the option recommended, which was (a): the bound for a refusal of the host contract
+     alone, a diagnostic listing every name, as decision 633 keeps a compile's text as the
+     release gives it. Decision 633 still holds beside it: each name a compile's diagnostic
+     quotes is quoted whole, so the bound shortens the list and cuts none of its names. IEC
+     and Logix have no host API to compare; Logix's editor shows a program's tags in a
+     browser, not in a message. RV-34 builds it.
+
+637. **A real literal in a long timer's `pre` (RV-34),** decision 626's "a real literal in
+     a long timer's `pre`, a time in ns, warned": `ton t 1.5` and `move 1.5 t.pre` on a
+     `ton_ltime` are refused on `main`, not taken unwarned, so the form the close's writer
+     ran is not yet known.
+
+     **Taken: the form found, or the finding recorded as covered (a)** (the maintainer,
+     2026-11-26): RV-34 finds the form the close's writer ran; where it, or any form of a
+     real literal reaching a long timer's `pre`, still passes without a warning, it is
+     warned as decision 626 says, and where none does, the finding is recorded as already
+     covered, with the runs. Not taken: a warning added for every real that reaches an
+     `ltime` member, however it gets there, which would warn a `move` of a real tag the
+     source states on purpose. RV-34 builds it.
+
+638. **A configuration file's program warnings (RV-34),** decision 626's
+     "`Logex.Configuration.compile_file/1` keeping a program's warnings": on `main` a
+     configuration file whose conveyor program has two `ote`s on `belt` compiles with
+     `warnings: []`, the warning only inside the program type's own struct.
+
+     **Taken: each program's warnings copied into the configuration's, each naming its
+     program (a)** (the maintainer, 2026-11-26): the configuration's `warnings` hold every
+     warning of each program it compiles, after its own, each saying which program type it
+     is of, so a host that reads one list reads them all. Not taken: the warnings left in
+     each program type's struct, the documentation saying where to look; copied as they are,
+     naming no program, so that two programs' like warnings read alike. RV-34 builds it.
+
+639. **Where a tag that is no tag is refused (RV-34),** decision 630's "`instance/1`'s
+     shape check": decision 616's check of a program edited by hand runs at more doors than
+     `instance/1`, and a `Date` in a program's table reaches each.
+
+     **Taken: wherever decision 616's check runs (a)** (the maintainer, 2026-11-26): the
+     tag that is no `%Logex.Tag{}` is refused, one pinned line each, by `instance/1`,
+     `Logex.Configuration.check/1`, `new!/1`, `start/1` and both edits, as each refuses a
+     struct as the table, where `FunctionClauseError` escapes now. Not taken: `instance/1` alone, as decision 630 is written, the other doors
+     left as they are. In Logix a program is downloaded whole and checked when it is. RV-34
+     builds it.
+
+640. **A decision record's claim about another IEC 61131-3 tool (RV-34),** decision 620's
+     "this decision does not reach it": record 0022 compares logex's checks with "the tools
+     of IEC 61131-3" and says the source of those claims is not recorded.
+
+     **Taken: decision 620's rule for any tool (a)** (the maintainer, 2026-11-26): a
+     decision record cites or drops each claim about another IEC 61131-3 tool, as decision
+     620 has it for Logix, so that record 0022's reader reads only claims that have a
+     source, and its sentence that their source is not recorded goes. Not taken: decision
+     620 for Logix alone, the sentence kept. Made with this record: record 0022's claim of
+     a function block's internal values is cited to IEC itself, Ed 2 Table 32 and Ed 3
+     Figure 13 as decision 33 reads them, and its two claims about the tools, a typed
+     interface checked at each compile and no mark that hides a warning, are dropped.
 
 ---
 

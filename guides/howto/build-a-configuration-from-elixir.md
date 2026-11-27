@@ -541,7 +541,7 @@ does not exist, gives 2 lines:
 <!-- unchecked: a message copied from a run of new!/1 with m1's overtemp connected to m3 -->
 ```text
 no instance `m3`: declare it, as in `program m3 motor`
-`m1` leaves its var_input `overtemp` unconnected: connect it to a global, a point or a constant, as in `m1.overtemp 0`
+`m1` leaves its var_input `overtemp` unconnected: connect it to a global or a constant, as in `m1.overtemp 0`
 ```
 
 A map in place of the struct `%Instance{}` of `m1` gives more lines. The first line gives

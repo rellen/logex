@@ -747,17 +747,17 @@ report.(80, texts, &Logex.Configuration.compile("line_1", &1, Map.put(types, "fa
 ```console
 $ mix run configuration-file-wrong-connections.exs
 80  program l1 lamp
-      line 1: `l1` leaves its var_input `on` unconnected: connect it to a
-      global, a point or a constant, as in `l1.on 0`
+      line 1: `l1` leaves its var_input `on` unconnected: connect it to a global
+      or a constant, as in `l1.on 0`
 81  program c1 belt
       c1.start 0
     var_global estop bool
       line 1: `c1` leaves its var_input `stop` unconnected: connect it to a
-      global, a point or a constant, as in `c1.stop 0`
+      global or a constant, as in `c1.stop 0`
 82  program l1 lamp
       l1.of 0
-      line 1: `l1` leaves its var_input `on` unconnected: connect it to a
-      global, a point or a constant, as in `l1.on 0`
+      line 1: `l1` leaves its var_input `on` unconnected: connect it to a global
+      or a constant, as in `l1.on 0`
       line 2: `l1` runs `lamp`, which declares no `of`: its var_inputs and
       var_outputs are `lamp` and `on`
 83  program l1 lamp
@@ -770,8 +770,8 @@ $ mix run configuration-file-wrong-connections.exs
       `l1.on pb_start_1`
 85  program l1 lamp
       l1 0
-      line 1: `l1` leaves its var_input `on` unconnected: connect it to a
-      global, a point or a constant, as in `l1.on 0`
+      line 1: `l1` leaves its var_input `on` unconnected: connect it to a global
+      or a constant, as in `l1.on 0`
       line 2, column 3: unknown configuration line `l1`: a line starts with
       `task`, `var_global` or `program`, or is a connection, as in `m1.start
       pb_start_1`
@@ -894,7 +894,7 @@ $ mix run configuration-file-wrong-connections.exs
 108  program f1 fans
       f1.temps[0] 20.0
       line 1: `f1` leaves its var_input `temps[1]` unconnected: connect it to a
-      global, a point or a constant, as in `f1.temps[1] 0`
+      global or a constant, as in `f1.temps[1] 0`
 109  program f1 fans
       f1.temps[0] 20.0
       f1.temps[1] 20.0

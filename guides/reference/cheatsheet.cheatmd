@@ -124,6 +124,11 @@ A contact writes nothing.
 No instruction writes a `var_input` tag. `otl` is the [latch](glossary.md#latch) and
 `otu` is the [unlatch](glossary.md#unlatch).
 
+An `ote` and a second write of `d` give a [warning](glossary.md#warning): a second
+`ote`, a `move`, or the output operand of a `cal`. 2 `cal` instructions that write `d`
+give it too. An `otl` and an `otu` give none. [Warnings](warnings.md#the-warnings-of-2-writes)
+gives the full rules.
+
 [Instructions: contacts and coils](instructions-contacts-and-coils.md) gives the full
 rules.
 

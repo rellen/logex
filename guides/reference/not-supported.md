@@ -427,13 +427,15 @@ $ mix run not-supported-program.exs
 31  xic start bool_to_int eye count
       line 17: unknown instruction `bool_to_int`
 32  xic start int_to_bool slot lamp
-      line 17: unknown instruction `int_to_bool`
+      line 17: unknown instruction `int_to_bool` — did you mean
+      `int_to_lword`?
 33  xic start bcd_to_int status slot
       line 17: unknown instruction `bcd_to_int`
 34  xic start int_to_bcd slot status
-      line 17: unknown instruction `int_to_bcd`
+      line 17: unknown instruction `int_to_bcd` — did you mean `int_to_byte`?
 35  xic start real_to_dword speed pattern
-      line 17: unknown instruction `real_to_dword`
+      line 17: unknown instruction `real_to_dword` — did you mean
+      `real_to_dint`?
 36  xic start res t1
       line 17: unknown instruction `res`
 37  xic start mcr

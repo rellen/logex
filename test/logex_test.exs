@@ -16,6 +16,12 @@ defmodule LogexTest do
 
   defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
 
+  defp usage(got),
+    do:
+      "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
+        "types, and tags declared from Elixir, each once in any order, as in " <>
+        ~s|Logex.compile(source, name: "motor", types: [seal], declared: [start]), got: | <> got
+
   # Milestone 2's done sentence: §4.3's seal-in block and motor, §4.4's snapshot, and a
   # plant of §4.4's shape with a periodic task, an event task and a task-less instance.
   @m2_seal """
@@ -708,6 +714,51 @@ defmodule LogexTest do
       assert Enum.all?(diagnostics, &(&1.stage == :validate))
     end
 
+    # Decision 607 (RV-34): `declared:` takes the tags `Logex.Tag.new!/5` builds, beside the
+    # source's declarations, as `instructionize/3` takes them, and in any order beside
+    # `name:` and `types:`; a tag the source declares too, or one that is no tag, is
+    # refused in instructionize/3's words.
+    test "declared: takes tags built in Elixir beside the source's declarations" do
+      start = Logex.Tag.new!("start", :bool, :var_input)
+      source = "var_output motor bool\nxic start ote motor"
+      {:ok, tokens, _} = Logex.Compiler.tokenize(source)
+      {:ok, ast} = Logex.Compiler.parse(tokens)
+      {:ok, lowered} = Logex.Compiler.instructionize(ast, [start])
+
+      assert {:ok, program} = Logex.compile(source, name: "belt", declared: [start])
+      assert program.tags == lowered.tags and program.rungs == lowered.rungs
+      assert program.tags["start"] == start
+      assert %Logex.Program{name: "belt", source: ^source, warnings: []} = program
+
+      # In any order, beside types:, each once.
+      assert Logex.compile(source, declared: [start], name: "belt") == {:ok, program}
+      assert Logex.compile(source, types: [], declared: [start], name: "belt") == {:ok, program}
+
+      assert Logex.compile(source, name: "belt", declared: []) ==
+               Logex.compile(source, name: "belt")
+
+      # It runs: the host's input reaches the rung as a source tag's would.
+      instance = Logex.Runtime.instance(program)
+      instance = Logex.Runtime.put_inputs(program, instance, %{"start" => 1})
+      {outputs, _instance} = Logex.Runtime.scan(program, instance)
+      assert outputs == %{"motor" => 1}
+
+      # A tag the source declares too is a diagnostic at its line, as instructionize/3 gives.
+      assert formatted(
+               Logex.compile("var_input start bool\n" <> source, name: "belt", declared: [start])
+             ) ==
+               ["line 1: `start` is declared twice: the caller's table already has it"]
+
+      # What is no list of tags is the host's mistake, in instructionize/3's words.
+      assert_raise ArgumentError, "declared must be a list of %Logex.Tag{}, got: :x", fn ->
+        Logex.compile(source, name: "belt", declared: :x)
+      end
+
+      assert_raise ArgumentError, "expected a %Logex.Tag{}, got: :x", fn ->
+        Logex.compile(source, name: "belt", declared: [:x])
+      end
+    end
+
     test "raises ArgumentError when the call breaks its contract, never for the source" do
       for {call, message} <- [
             {fn -> Logex.compile(~c"xic a", name: "p") end,
@@ -725,13 +776,16 @@ defmodule LogexTest do
             {fn -> Logex.compile(@seal, name: "") end,
              ~s("" cannot name a program: a name is a letter or `_`, ) <>
                "then letters, digits or `_`"},
-            {fn -> Logex.compile(@seal, []) end,
-             "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
-               ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), got: []|},
+            # Decision 607 (RV-34): the message names `declared:` too.
+            {fn -> Logex.compile(@seal, []) end, usage("[]")},
             {fn -> Logex.compile(@seal, name: "p", file: "x") end,
-             "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
-               ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
-               ~s|got: [name: "p", file: "x"]|}
+             usage(~s|[name: "p", file: "x"]|)},
+            {fn -> Logex.compile(@seal, name: "p", name: "q") end,
+             usage(~s|[name: "p", name: "q"]|)},
+            {fn -> Logex.compile(@seal, declared: []) end, usage("[declared: []]")},
+            {fn -> Logex.compile(@seal, [{:name, "p"} | :x]) end,
+             usage(~s|[{:name, "p"} \| :x]|)},
+            {fn -> Logex.compile(@seal, %{name: "p"}) end, usage(~s|%{name: "p"}|)}
           ] do
         assert_raise ArgumentError, message, call
       end
@@ -1172,7 +1226,7 @@ defmodule LogexTest do
     end
 
     test "compiles each as compile_file/1 does, a block they share once, its warnings " <>
-           "handed back once",
+           "in each that holds it",
          %{tmp_dir: dir} do
       latch = Path.join(dir, "latch.ld")
       File.write!(latch, @block)
@@ -1183,11 +1237,13 @@ defmodule LogexTest do
       assert [{:ok, first}, {:ok, second}] = Logex.compile_files([one, two])
       assert {:ok, first} == Logex.compile_file(one)
       assert Enum.map(first.warnings, &Diagnostic.format/1) == [warning]
-      assert {:ok, %{second | warnings: [hd(first.warnings)]}} == Logex.compile_file(two)
-      assert second.warnings == []
+      # Decision 598 (RV-34): the block's warnings travel with its type, to each program
+      # that holds it, where only the first to load it handed them back.
+      assert {:ok, second} == Logex.compile_file(two)
+      assert Enum.map(second.warnings, &Diagnostic.format/1) == [warning]
 
-      # In the other order, the other program hands the warning back.
-      assert [{:ok, %{warnings: [_]}}, {:ok, %{warnings: []}}] = Logex.compile_files([two, one])
+      # In the other order, the same.
+      assert [{:ok, %{warnings: [_]}}, {:ok, %{warnings: [_]}}] = Logex.compile_files([two, one])
 
       # A path given twice gives its one result twice; each path passes the gate.
       assert [{:ok, ^first}, {:ok, ^first}] = Logex.compile_files([one, one])

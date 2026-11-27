@@ -222,7 +222,7 @@ line 4: `move` writes `boxes.cv`, but logic may write only `.r` and `.pv` of a c
 line 2: unknown instruction `jsr`
 line 4: `g` cannot be a var_external in a function block's file: a block reaches no global of a configuration, so it takes one through a var_input, which the `cal` that runs it fills
 line 20: `c1.motor` is an instance's member: instances share a value only through a global, which one drives and the other reads
-line 19: `c2` leaves its var_input `stop` unconnected: connect it to a global, a point or a constant, as in `c2.stop 0`
+line 19: `c2` leaves its var_input `stop` unconnected: connect it to a global or a constant, as in `c2.stop 0`
 ```
 
 In run 1 at 40 ms, `c1.s1.run` is 0 and `c2.s1.run` is 1: the 2 seals are 2 instances. At

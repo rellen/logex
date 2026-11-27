@@ -770,8 +770,10 @@ defmodule Logex.BitStringTest do
                  "int does not widen into a word, so convert it first, with `int_to_word`",
                "`xor` computes in `w`'s type, a word, but `d` is a dword (declared on line 3): " <>
                  "a dword does not widen into a word, so convert it first, with `dword_to_word`",
-               "`not` computes in `w`'s type, a word, but `i` is an int (declared on line 2): " <>
-                 "an int does not widen into a word, so convert it first, with `int_to_word`"
+               # Decision 597 (RV-34): `not` computes in its source's type (decision 214).
+               "`not` computes in `i`'s type, an int (declared on line 2), and writes its " <>
+                 "result into `w`, a word: an int does not widen into a word, so convert it " <>
+                 "first, with `int_to_word`"
              ]
 
       # Since decision 206 a bool widens into a bit string, and a bit string into no bool.
@@ -1285,9 +1287,11 @@ defmodule Logex.BitStringTest do
 
       head = "var x word\nvar status word\nvar g bool\n"
 
+      # Decision 597 (RV-34): told at the write's line that it writes the word whole.
       assert warned.(head <> "xic g ote status.3\nmove x status") == [
                {5,
-                "`status.3` already has an `ote` on line 4: the last one in the scan decides it"}
+                "`status` is written whole by the `move`, and its bit `status.3` already has " <>
+                  "an `ote` on line 4: the last one in the scan decides it"}
              ]
 
       assert warned.(head <> "move x status\nxic g ote status.3") == [
@@ -1778,8 +1782,10 @@ defmodule Logex.BitStringTest do
             {"move x c.pv\nxic k ote c.pv.3",
              "`c.pv.3` is a bit of `c.pv`, which the `move` on line 5 writes whole: the last " <>
                "one in the scan decides it"},
+            # Decision 597 (RV-34): told at the write's line that it writes the word whole.
             {"xic k ote c.pv.03\nmove x c.pv",
-             "`c.pv.03` already has an `ote` on line 5: the last one in the scan decides it"}
+             "`c.pv` is written whole by the `move`, and its bit `c.pv.03` already has an " <>
+               "`ote` on line 5: the last one in the scan decides it"}
           ] do
         {:ok, p} =
           Logex.compile(

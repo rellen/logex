@@ -108,7 +108,10 @@ defmodule Logex.Configuration do
   runs, an `ons`, an `osr` or an `osf`, a block's by its storage bit's path, so too, after
   its counters, each in its own words, citing its instruction (`Logex.Walk.one_shots/1`,
   decision 103): a one-shot sees its rung only at the task's runs, so an edge between two
-  runs is never seen, and the pulse a coil sets stays on until the task's next run.
+  runs is never seen, and the pulse a coil sets stays on until the task's next run. Since
+  decision 638 (RV-34), after its own, every warning of each program type its instances
+  run, once a type, in the order they first name the types, its message naming its type,
+  "program type `conveyor`: ...", its line and its `file` its program's.
 
   **Arrays** (M5-11, `docs/organisation.md` §4.12, decisions 151 and 159). A global may be
   an array of an elementary type, `var_global temps int[8] 1 2 3 4 5 6 7 8`, its sizes
@@ -1052,7 +1055,30 @@ defmodule Logex.Configuration do
         Enum.reverse(lined) ++ mistakes ++ Enum.map(finished(diagnostics), &Diagnostic.format/1),
       %{config | warnings: warnings}
     )
+    |> programs_told()
   end
+
+  # Decision 638 (RV-34): a configuration holds, after its own warnings, every warning of
+  # each program type its instances run, in the order they first name the types, each as
+  # its program holds it, its `file` kept, and its message naming its program type,
+  # "program type `conveyor`: `belt` already has an `ote` on line 4: ..."; the program
+  # keeps its own as it was. Each door gives it: `new!/1`, `compile/3` and
+  # `compile_file/1`.
+  defp with_programs({:ok, config}), do: {:ok, programs_told(config)}
+  defp with_programs(refused), do: refused
+
+  defp programs_told(%__MODULE__{instances: instances, programs: programs} = config),
+    do: %{
+      config
+      | warnings:
+          config.warnings ++
+            for(
+              type <- Enum.uniq(for(%Instance{type: type} <- instances, do: type)),
+              %Program{warnings: warnings} <- [Map.get(programs, type)],
+              warning <- warnings,
+              do: %{warning | message: "program type #{quoted(type)}: " <> warning.message}
+            )
+    }
 
   # An element from Elixir has no line: a line is where a configuration file declares it,
   # and every message that cites one relies on that. One that brings a line is refused,
@@ -1212,6 +1238,7 @@ defmodule Logex.Configuration do
     |> compiled(name, programs, {nil, [], MapSet.new()})
     |> with_rounded(rounded)
     |> respelled(spelled, literals)
+    |> with_programs()
   end
 
   def compile(_name, source, _programs),
@@ -1231,21 +1258,43 @@ defmodule Logex.Configuration do
     types = Map.new(config.instances, &{&1.name, &1.type})
 
     told =
-      for entry <- rounded,
-          {line, spelling, type, held} <- rounded_entry(entry, types, config.programs),
-          do: %{
-            warning(
-              line,
-              "#{quoted(spelling)} is more precise than #{Declarations.a_type(type)} keeps: it is " <>
-                "held as #{held}"
-            )
-            | file: config.file
-          }
+      rounded
+      |> Enum.flat_map(&rounded_entry(&1, types, config.programs))
+      |> Enum.chunk_by(&elem(&1, 0))
+      |> Enum.flat_map(&rounded_told(&1, config.file))
 
     {:ok, %{config | warnings: Enum.sort_by(told ++ config.warnings, &line_order/1)}}
   end
 
   defp with_rounded(compiled, _rounded), do: compiled
+
+  # Decision 598 (RV-34): a `var_global` line's initial list is told ten of its rounded
+  # literals and then how many more there are, as a declaration line of a program is
+  # (`Logex.Array.capped/2`), where each was a warning of its own.
+  defp rounded_told([{line, _spelling, type, _held} | _] = entries, file),
+    do:
+      entries
+      |> Enum.map(fn {line, spelling, type, held} ->
+        %{
+          warning(
+            line,
+            "#{quoted(spelling)} is more precise than #{Declarations.a_type(type)} keeps: it " <>
+              "is held as #{held}"
+          )
+          | file: file
+        }
+      end)
+      |> Logex.Array.capped(&%{warning(line, more_rounded(&1, type)) | file: file})
+
+  defp more_rounded(1, type),
+    do:
+      "1 more literal of this initial list is more precise than #{Declarations.a_type(type)} " <>
+        "keeps, not listed"
+
+  defp more_rounded(count, type),
+    do:
+      "#{count} more literals of this initial list are more precise than " <>
+        "#{Declarations.a_type(type)} keeps, not listed"
 
   defp rounded_entry({:constant, line, {instance, member}, value, spelling}, types, programs),
     do:
@@ -1368,8 +1417,12 @@ defmodule Logex.Configuration do
   Each program type a `program` line names, `motor`, is `motor.ld` beside the file,
   compiled by `Logex.compile_files/1` in the order the types are first named: one memo for
   the configuration, so a function block several program types hold is read and compiled
-  once, and its warnings are handed back once, by the first program type that holds it and
-  compiles. A program type's warnings stay in its program, the configuration's own in its `warnings`.
+  once, and since decision 598 (RV-34) its warnings are in each program type that holds it
+  and compiles. Since decision 638 (RV-34) the configuration's `warnings` hold, after its
+  own, every program type's, as `compile/3`'s and `new!/1`'s do: each with its `file`, the
+  program type's `.ld` or the block's it was found in, and its message naming its program
+  type, so a block two program types hold is told for each (provisional, RV-34); each
+  program keeps its own too.
   A name on a `program` line that gives no program type is cited once, at the line of
   its first instance, and no instance of it is reported again:
 
@@ -1494,6 +1547,7 @@ defmodule Logex.Configuration do
     |> with_rounded(rounded)
     |> respelled(spelled, literals)
     |> with_theirs(Enum.reverse(theirs))
+    |> with_programs()
   end
 
   # Each type a `program` line names that could be a file's, once, at its first line: one
@@ -2992,13 +3046,11 @@ defmodule Logex.Configuration do
 
   defp no_task(false, task, world), do: no_named(:task, task, world, nil)
 
-  defp listed(names) do
-    quoted = Enum.map(names, &"#{quoted(&1)}")
-    listing(Enum.drop(quoted, -1), List.last(quoted))
-  end
-
-  defp listing([], last), do: last
-  defp listing(rest, last), do: Enum.join(rest, ", ") <> " and " <> last
+  # Decision 636 (RV-34): a list of names a diagnostic gives, a program's var_inputs and
+  # var_outputs, the var_inputs left unconnected, the types given or the files a type's
+  # mistakes are cited in, tells the first hundred and a count, each quoted only among the
+  # hundred (`Logex.Declarations.named/4`).
+  defp listed(names), do: Declarations.named(names, &"#{quoted(&1)}")
 
   # The connections, in line order, each checked against its instance's program and the
   # globals. One problem is reported per connection, the first; a var_input with a
@@ -3034,8 +3086,9 @@ defmodule Logex.Configuration do
   defp connect_ends(true, connection, acc, world),
     do: on_instance(instance_of(connection, world), connection, acc, world)
 
-  # The instance a connection begins with: one that can run; one that cannot, its type
-  # unknown, whose connections are not checked; or a name that names no instance.
+  # The instance a connection begins with: one that can run; one whose line was refused,
+  # whose connections are not checked; one whose program did not compile, whose far ends
+  # alone are checked (decision 599); or a name that names no instance.
   defp instance_of(%Connection{instance: name} = connection, world),
     do:
       instance_held(
@@ -3059,7 +3112,11 @@ defmodule Logex.Configuration do
     do: no_instance(spelled("#{connection.instance}.#{connection.member}"), connection, world)
 
   defp running({:ok, {instance, program}}), do: {:ok, instance, program}
-  defp running(:error), do: :skip
+
+  # Decision 599: an instance of a program type that did not compile, or that no program
+  # was given for, has no member to check, but its connection's far end is checked still,
+  # so that the configuration's own mistakes are told beside the compile's.
+  defp running(:error), do: :unbuilt
 
   defp no_instance(:error, connection, world),
     do: {:error, no_named(:instance, connection.instance, world, nil)}
@@ -3136,6 +3193,11 @@ defmodule Logex.Configuration do
   defp declare("", kind, name, _type) when byte_size(name) > @longest_text,
     do: "no #{noun(kind)} #{quoted(name)}"
 
+  # Decision 599: the far end of an instance whose program did not compile, whose member's
+  # type is not known, is advised no type.
+  defp declare("", :global, name, nil),
+    do: "no global #{quoted(name)}: declare it on a `var_global` line"
+
   defp declare("", :global, name, type),
     do:
       "no global #{quoted(name)}: declare it, as in #{quoted("var_global #{name} #{written_type(type)}")}"
@@ -3161,6 +3223,9 @@ defmodule Logex.Configuration do
 
   defp on_instance(:skip, _connection, acc, _world), do: acc
 
+  defp on_instance(:unbuilt, connection, acc, world),
+    do: far_end(other_end(connection.to), connection, acc, world)
+
   defp on_instance({:error, message}, connection, acc, _world),
     do: problem(acc, connection, message)
 
@@ -3174,6 +3239,18 @@ defmodule Logex.Configuration do
         acc,
         world
       )
+
+  # A far end alone, its member's type unknown: a name where a global is wanted is read as
+  # any connection's is; a constant has nothing to check without the type it fills. The
+  # configuration is refused already, so nothing here counts as a use or a drive.
+  defp far_end(:global, connection, acc, world),
+    do: far_global(global_of(connection.to, nil, world), connection, acc)
+
+  defp far_end(_constant_or_junk, _connection, acc, _world), do: acc
+
+  defp far_global({:ok, _global}, _connection, acc), do: acc
+  defp far_global({:error, message}, connection, acc), do: problem(acc, connection, message)
+  defp far_global(:skip, _connection, acc), do: acc
 
   # M5-11 (decision 151, §4.12): a connection names an array var_input or var_output whole,
   # `m1.temps`, or an element of one by literal subscripts, `m1.temps[3]`, read as the tag
@@ -3697,6 +3774,12 @@ defmodule Logex.Configuration do
   # A raw location in a connection (§4.5: not adopted), its advice in its one spelling, an
   # array member's type with its sizes, `real[8]` (the review after Milestone 6,
   # b6-configuration-1, where it raised Protocol.UndefinedError).
+  defp member_held(false, _held, {_written, _address}, {name, _first, nil}, _world),
+    do:
+      {:error,
+       "#{quoted(name)} is a location, written only after `at` on a `var_global` line: declare a " <>
+         "global at it, and name that"}
+
   defp member_held(false, _held, {_written, address}, {name, _first, type}, _world),
     do:
       {:error,
@@ -3837,7 +3920,8 @@ defmodule Logex.Configuration do
 
   defp driven_part([_whole], _name, _connection, wiring), do: wiring.parts
 
-  # Decision 7: every var_input is connected, to a global, a point or a constant. An
+  # Decision 7: every var_input is connected, to a global or a constant; since decision 597
+  # (RV-34) the message offers no point, which a connection may not name. An
   # instance that leaves any unconnected is told them all, in the program's declaration
   # order, in one diagnostic at its line.
   defp unconnected(instances, kept, world, inputs) do
@@ -3884,7 +3968,7 @@ defmodule Logex.Configuration do
       diagnostic(
         instance.line,
         "#{quoted(instance.name)} leaves its var_input #{quoted(one)} unconnected: connect it to a " <>
-          "global, a point or a constant, as in #{quoted("#{instance.name}.#{one} 0")}"
+          "global or a constant, as in #{quoted("#{instance.name}.#{one} 0")}"
       )
     ]
 
@@ -3892,10 +3976,19 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         instance.line,
-        "#{quoted(instance.name)} leaves its var_inputs #{listed(names)} unconnected: connect " <>
-          "each to a global, a point or a constant, as in #{quoted("#{instance.name}.#{first} 0")}"
+        "#{quoted(instance.name)} leaves " <>
+          unconnected(Enum.drop(names, 100), names) <>
+          ": connect each to a global or a constant, as in " <>
+          quoted("#{instance.name}.#{first} 0")
       )
     ]
+
+  # Decision 636 (RV-34): past a hundred, the count first, so that the list's own count of
+  # the rest ends the sentence's list.
+  defp unconnected([], names), do: "its var_inputs #{listed(names)} unconnected"
+
+  defp unconnected(_past, names),
+    do: "#{length(names)} var_inputs unconnected, #{listed(names)}"
 
   defp declared(%Program{tags: tags}),
     do:
@@ -4405,18 +4498,23 @@ defmodule Logex.Configuration do
   # cites its `ton` in the text it is in; since M3-1 its counters so too, and since M3-4
   # its one-shots (Logex.Walk.counters/1 and one_shots/1; decisions 72 and 103).
   defp timed(world) do
+    # Decision 598 (RV-34): each event task, by whether its trigger never pulses, which
+    # only one with no interval is sure of: one with an interval runs at its due time too,
+    # with its trigger 0, so a rung that is its trigger pulses and counts.
     events =
-      for {name, {:task, _line, %Logex.Configuration.Task{single: single}}} <- world.names,
+      for {name, {:task, _line, %Logex.Configuration.Task{single: single, interval: interval}}} <-
+            world.names,
           is_binary(single),
-          into: MapSet.new(),
-          do: name
+          into: %{},
+          do: {name, interval == nil}
 
     world.runnable
     |> Map.values()
-    |> Enum.filter(fn {instance, _program} -> MapSet.member?(events, instance.task) end)
+    |> Enum.filter(fn {instance, _program} -> is_map_key(events, instance.task) end)
     |> Enum.flat_map_reduce(%{}, fn {instance, program}, memo ->
       {timers, memo} = timers_of(Map.fetch(memo, program.name), program, memo)
-      {Enum.map(timers, &timer_warning(&1, instance, program)), memo}
+      never = Map.fetch!(events, instance.task)
+      {Enum.map(timers, &timer_warning(&1, instance, program, never)), memo}
     end)
     |> elem(0)
   end
@@ -4466,85 +4564,95 @@ defmodule Logex.Configuration do
   defp instance_tag(typed, name), do: Map.fetch!(typed, name)
 
   # M3-2: in the words of the timer's own type.
-  defp timer_warning({:timer, path, cited, word}, instance, program),
+  defp timer_warning({:timer, path, cited, word}, instance, program, never),
     do:
       warning(
         instance.line,
         "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
           "#{quoted(program.name)} runs the timer #{quoted(path)}#{cited}: " <>
-          across(FbType.family(FbType.builtin(word)), Declarations.a_or_an(word))
+          across(FbType.family(FbType.builtin(word)), Declarations.a_or_an(word), never)
       )
 
   # M3-1 (decision 72): a counter sees its rung only at the task's runs, so an edge that
   # comes and goes between two is never counted, and one whose rung is the task's own
   # trigger is true at every run and never counts at all.
-  defp timer_warning({:counter, path, cited, _word}, instance, program),
+  defp timer_warning({:counter, path, cited, _word}, instance, program, never),
     do:
       warning(
         instance.line,
         "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
           "#{quoted(program.name)} runs the counter #{quoted(path)}#{cited}" <>
           ": a counter sees its rung only at the task's runs, so a pulse between two runs " <>
-          "is never counted, and a rung that is the task's trigger is true at every run " <>
-          "and never counts"
+          "is never counted" <> pulsing(never, "never counts")
       )
 
   # M3-4 (decision 103, as the maintainer answered it): a one-shot sees its rung only at
   # the task's runs, so an edge between two runs is never seen, and a rung that is the
   # task's own trigger is true at every run and gives none; a coil's pulse bit stays on
   # until the task's next run. Each is said letter by letter, "an".
-  defp timer_warning({:one_shot, path, cited, word}, instance, program),
+  defp timer_warning({:one_shot, path, cited, word}, instance, program, never),
     do:
       warning(
         instance.line,
         "#{quoted(instance.name)} runs under the event task #{quoted(instance.task)}, and " <>
           "#{quoted(program.name)} runs an `#{word}`#{cited}, whose storage bit is #{quoted(path)}: " <>
-          sees(word)
+          sees(word, never)
       )
 
-  defp sees("ons"),
+  defp sees("ons", never),
     do:
       "an ons sees its rung only at the task's runs, so a pulse between two runs never " <>
-        "fires it, and a rung that is the task's trigger is true at every run and never " <>
-        "fires it"
+        "fires it" <> pulsing(never, "never fires it")
 
-  defp sees("osr"),
+  defp sees("osr", never),
     do:
       "an osr sees its rung only at the task's runs, so a pulse between two runs is never " <>
-        "seen, the pulse it sets stays on until the task's next run, and a rung that is the " <>
-        "task's trigger is true at every run and never pulses"
+        "seen, the pulse it sets stays on until the task's next run" <>
+        pulsing(never, "never pulses")
 
-  defp sees("osf"),
+  defp sees("osf", never),
     do:
       "an osf sees its rung only at the task's runs, so a drop between two runs is never " <>
-        "seen, the pulse it sets stays on until the task's next run, and a rung that is the " <>
-        "task's trigger is true at every run and never pulses"
+        "seen, the pulse it sets stays on until the task's next run" <>
+        pulsing(never, "never pulses")
+
+  # Decision 598 (RV-34): only a task whose trigger never pulses, one with no interval, is
+  # told that a rung that is its trigger is true at every run.
+  defp pulsing(true, what),
+    do: ", and a rung that is the task's trigger is true at every run and #{what}"
+
+  defp pulsing(false, _what), do: ""
 
   # Since M5-6 by the timer's kind, its `family`, in its own words: a `ton_ltime`'s as a
   # `ton`'s, "a ton_ltime times across the task's runs" (decision 158).
-  defp across("ton", a_word),
+  defp across("ton", a_word, _never),
     do:
       "#{a_word} times across the task's runs, and one whose rung is true on two runs in a " <>
         "row counts the whole time between them"
 
   # M3-2: a tof's delay ends only at a run, which may be long after its preset.
-  defp across("tof", a_word),
+  defp across("tof", a_word, _never),
     do:
       "#{a_word}'s delay ends only at one of the task's runs, so what it holds on stays on " <>
         "until the first run after its preset has passed"
 
   # M3-2: an rto adds the time between two runs whose rung is true, as a ton counts it.
-  defp across("rto", a_word),
+  defp across("rto", a_word, _never),
     do:
       "#{a_word} times across the task's runs, and one whose rung is true on two runs in a " <>
         "row adds the whole time between them"
 
   # M3-2: a tp's pulse ends only at a run, and it sees an edge only between two runs.
-  defp across("tp", a_word),
+  defp across("tp", a_word, never),
     do:
       "#{a_word}'s pulse ends only at one of the task's runs, so it lasts until the first " <>
-        "run after its preset has passed, and it starts only on an edge between two runs: a " <>
-        "rung that is the task's trigger is true at every run and never starts one"
+        "run after its preset has passed, and it starts only on an edge between two runs" <>
+        tp_trigger(never)
+
+  defp tp_trigger(true),
+    do: ": a rung that is the task's trigger is true at every run and never starts one"
+
+  defp tp_trigger(false), do: ""
 
   # The routine whose text holds a timer: the program's, or a block's body down its path,
   # each routine's typed tags read once, by the routine (`:program`, or its block's name,

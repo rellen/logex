@@ -2224,7 +2224,9 @@ defmodule Logex.RealTest do
                {3,
                 "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
                   "9.007199254740992e15"},
-               {5, "`1.6777217e7` is more precise than a real keeps: it is held as 16777216.0"}
+               {5, "`1.6777217e7` is more precise than a real keeps: it is held as 16777216.0"},
+               # Decision 638 (RV-34): the program type's own, at its line in its text.
+               {4, "program type `m`: `n` is declared but no rung uses it"}
              ]
 
       # The same digits in an lreal, which keeps them, and a constant that is its real's
@@ -2236,7 +2238,10 @@ defmodule Logex.RealTest do
           %{"m" => m}
         )
 
-      assert quiet.warnings == []
+      # Decision 638 (RV-34): only the program type's own.
+      assert Enum.map(quiet.warnings, & &1.message) == [
+               "program type `m`: `n` is declared but no rung uses it"
+             ]
 
       # Printed, the constant is the shortest text of the double it holds, which comes
       # back warned again where that text holds more digits than its real keeps, quoted
@@ -2248,7 +2253,8 @@ defmodule Logex.RealTest do
 
       assert Enum.map(again.warnings, &{&1.line, &1.message}) == [
                {2, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
-               {5, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
+               {5, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {4, "program type `m`: `n` is declared but no rung uses it"}
              ]
     end
 

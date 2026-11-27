@@ -1522,7 +1522,7 @@ $ mix run instructions-bitwise-wrong-operands.exs
       line 30: `and` writes `boxes.cv`, but logic may write only `.r` and `.pv`
       of a ctu
 12  xnor a_word b_word d_word
-      line 30: unknown instruction `xnor`
+      line 30: unknown instruction `xnor` — did you mean `xor`?
 13  xic go ton delay 5 and a_word 1 d_word
       line 30: `and a_word 1 d_word` follows `ton delay` on its path: what
       passes on after a `ton` is not settled, so a `ton` ends its path; read the
@@ -1570,9 +1570,9 @@ $ mix run instructions-bitwise-wrong-types.exs
       dword (declared on line 13): a dword does not widen into a word, so
       convert it first, with `dword_to_word`
 17  not a_int d_word
-      line 30: `not` computes in `d_word`'s type, a word, but `a_int` is an int
-      (declared on line 6): an int does not widen into a word, so convert it
-      first, with `int_to_word`
+      line 30: `not` computes in `a_int`'s type, an int (declared on line 6),
+      and writes its result into `d_word`, a word: an int does not widen into a
+      word, so convert it first, with `int_to_word`
 18  and a_dint 1 d_int
       line 30: `and` computes in `d_int`'s type, an int, but `a_dint` is a dint
       (declared on line 8): a dint does not widen into an int, so convert it
@@ -1866,8 +1866,8 @@ $ mix run instructions-bitwise-warnings.exs
     var_input k word
     xic eye ote out.3
     move k out
-      line 5: warning: `out.3` already has an `ote` on line 4: the last one in
-      the scan decides it
+      line 5: warning: `out` is written whole by the `move`, and its bit `out.3`
+      already has an `ote` on line 4: the last one in the scan decides it
  6  var_input eye bool
     var_output out word
     var_input k word
@@ -1901,8 +1901,9 @@ $ mix run instructions-bitwise-warnings.exs
     var_input sel int
     xic eye ote out.[sel]
     xic eye ote out.3
-      line 5: warning: `out.3` is a bit of `out`, which the `ote` on line 4
-      writes whole: the last one in the scan decides it
+      line 5: warning: `out.3` is a bit of `out`, and the `ote` on line 4 writes
+      one bit of it, `out.[sel]`, which a tag numbers: the last one in the scan
+      decides it
 11  var_input eye bool
     var_output out word
     var_input sel int
@@ -1917,8 +1918,9 @@ $ mix run instructions-bitwise-warnings.exs
     var_input other int
     xic eye ote out.[sel]
     xic eye otl out.[other]
-      line 6: warning: `out.[sel]` already has an `ote` on line 5: the last one
-      in the scan decides it
+      line 6: warning: `out.[other]`, which the `otl` writes, is a bit of `out`
+      that a tag numbers, and `out.[sel]` already has an `ote` on line 5: the
+      last one in the scan decides it
 13  var_input eye bool
     var_output out word
     var_input sel int
@@ -1948,8 +1950,9 @@ $ mix run instructions-bitwise-warnings.exs
     var_input sel int
     xic eye ote out.3
     xic eye otl out.[sel]
-      line 5: warning: `out.3` already has an `ote` on line 4: the last one in
-      the scan decides it
+      line 5: warning: `out.[sel]`, which the `otl` writes, is a bit of `out`
+      that a tag numbers, and `out.3` already has an `ote` on line 4: the last
+      one in the scan decides it
 17  var_input eye bool
     var_output w word[4]
     var_input i int

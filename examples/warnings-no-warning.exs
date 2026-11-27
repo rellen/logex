@@ -18,15 +18,14 @@ cases = [
   {"2 writes of a bool tag or of a word, with no ote",
    "xic start move 1 motor\nxic stop move 0 motor\nxic start move panel status\n" <>
      "xic stop move 0 status"},
-  {"a move and an ote on 1 bool tag", "xic start move 1 kick\nxic stop ote kick"},
+  {"an otl and a move on 1 bool tag", "xic start otl kick\nxic stop move 0 kick"},
   {"an otl on a bit and a write of its word",
    "xic start otl status.3\nxic stop move panel status"},
   {"2 bits with different numbers", "xic start ote status.3\nxic stop ote status.4"},
   {"2 different elements", "xic start ote lamps[1]\nxic stop ote lamps[2]"},
-  {"an ote and a different write through the same tag",
+  {"an ote and a latch through the same tag",
    "xic start ote lamps[slot]\nxic stop otl lamps[slot]\nxic start ote status.[n]\n" <>
-     "xic stop otu status.[n]\nxic jog ote lane_c[i].r\nxic stop otl lane_c[i].r\n" <>
-     "xic jog move 0 lamps[slot]"},
+     "xic stop otu status.[n]\nxic jog ote lane_c[i].r\nxic stop otl lane_c[i].r"},
   {"an otl on a literal bit and an ote on a bit through a tag, in the 2 orders",
    "xic start otl status.3\nxic stop ote status.[n]\nxic jog ote flags[1].[n]\nxic stop otl flags[1].3"},
   {"2 writes with no ote, 1 with a tag as a subscript",

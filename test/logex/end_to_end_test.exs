@@ -1925,9 +1925,11 @@ defmodule Logex.EndToEndTest do
 
       unknown = write.("unknown.ld", String.replace(@three_seals, "var s3 seal", "var s3 sael"))
 
-      # The line declares nothing, and s3's use is excused: one mistake, one message.
+      # The line declares nothing, and s3's use is excused: one mistake, one message, which
+      # names the file looked for (decision 599, RV-34).
       assert formatted.(Logex.compile_file(unknown)) == [
-               "#{unknown}: line 12: unknown type `sael`: #{@has}, " <>
+               "#{unknown}: line 12: unknown type `sael`: there is no `sael.ld` beside " <>
+                 "`unknown.ld`, and #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`?"
              ]
 
@@ -2295,7 +2297,7 @@ defmodule Logex.EndToEndTest do
                  "mean `start`?",
                # undriven input: a var_input left unconnected
                "#{wired}: line 10: `m2` leaves its var_input `stop` unconnected: connect " <>
-                 "it to a global, a point or a constant, as in `m2.stop 0`",
+                 "it to a global or a constant, as in `m2.stop 0`",
                # mistyped: a bool var_input connected to a dint
                "#{wired}: line 11: `m2.start` is a bool, but `sp` is a dint (line 4)",
                # unknown: a global the file does not declare

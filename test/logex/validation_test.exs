@@ -1201,6 +1201,414 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  # Decision 626 (RV-34): a `cal`'s write beside a coil or another `cal`'s, and a write but
+  # a latch's of a bool a coil writes, are warned as two coils are, either first.
+  describe "a write beside a coil (decision 626, RV-34)" do
+    @later "the last one in the scan decides it"
+
+    defp shared_warnings(source) do
+      {:ok, seal} =
+        Logex.compile("function_block seal\nvar_input s bool\nvar_output q bool\nxic s ote q",
+          name: "seal"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var_input a bool\nvar_input i dint\nvar_input n dint\nvar belt bool\n" <>
+            "var lamps bool[4]\nvar w word\nvar s1 seal\nvar s2 seal\n" <> source,
+          name: "p",
+          types: [seal]
+        )
+
+      for %Logex.Diagnostic{line: line, message: message} <- program.warnings,
+          String.ends_with?(message, @later),
+          do: {line, message}
+    end
+
+    test "a cal and an ote on one tag, either first" do
+      assert shared_warnings("cal s1 a belt\nxic a ote belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a ote belt\ncal s1 a belt") == [
+               {10, "`belt` already has an `ote` on line 9: #{@later}"}
+             ]
+    end
+
+    test "two cals on one tag, and a cal and a move" do
+      assert shared_warnings("cal s1 a belt\ncal s2 a belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      # Provisional (PLAN's RV-34): the `cal` judged as its coil.
+      assert shared_warnings("cal s1 a belt\nxic a move 0 belt") == [
+               {10, "`belt` is already written by the `cal` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a move 0 belt\ncal s1 a belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+    end
+
+    test "a move and an ote on one bool, either first, a bool array's and a word's alike" do
+      for {first, later, shown} <- [
+            {"xic a move 1 belt", "xic a ote belt", "belt"},
+            {"xic a move 1 lamps[2]", "xic a ote lamps[2]", "lamps[2]"},
+            {"xic a move 1 w.0", "xic a ote w.0", "w.0"},
+            {"xic a move 1 lamps[i]", "xic a ote lamps[i]", "lamps[i]"},
+            {"xic a move 1 w.[n]", "xic a ote w.[n]", "w.[n]"},
+            {"xic a not a belt", "xic a ote belt", "belt"}
+          ] do
+        [symbol | _] = first |> String.split() |> Enum.drop(2)
+
+        assert shared_warnings(first <> "\n" <> later) == [
+                 {10, "`#{shown}` is already written by the `#{symbol}` on line 9: #{@later}"}
+               ]
+
+        assert shared_warnings(later <> "\n" <> first) == [
+                 {10, "`#{shown}` already has an `ote` on line 9: #{@later}"}
+               ]
+      end
+    end
+
+    test "two cals on a tag of any type, a cal and a move on a bool alone (provisional)" do
+      {:ok, gauge} =
+        Logex.compile("function_block gauge\nvar_input s dint\nvar_output q dint\nmove s q",
+          name: "gauge"
+        )
+
+      text = "var_input a bool\nvar n dint\nvar g1 gauge\nvar g2 gauge\n"
+
+      told = fn rungs ->
+        {:ok, program} = Logex.compile(text <> rungs, name: "p", types: [gauge])
+        for %{line: line, message: m} <- program.warnings, m =~ @later, do: {line, m}
+      end
+
+      assert told.("cal g1 1 n\ncal g2 2 n") == [
+               {6, "`n` is already written by the `cal` on line 5: #{@later}"}
+             ]
+
+      assert told.("cal g1 1 n\nxic a move 3 n") == []
+    end
+
+    test "a coil after a coil is told once, by the second-ote warning" do
+      assert shared_warnings("xic a move 1 belt\nxic a ote belt\nxic a ote belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"},
+               {11, "`belt` already has an `ote` on line 10: #{@later}"}
+             ]
+    end
+
+    test "latches, two moves and writes of other bools stay quiet" do
+      for rungs <- [
+            "xic a ote belt\nxic a otl belt\nxio a otu belt",
+            "xic a move 1 belt\nxic a move 0 belt",
+            "xic a otl belt\nxic a move 0 belt",
+            "xic a ote lamps[1]\nxic a move 1 lamps[2]",
+            "xic a ote lamps[i]\nxic a otl lamps[i]",
+            "xic a ote w.0\nxic a move 1 w.1",
+            "cal s1 a belt\nxic a otl belt"
+          ] do
+        assert {rungs, shared_warnings(rungs)} == {rungs, []}
+      end
+    end
+
+    # A coil on a member of an element, `ote cs[1].r`, beside a write of it, as on a
+    # scalar instance's member, is told as the scalar's is (decision 626).
+    test "a write beside a coil on a member of an element, as on a scalar's member" do
+      warned = fn source ->
+        {:ok, program} = Logex.compile("var_input a bool\n" <> source, name: "p")
+        Enum.map(program.warnings, &Logex.Diagnostic.format/1)
+      end
+
+      assert warned.(
+               "var cs ctu[2]\nxic a ote cs[1].r\nxic a move 1 cs[1].r\nxic a ctu cs[1] 3\nxic a ctu cs[0] 3"
+             ) ==
+               ["line 4: warning: `cs[1].r` already has an `ote` on line 3: #{@later}"]
+
+      assert warned.("var c ctu\nxic a ote c.r\nxic a move 1 c.r\nxic a ctu c 3") ==
+               ["line 4: warning: `c.r` already has an `ote` on line 3: #{@later}"]
+
+      # Another element's member is another bool.
+      assert warned.(
+               "var cs ctu[2]\nxic a ote cs[1].r\nxic a move 1 cs[0].r\nxic a ctu cs[1] 3\nxic a ctu cs[0] 3"
+             ) ==
+               []
+    end
+
+    test "each write is told the earliest it meets, a coil none where a coil came first" do
+      assert shared_warnings("xic a move 1 belt\nxic a ote belt\ncal s1 a belt") == [
+               {10, "`belt` is already written by the `move` on line 9: #{@later}"},
+               {11, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+
+      assert shared_warnings("xic a ote belt\nxic a ote belt\nxic a move 1 belt") == [
+               {10, "`belt` already has an `ote` on line 9: #{@later}"},
+               {11, "`belt` already has an `ote` on line 9: #{@later}"}
+             ]
+
+      # Two `move`s before the coil meet each other not: the coil alone is told, of the first.
+      assert shared_warnings("xic a move 1 belt\nxio a move 0 belt\nxic a ote belt") == [
+               {11, "`belt` is already written by the `move` on line 9: #{@later}"}
+             ]
+
+      # In one rung, and a pulse coil's bit.
+      assert shared_warnings("xic a ote belt move 1 belt") == [
+               {9, "`belt` already has an `ote` in this rung: #{@later}"}
+             ]
+
+      assert shared_warnings("var st bool\nxic a osr st belt\nxic a move 0 belt") == [
+               {11, "`belt` is already the pulse bit of the `osr` on line 10: #{@later}"}
+             ]
+    end
+
+    test "a one-shot's storage bit and a tag declared from Elixir are judged elsewhere" do
+      assert shared_warnings("var st bool\nxic a ons st ote belt\nxic a move 1 st") == []
+
+      {:ok, program} =
+        source_compile("xic a ote d\nxic a move 1 d", [
+          Logex.Tag.new!("a", :bool),
+          Logex.Tag.new!("d", :bool)
+        ])
+
+      assert program.warnings == []
+    end
+
+    # The look costs a routine with no coil on what it names by its name and no `cal` one
+    # pass, and grows linearly where it looks.
+    test "grows linearly, in reductions" do
+      compile = fn n ->
+        text =
+          Enum.map_join(1..n, "", &"var b#{&1} bool\n") <>
+            "var_input a bool\n" <>
+            Enum.map_join(1..n, "\n", &"xic a ote b#{&1}\nxic a move 1 b#{&1}")
+
+        {:reductions, before} = Process.info(self(), :reductions)
+        {:ok, %{warnings: warnings}} = Logex.compile(text, name: "p")
+        {:reductions, later} = Process.info(self(), :reductions)
+        assert length(warnings) == n
+        later - before
+      end
+
+      _warm = compile.(10)
+      assert compile.(400) / compile.(200) < 2.4
+    end
+  end
+
+  describe "messages made true, warnings found and refusals that help (decisions 597 to 599, RV-34)" do
+    defp told(source), do: told_of(Logex.compile(source, name: "p"))
+
+    defp told_of({:ok, program}), do: Enum.map(program.warnings, &Logex.Diagnostic.format/1)
+    defp told_of({:error, diagnostics}), do: Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+
+    # Decision 597: `not` and the shifts compute in their source's type (decision 214), so
+    # a source that does not widen into the destination is told so, where it was told the
+    # instruction computes in the destination's.
+    test "not and the shifts are told they compute in the source's type" do
+      for {word, rung} <- [
+            {"not", "not w d"},
+            {"shl", "shl w 1 d"},
+            {"shr", "shr w 1 d"},
+            {"rol", "rol w 1 d"},
+            {"ror", "ror w 1 d"}
+          ] do
+        assert told("var_input w word\nvar_output d byte\n" <> rung) == [
+                 "line 3: `#{word}` computes in `w`'s type, a word (declared on line 1), and " <>
+                   "writes its result into `d`, a byte: a word does not widen into a byte, so " <>
+                   "convert it first, with `word_to_byte`"
+               ]
+      end
+
+      # A source that widens into the destination is taken, as it was.
+      assert told("var_input w int\nvar_output d dint\nnot w d") == []
+    end
+
+    # Decision 597: a coil on a bit a tag numbers, `otl out.[sel]`, writes one bit and not
+    # `out` whole; and a write of the word whole after a coil on a bit of it is told at the
+    # write's line, naming the coil's bit.
+    test "a bit coil's warning names the one bit it writes, and a whole write names the coil's bit" do
+      later = "the last one in the scan decides it"
+
+      assert told(
+               "var_input a bool\nvar_input b bool\nvar_input sel int\nvar_input other int\n" <>
+                 "var_output out word\nxic a otl out.[sel]\nxic b ote out.[other]"
+             ) == [
+               "line 7: warning: `out.[other]` is a bit of `out`, and the `otl` on line 6 " <>
+                 "writes one bit of it, `out.[sel]`, which a tag numbers: #{later}"
+             ]
+
+      assert told(
+               "var_input a bool\nvar_output faults word[4]\nxic a ote faults[1].0\n" <>
+                 "xic a move 0 faults[1]"
+             ) == [
+               "line 4: warning: `faults[1]` is written whole by the `move`, and its bit " <>
+                 "`faults[1].0` already has an `ote` on line 3: #{later}"
+             ]
+
+      # A write of the word whole, `move 1 w`, first is still told it writes the word whole.
+      assert told("var_input a bool\nvar_output w word\nmove 1 w\nxic a ote w.3") == [
+               "line 4: warning: `w.3` is a bit of `w`, which the `move` on line 3 writes " <>
+                 "whole: #{later}"
+             ]
+    end
+
+    # Decision 597: the value a `var_output` nothing writes holds, as a real keeps it.
+    test "a var_output nothing writes is told the value it holds, not its spelling" do
+      assert told(
+               "var_input a bool\nvar_output g real 16777217.0\nvar_output m bool\n" <>
+                 "xic a gt g 1.0 ote m"
+             ) == [
+               "line 2: warning: `16777217.0` is more precise than a real keeps: it is held as " <>
+                 "16777216.0",
+               "line 2: warning: `g` is a var_output, but no rung writes it: it stays at " <>
+                 "16777216.0"
+             ]
+
+      assert told(
+               "var_input a bool\nvar_output g lreal 0.1\nvar_output m bool\nxic a gt g 1.0 ote m"
+             ) == ["line 2: warning: `g` is a var_output, but no rung writes it: it stays at 0.1"]
+    end
+
+    # Decision 598: a real's limit compare is warned as an integer's is.
+    test "a compare with a real's limit, which never changes its result, is warned" do
+      never = fn word, limit, type, side ->
+        "line 3: warning: `#{word}` compares `speed` with `#{limit}`, and #{type} holds " <>
+          "nothing #{side} `#{limit}`: its result never changes"
+      end
+
+      head = "var_input speed real\nvar_output m bool\n"
+
+      assert told(head <> "ge speed -3.4028235e38 ote m") ==
+               [never.("ge", "-3.4028235e38", "a real", "below")]
+
+      assert told(head <> "lt speed -3.4028235e38 ote m") ==
+               [never.("lt", "-3.4028235e38", "a real", "below")]
+
+      assert told(head <> "le speed 3.4028235e38 ote m") ==
+               [never.("le", "3.4028235e38", "a real", "above")]
+
+      # The literal first, read in its order.
+      assert told(head <> "le -3.4028235e38 speed ote m") == [
+               "line 3: warning: `le` compares `-3.4028235e38` with `speed`, and a real holds " <>
+                 "nothing below `-3.4028235e38`: its result never changes"
+             ]
+
+      assert told(
+               "var_input speed lreal\nvar_output m bool\nge speed -1.7976931348623157e308 ote m"
+             ) == [never.("ge", "-1.7976931348623157e308", "an lreal", "below")]
+
+      # Inside the range, nothing.
+      assert told(head <> "ge speed -3.0e38 ote m") == []
+      assert told(head <> "gt speed -3.4028235e38 ote m") == []
+
+      # As an int's is.
+      assert told("var_input speed int\nvar_output m bool\nge speed -32768 ote m") ==
+               [never.("ge", "-32768", "an int", "below")]
+    end
+
+    # Decision 599: an unknown instruction is offered the nearest mnemonic by the bounded
+    # search a tag's name has (decision 520), its word read in any case.
+    test "an unknown instruction is offered a did-you-mean" do
+      head = "var_input a bool\nvar_output x bool\n"
+
+      assert told(head <> "xic a otee x") ==
+               ["line 3: unknown instruction `otee` — did you mean `ote`?"]
+
+      assert told(head <> "XICC a ote x") ==
+               ["line 3: unknown instruction `XICC` — did you mean `xic`?"]
+
+      assert told("zzz aa") == ["line 1: unknown instruction `zzz`"]
+
+      # A renamed mnemonic keeps its own advice.
+      assert told("var_input a dint\nvar_output x dint\nmov a x") ==
+               [
+                 "line 3: unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)"
+               ]
+    end
+  end
+
+  # Decision 636 (RV-34): a list of names a diagnostic gives shows the first hundred in its
+  # order and how many more there are, each name it quotes whole (decision 633), so a
+  # block of 10,000 members is told in about the bytes of one of 101.
+  describe "a diagnostic that lists names (decision 636, RV-34)" do
+    defp member_names(n), do: for(i <- 1..n, do: "i#{String.pad_leading("#{i}", 5, "0")}")
+
+    defp big_block(n) do
+      source =
+        "function_block big\n" <>
+          Enum.map_join(member_names(n), "", &"var_input #{&1} bool\n") <>
+          "var_output q bool\nxic i00001 ote q"
+
+      {:ok, big} = Logex.compile(source, name: "big")
+      big
+    end
+
+    defp listed_names(names), do: Enum.map_join(names, ", ", &"`#{&1}`")
+
+    defp told_with(source, types) do
+      {:error, diagnostics} = Logex.compile(source, name: "p", types: types)
+      Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+    end
+
+    test "a block's members, at 100 and past it, and at 10,000" do
+      members = fn n ->
+        told_with("var s big\nvar_output o bool\nxic s.zz ote o", [big_block(n)])
+      end
+
+      # 99 var_inputs and its output, 100 in all: every one, the last two joined by `and`.
+      names = member_names(99) ++ ["q"]
+
+      assert members.(99) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(Enum.drop(names, -1)) <> " and `q`"
+             ]
+
+      # 101: the first hundred and the one more.
+      assert members.(100) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(member_names(100)) <> " and 1 more, not listed"
+             ]
+
+      # 10,001: the same hundred, and the count.
+      assert members.(10_000) == [
+               "line 3: `s.zz` is not a member of `s`, an instance of `big`: its members are " <>
+                 listed_names(member_names(100)) <> " and 9901 more, not listed"
+             ]
+    end
+
+    test "a cal's formals, past a hundred" do
+      formal = fn name -> "`#{name}` (var_input bool)" end
+
+      assert told_with("var s big\ncal s", [big_block(101)]) == [
+               "line 2: `cal s` expects 102 operands after its instance, " <>
+                 Enum.map_join(member_names(100), ", then ", formal) <>
+                 " and 2 more, not listed: found none"
+             ]
+    end
+
+    test "the function blocks given, past a hundred" do
+      blocks =
+        for name <- member_names(101) do
+          {:ok, block} =
+            Logex.compile(
+              "function_block b#{name}\nvar_input x bool\nvar_output y bool\nxic x ote y",
+              name: "b#{name}"
+            )
+
+          block
+        end
+
+      [told] = told_with("var s zzzzzz\nvar_output o bool\nxic o ote o", blocks)
+      assert told =~ ~r/^line 1: unknown type `zzzzzz`: logex has `bool`, /
+
+      assert String.ends_with?(
+               told,
+               ", and the function blocks " <>
+                 listed_names(Enum.map(member_names(100), &"b#{&1}")) <>
+                 " and 1 more, not listed"
+             )
+    end
+  end
+
   describe "ons (M1-6)" do
     test "its storage bit is a bool tag it writes: M1-3's rules refuse anything else" do
       assert source_errors(

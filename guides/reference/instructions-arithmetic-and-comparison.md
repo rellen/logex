@@ -187,7 +187,7 @@ bits. `16#ffff` is 65535, and thus `move 16#ffff trim` is an error if `trim` is 
 To write the 16 bits into an `int`, use `move -1 trim`.
 
 [Wrong rungs 38 to 52](#wrong-rungs-38-to-52-the-literals) show the diagnostics of a
-literal. [Programs 1 to 4, 9 and 10](#programs-1-to-11-warnings) show the warnings.
+literal. [Programs 1 to 4, 10 and 11](#programs-1-to-12-warnings) show the warnings.
 
 ### Results that a type cannot hold
 
@@ -474,12 +474,11 @@ less than `b`. The rules of the table are the same in the other order.
 | Case | Rule |
 |---|---|
 | A literal and a tag | The literal must be a value of the type of the tag. `lt boxes 70000` is an error if `boxes` is a `uint`. |
-| A literal and a tag at a limit of the type of the tag | Correct, and logex gives a warning if the result never changes. `ge boxes 0` with a `uint` tag is always true, and it gets the warning. `le step -128` with an `sint` tag can change, and it gets no warning. |
+| A literal and a tag at a limit of the type of the tag | Correct, and logex gives a warning if the result never changes. `ge boxes 0` with a `uint` tag is always true, and it gets the warning. `le step -128` with an `sint` tag can change, and it gets no warning. `ge speed -3.4028235e38` with a `real` tag is always true, and it gets the warning. |
 | A real literal and a real tag | logex compares the tag with the value that the real type holds for the literal. Thus `move 37.1 sp` and then `eq sp 37.1` passes power. |
 | 2 literals | Correct, and logex gives a warning: the result never changes. An integer literal is its integer value, from -9223372036854775808 to 18446744073709551615. A real literal is an `lreal` value. logex compares the 2 values exactly: `eq 1 1.0` is true, and `eq 9007199254740993 9007199254740992` is false. |
 
-logex gives the warning of a limit for an integer type and for a bit string type. It
-gives no such warning for a real type.
+logex gives the warning of a limit for an integer type, a bit string type and a real type.
 [Comparison of 2 literals](literals.md#comparison-of-2-literals) gives the range of a
 literal in a comparison of 2 literals.
 
@@ -1642,12 +1641,11 @@ field `warnings`, and `Logex.Diagnostic.format/1` gives the text of a warning.
 | Each source of an arithmetic instruction is a literal. | 1 and 2 | Yes |
 | The source of `sqrt` is a literal. | 3 | Yes |
 | A comparison of 2 literals | 4 | Yes |
-| A comparison of a tag with a literal at a limit of its type, and the result never changes | 5 to 8 | Yes |
-| A real literal that is not the shortest literal for the value that a `real` keeps | 9 and 10 | Yes |
-| A `move` writes a whole tag, and a [coil](glossary.md#coil) writes a bit of the same tag. | 11 | Yes |
-| A `move` of a literal | 12 | No |
-| A comparison with a literal at a limit, and the result can change | 13 to 15 | No |
-| A comparison of a real tag with the lowest value of a `real` | 16 | No |
+| A comparison of a tag with a literal at a limit of its type, and the result never changes | 5 to 9 | Yes |
+| A real literal that is not the shortest literal for the value that a `real` keeps | 10 and 11 | Yes |
+| A `move` writes a whole tag, and a [coil](glossary.md#coil) writes a bit of the same tag. | 12 | Yes |
+| A `move` of a literal | 13 | No |
+| A comparison with a literal at a limit, and the result can change | 14 to 16 | No |
 | The real literal `0.1` in a `real` | 17 | No |
 | A tag is a source and the destination. | 18 | No |
 | 2 instructions write the same number tag. | 19 | No |
@@ -1657,7 +1655,7 @@ shows the warning of a literal beside `acc` or `pre` of a
 [long timer](glossary.md#long-timer). [Warnings](warnings.md) gives each warning of
 logex.
 
-### Programs 1 to 11: warnings
+### Programs 1 to 12: warnings
 
 ```elixir
 {report, _} = Code.eval_file("instructions-contacts-and-coils/report.exs")
@@ -1671,6 +1669,7 @@ programs = [
   "var_input boxes uint\nvar_output lamp bool\nle boxes 65535 ote lamp",
   "var_input step sint\nvar_output lamp bool\nlt step -128 ote lamp",
   "var_input status word\nvar_output lamp bool\nle status 16#ffff ote lamp",
+  "var_input speed real\nvar_output lamp bool\nge speed -3.4028235e38 ote lamp",
   "var_output speed real\nmove 16777217.0 speed",
   "var_input speed real\nvar_output lamp bool\neq speed 16777217.0 ote lamp",
   "var_input eye bool\nvar_input status word\nvar_output out word\n" <>
@@ -1716,16 +1715,21 @@ $ mix run instructions-arithmetic-and-comparison-warnings.exs
     le status 16#ffff ote lamp
       line 3: warning: `le` compares `status` with `16#ffff`, and a word holds
       nothing above `16#ffff`: its result never changes
- 9  var_output speed real
+ 9  var_input speed real
+    var_output lamp bool
+    ge speed -3.4028235e38 ote lamp
+      line 3: warning: `ge` compares `speed` with `-3.4028235e38`, and a real
+      holds nothing below `-3.4028235e38`: its result never changes
+10  var_output speed real
     move 16777217.0 speed
       line 2: warning: `16777217.0` is more precise than a real keeps: it is
       held as 16777216.0
-10  var_input speed real
+11  var_input speed real
     var_output lamp bool
     eq speed 16777217.0 ote lamp
       line 3: warning: `16777217.0` is more precise than a real keeps: it is
       held as 16777216.0
-11  var_input eye bool
+12  var_input eye bool
     var_input status word
     var_output out word
     move status out
@@ -1734,7 +1738,7 @@ $ mix run instructions-arithmetic-and-comparison-warnings.exs
       writes whole: the last one in the scan decides it
 ```
 
-### Programs 12 to 19: no warning
+### Programs 13 to 19: no warning
 
 ```elixir
 {report, _} = Code.eval_file("instructions-contacts-and-coils/report.exs")
@@ -1744,35 +1748,30 @@ programs = [
   "var_input step sint\nvar_output lamp bool\nle step -128 ote lamp",
   "var_input step sint\nvar_output lamp bool\nne step 127 ote lamp",
   "var_input boxes uint\nvar_output lamp bool\neq boxes 0 ote lamp",
-  "var_input speed real\nvar_output lamp bool\nge speed -3.4028235e38 ote lamp",
   "var_output speed real\nmove 0.1 speed",
   "var_input flow dint\nvar_output total dint\nadd total flow total",
   "var_input flow dint\nvar_output total dint\nmove flow total\nadd total flow total"
 ]
 
-report.(12, programs, &Logex.compile(&1, name: "quiet"))
+report.(13, programs, &Logex.compile(&1, name: "quiet"))
 ```
 
 ```console
 $ mix run instructions-arithmetic-and-comparison-no-warning.exs
-12  var_output total dint
+13  var_output total dint
     move 5 total
-      the text compiles, and logex gives no warning
-13  var_input step sint
-    var_output lamp bool
-    le step -128 ote lamp
       the text compiles, and logex gives no warning
 14  var_input step sint
     var_output lamp bool
+    le step -128 ote lamp
+      the text compiles, and logex gives no warning
+15  var_input step sint
+    var_output lamp bool
     ne step 127 ote lamp
       the text compiles, and logex gives no warning
-15  var_input boxes uint
+16  var_input boxes uint
     var_output lamp bool
     eq boxes 0 ote lamp
-      the text compiles, and logex gives no warning
-16  var_input speed real
-    var_output lamp bool
-    ge speed -3.4028235e38 ote lamp
       the text compiles, and logex gives no warning
 17  var_output speed real
     move 0.1 speed

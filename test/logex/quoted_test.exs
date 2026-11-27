@@ -415,8 +415,9 @@ defmodule Logex.QuotedTest do
        "a program's name is a string, got: #{@cut}"},
       {"Logex.compile/2 options", fn -> Logex.compile("", o.(big)) end,
        "Logex.compile/2 takes a name and, where the source uses function " <>
-         "blocks, their types, as in Logex.compile(source, name: \"motor\", types: " <>
-         "[seal]), got: #{@cut}"},
+         "blocks, their types, and tags declared from Elixir, each once in any order, " <>
+         "as in Logex.compile(source, name: \"motor\", types: [seal], declared: " <>
+         "[start]), got: #{@cut}"},
       {"Logex.compile/2 types", fn -> Logex.compile("", name: "p", types: o.(big)) end,
        "types must be a list of function block types from Logex.compile/2, " <>
          "got: #{@cut}"},

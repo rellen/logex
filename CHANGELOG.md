@@ -28,7 +28,7 @@ Under it, what a host who upgrades must know first, each item naming its decisio
 
 ## Unreleased
 
-Decisions: 1–635.
+Decisions: 1–640.
 
 The first release, carrying every decision §7 records, taken from 2026-09-28 to 2026-11-15
 (waiting under decision 541, no release planned: its number, and whether its tag is
@@ -117,7 +117,89 @@ API".
   and a poll period trips the line whatever the runner's lateness. Look for: plants on a
   loaded or virtual machine.
 
+### The language
+
+- **A write beside a coil is warned as a second coil is** (decision 626), "the last one in
+  the scan decides it", where it compiled unwarned: a `cal`'s output and an `ote` on one
+  tag, `cal s1 a b belt` beside `xic a ote belt`, two `cal`s' outputs on one tag, and any
+  write but a latch's of a bool an `ote` or a pulse coil writes, `xic a move 1 belt`
+  beside `xic a ote belt`, by literals or through the very tags, `move 0 lamps[slot]`
+  beside `ote lamps[slot]` among them, where decision 246 had left it quiet, so a bool
+  array's element is told as a word's bit is beside its word. A write after the coil is
+  told ``already has an `ote` on line 5``, the coil after it ``is already written by the
+  `move` on line 5``. A `cal` and a `move` on one bool are warned too (provisional,
+  `PLAN.md`'s RV-34); an `otl` and an `otu` beside an `ote`, and two `move`s, stay
+  quiet. Look for: a test or a tool that reads a program's warnings whole.
+- **A real literal a conversion writes into a long timer's `.pre` or `.acc` is warned of
+  its nanoseconds** (decision 637), as an integer literal is since decision 196, by the
+  integer the conversion gives: `lreal_to_lint 1.5e6 cure.pre` on a `ton_ltime` is told
+  `1500000 ns is no whole number of milliseconds`, where it was told only that it reads a
+  literal. Look for: a test or a tool that reads such a program's warnings whole.
+- **Four messages made true** (decision 597): `not` and the shifts are told they compute
+  in their source's type, `` `not` computes in `w`'s type, a word (declared on line 1),
+  and writes its result into `d`, a byte `` (decision 214), where they were told the
+  destination's; a coil on a bit a tag numbers is told it writes one bit, ``the `otl` on
+  line 6 writes one bit of it, `out.[sel]`, which a tag numbers``, where it was told it
+  writes `out` whole, and a whole write after a coil on a bit of the word, `move 0
+  faults[1]` after `ote faults[1].0`, `` `faults[1]` is written whole by the `move`, and
+  its bit `faults[1].0` already has an `ote` on line 3 ``; a `var_output` nothing writes
+  is told the value it holds, `it stays at 16777216.0`, not its spelling; and an
+  unconnected `var_input` is offered ``a global or a constant``, no point. Look for: a
+  test or a tool that reads these messages whole.
+- **Four warnings given rightly** (decision 598): under an event task with an interval
+  the one-shot, counter and `tp` warnings no longer say the trigger "is true at every run
+  and never pulses", which a run at the due time disproves; a real's limit compare, `ge
+  speed -3.4028235e38`, is warned as an integer's is; a block's warnings travel with its
+  type, given through `types:` after the program's own in its table's order, and by
+  `Logex.compile_files/1` to every program that holds it, where only the first to load it
+  held them; and a configuration's real initial list is told ten rounded literals and a
+  count of the rest, as a program's is. Look for: code that counts warnings, or reads a
+  program's as its own alone.
+- **A diagnostic that lists names tells the first hundred and a count** (decision 636),
+  as a refusal of the host contract's does since decision 629: a block's "its members
+  are", a `cal`'s formals, the function blocks given, a configuration's "its var_inputs
+  and var_outputs are", the types given and the files a type's mistakes are cited in, each
+  `` ..., `i00100` and 9901 more, not listed ``; and an instance that leaves more than a
+  hundred var_inputs unconnected is told the count first, `` `f1` leaves 10000 var_inputs
+  unconnected, `i00001`, ... and 9900 more, not listed: connect each ... ``. Each name the
+  list shows is quoted whole (decision 633). Look for: a test or a tool that reads such a
+  list whole.
+- **Three refusals that help more** (decision 599): an unknown instruction is offered the
+  nearest mnemonic, ``unknown instruction `otee` — did you mean `ote`?``, by the bounded
+  search a tag's name has (decision 520), compared in lowercase; a type word the loader
+  found no file for names the file, ``unknown type `nofile`: there is no `nofile.ld`
+  beside `prog.ld`, and logex has ...``; and a configuration whose program type does not
+  compile still tells its instances' connections whose far end is wrong, ``no global
+  `pbb` — did you mean `pb`?``, beside the compile's mistakes. Look for: a test or a tool
+  that reads these messages whole, or counts a configuration's diagnostics.
+
 ### The host's API
+
+- **`Logex.compile/2` takes `declared:`** (decision 607), the tags `Logex.Tag.new!/5`
+  builds, entered in the table before the source's declarations as
+  `Logex.Compiler.instructionize/3` takes them: `Logex.compile(source, name: "belt",
+  declared: [Logex.Tag.new!("start", :bool, :var_input)])`, where it refused the option.
+  The options come in any order, each once; a tag the source declares too is a diagnostic
+  at the source's line, and a `declared:` that is no list of tags raises in
+  `instructionize/3`'s words. The refusal of other options names `declared:` too, "...
+  their types, and tags declared from Elixir, each once in any order, as in ...". Look for:
+  code that matches that message whole.
+- **`Logex.Configuration.Text.print/1` prints every configuration `new!/1` accepts**
+  (decision 601): a real global's initial value that is no value of its type, `initial:
+  0.1` on a `real`, is printed as the shortest text that reads back to the value the
+  global holds, `var_global sp real 0.1`, where `print/1` raised that it is "not an entry
+  a configuration file can say"; `compile/3` reads it back holding that value, its
+  `initial` the nearest real, `0.10000000149011612`. `Text.entries!/1` takes any float the
+  type holds, and refuses one past its range or one written as 0.0 in the words "one its
+  type holds, within its range and not written as 0.0". Look for: code that rescues
+  `print/1`'s `ArgumentError`, or matches the old words.
+- **A configuration's `warnings` hold its program types' warnings** (decision 638), after
+  its own, each program type's once, in the order its instances first name them, each
+  message naming its type, ``program type `conveyor`: `belt` already has an `ote` on line
+  4: ...``, its line and file its program's, from `Logex.Configuration.new!/1`,
+  `compile/3` and `compile_file/1`, where they were only in each program type's own
+  struct; each program keeps its own as it was. Look for: code that reads a
+  configuration's `warnings` as its own alone, or counts them.
 
 - **`Logex.Configuration.Global.new!/3` refuses an initial value no global of its type
   holds, at once** (decision 555), an `ArgumentError`, where it kept any value and
