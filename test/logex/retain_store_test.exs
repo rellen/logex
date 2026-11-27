@@ -1675,6 +1675,37 @@ defmodule Logex.RetainStoreTest do
         fn -> Retain.decoded!(after_unread, {"s", "plant"}) end
       )
 
+      # A digest line that does not read after another digest line is told its form alone,
+      # at once, the first kept: after one that reads, no way out, the store having a
+      # problem; after one that does not, each its form alone.
+      read_then_unread =
+        String.replace(
+          text,
+          "\nend #{count} lines",
+          "\ndigest #{String.upcase(digest)}\nend #{count + 1} lines"
+        )
+
+      raises(
+        "s: line #{count}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+          "lowercase hexadecimal digits",
+        fn -> Retain.decoded!(read_then_unread, {"s", "plant"}) end
+      )
+
+      unread_twice =
+        String.replace(
+          unread,
+          "\nend #{count} lines",
+          "\ndigest #{binary_part(digest, 0, 31)}\nend #{count + 1} lines"
+        )
+
+      raises(
+        "s: line #{count - 1}: `#{String.upcase(digest)}` is no digest: a store's is 32 " <>
+          "lowercase hexadecimal digits\n" <>
+          "s: line #{count}: `#{binary_part(digest, 0, 31)}` is no digest: a store's is 32 " <>
+          "lowercase hexadecimal digits",
+        fn -> Retain.decoded!(unread_twice, {"s", "plant"}) end
+      )
+
       twice =
         String.replace(text, "digest #{digest}\n", "digest #{digest}\ndigest #{digest}\n")
         |> String.replace("end #{count} lines", "end #{count + 1} lines")
